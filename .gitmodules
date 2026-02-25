@@ -1,0 +1,6 @@
+[submodule "mozjpeg"]
+	path = mozjpeg
+	url = https://github.com/mozilla/mozjpeg.git
+[submodule "oxipng"]
+	path = oxipng
+	url = https://github.com/oxipng/oxipng.git
