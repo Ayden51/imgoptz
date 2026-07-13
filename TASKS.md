@@ -12,26 +12,26 @@ Goal: establish leak tracking and unified console logging before feature work gr
 - [x] Initialize Odin `core:log` console logging at startup.
 - [x] Standardize user-facing console output through the logging API.
 - [x] Destroy the logger before reporting tracked allocations so logger internals do not appear as leaks.
-- [ ] Run unit tests with Odin's test runner.
-- [ ] Run a debug executable smoke test and check memory tracker output for leaks.
+- [x] Run unit tests with Odin's test runner.
+- [x] Run a debug executable smoke test and check memory tracker output for leaks.
 
 ## Phase 1: Console Input Foundation
 
 Goal: turn the launcher demo into the real prompt shell without image processing yet.
 
-- [ ] Replace demo banner with `== imgoptz ==` and print working directory.
-- [ ] Preserve Windows-only startup guard.
-- [ ] Preserve startup cwd change to the executable directory.
-- [ ] Preserve repeated stdin prompt loop.
-- [ ] Add case-insensitive `exit` handling after trimming input.
-- [ ] Trim pasted input whitespace.
-- [ ] Strip one pair of surrounding double quotes from pasted paths.
-- [ ] Validate that exactly one non-empty directory path was provided.
-- [ ] Accept absolute and relative input paths, resolved from the app root cwd.
-- [ ] Remove demo `cmd.exe /c dir` child process execution.
-- [ ] Print clear errors and return to the prompt without exiting.
-- [ ] Verify spaces, Unicode, `&`, and parentheses in directory names.
-- [ ] Verify relative paths, absolute paths, quoted paths, empty input, file input, missing directory, EOF, and `exit`.
+- [x] Replace demo banner with `== imgoptz ==` and print working directory.
+- [x] Preserve Windows-only startup guard.
+- [x] Preserve startup cwd change to the executable directory.
+- [x] Preserve repeated stdin prompt loop.
+- [x] Add case-insensitive `exit` handling after trimming input.
+- [x] Trim pasted input whitespace.
+- [x] Strip one pair of surrounding double quotes from pasted paths.
+- [x] Validate that exactly one non-empty directory path was provided.
+- [x] Accept absolute and relative input paths, resolved from the app root cwd.
+- [x] Remove demo `cmd.exe /c dir` child process execution.
+- [x] Print clear errors and return to the prompt without exiting.
+- [x] Verify spaces, Unicode, `&`, and parentheses in directory names.
+- [x] Verify relative paths, absolute paths, quoted paths, empty input, file input, missing directory, EOF, and `exit`.
 
 ## Phase 2: Config Defaults And Parsing
 
