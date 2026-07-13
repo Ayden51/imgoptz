@@ -1,0 +1,565 @@
+# imgoptz Implementation Plan
+
+## Purpose
+
+`imgoptz` is a Windows-only folder image optimizer. It optimizes one input directory at a time, supporting only JPEG and PNG files. Users launch `imgoptz.exe` by double-clicking it, which opens a console window, prompts for a directory path, processes supported images, prints results, then prompts again. Typing `exit` closes the program and the console window.
+
+The current `src/main.odin` demo already proves the intended UI shape: Windows-only guard, change cwd to the executable directory, line-based stdin prompt loop, and child process execution with inherited console output. Build the real tool by expanding that structure, not replacing it with a different UI model.
+
+## Distribution Layout
+
+The distributed app root is the directory containing `imgoptz.exe`. The folder can have any name. All runtime paths are relative to that app root.
+
+The distributed app root should use this layout:
+
+```text
+<app-root>/
+  imgoptz.exe
+  imgoptz.json          optional
+  output/               required only when output_mode = "dir" and default out_dir is used
+  tools/
+    mozjpeg/
+      mozjpeg.exe
+      LICENSE.md
+      README.ijg
+      README-mozilla.txt
+    oxipng/
+      oxipng.exe
+      LICENSE
+    imagemagick/
+      magick.exe
+      LICENSE.txt
+      NOTICE.txt
+      policy.xml
+```
+
+The app changes cwd to the executable directory at startup, so all relative paths resolve against `<app-root>/`.
+
+Required executable paths:
+
+```text
+tools\mozjpeg\mozjpeg.exe
+tools\oxipng\oxipng.exe
+tools\imagemagick\magick.exe
+```
+
+## License Files
+
+Keep required third-party notices beside each tool.
+
+MozJPEG/libjpeg-turbo:
+
+```text
+tools\mozjpeg\LICENSE.md
+tools\mozjpeg\README.ijg
+tools\mozjpeg\README-mozilla.txt
+```
+
+Local license guidance states binary distribution documentation must include: `This software is based in part on the work of the Independent JPEG Group.` Keeping `LICENSE.md` and `README.ijg` with the executable satisfies this requirement more clearly than shipping the binary alone.
+
+Oxipng:
+
+```text
+tools\oxipng\LICENSE
+```
+
+Oxipng is MIT licensed, so include its copyright and permission notice with the binary.
+
+ImageMagick:
+
+```text
+tools\imagemagick\LICENSE.txt
+tools\imagemagick\NOTICE.txt
+tools\imagemagick\policy.xml
+```
+
+`policy.xml` is not strictly required for the basic resize-to-PPM command, but keep it so runtime resource/security policy is explicit and distributable.
+
+## User Flow
+
+1. User double-clicks `imgoptz.exe`.
+2. Windows opens a new console window because the app is built with console subsystem.
+3. App verifies it is running on Windows.
+4. App changes cwd to its executable directory, which is the app root.
+5. App loads config from `imgoptz.json` if present.
+6. App validates required tools.
+7. If `gpu = true`, app probes ImageMagick OpenCL GPU support.
+8. App prints banner and active config summary.
+9. App prompts for one input image directory.
+10. User enters a directory path or `exit`.
+11. If `exit`, app exits cleanly.
+12. App validates the input directory.
+13. App discovers supported files in that one directory, recursively only when configured.
+14. App processes files with a balanced worker count.
+15. App prints per-file results and final summary.
+16. App returns to the prompt.
+
+Only accept one input directory at a time. If users want to process multiple directories, they should organize those directories under one parent folder and enable `recursive`.
+
+## Path Rules
+
+Input directory paths may be absolute or relative.
+
+Relative input paths resolve against `<app-root>/`, because the app changes cwd to the executable directory.
+
+Examples:
+
+```text
+C:\Images\Trip      absolute input path
+..\photos           relative to <app-root>/
+photos              <app-root>/photos
+```
+
+`out_dir` paths may also be absolute or relative.
+
+Relative `out_dir` paths resolve against `<app-root>/`.
+
+Handle folder names and file names containing whitespace or special characters correctly. For example, this input must work:
+
+```text
+C:\Images\Summer Trip\
+```
+
+Implementation should pass subprocess arguments as argument arrays where possible, not by string-concatenating shell commands. If a shell is unavoidable, quote and escape paths correctly for Windows paths containing spaces, parentheses, ampersands, Unicode characters, and other shell-special characters.
+
+Strip surrounding quotes from pasted paths, so these are equivalent:
+
+```text
+C:\Images\Trip
+"C:\Images\Trip"
+```
+
+## Supported Files
+
+Supported extensions are case-insensitive:
+
+```text
+.jpg
+.jpeg
+.png
+```
+
+Ignore all other files.
+
+Default discovery is non-recursive. Recursive discovery is controlled by config.
+
+## Config File
+
+Use exactly one config file name:
+
+```text
+imgoptz.json
+```
+
+Default config:
+
+```json
+{
+  "recursive": false,
+  "max_dimension": 1920,
+  "workers": "auto",
+  "gpu": true,
+  "debug_log": false,
+  "debug_log_file": "imgoptz.log",
+  "output_mode": "in-place",
+  "out_dir": "output",
+  "jpeg": {
+    "enabled": true,
+    "quality": 100,
+    "progressive": true,
+    "optimize": true,
+    "sample": "2x2",
+    "quant_table": 3
+  },
+  "png": {
+    "enabled": true,
+    "level": 6,
+    "interlace": false,
+    "strip": "safe",
+    "alpha": false
+  }
+}
+```
+
+Config validation rules:
+
+1. Missing `imgoptz.json`: use built-in defaults.
+2. Invalid JSON: warn and use the entire default config.
+3. Valid JSON with invalid option values: warn for each invalid option and use the default value for that option.
+4. Unknown options should warn and be ignored.
+5. Config warnings print to console.
+
+`gpu` accepts only JSON booleans:
+
+```json
+"gpu": true
+"gpu": false
+```
+
+Do not accept string values like `"auto"` for `gpu`.
+
+`output_mode` accepts only:
+
+```text
+in-place
+dir
+```
+
+Do not accept `inplace` and do not normalize alternate spellings.
+
+`workers` accepts:
+
+```text
+"auto"
+positive integer
+```
+
+## Output Modes
+
+### in-place
+
+`output_mode = "in-place"` behavior:
+
+1. Process each image through temp files.
+2. Compare final optimized temp file size against original file size.
+3. Replace the original only if the optimized file is smaller.
+4. Slugify the final file name after replacement.
+5. Delete temp files when output is equal/larger or processing fails.
+6. Print skipped files that did not get smaller.
+
+Never provide an option to blindly replace larger or equal output.
+
+### dir
+
+`output_mode = "dir"` behavior:
+
+1. Process each image through temp files.
+2. Compare final optimized temp file size against original file size.
+3. Slugify the final output file name.
+4. Write/copy the optimized file into `out_dir` only if it is smaller.
+5. Do not emit output for files that do not get smaller.
+6. Print skipped files that did not get smaller.
+
+`out_dir` defaults to:
+
+```text
+<app-root>\output
+```
+
+If a configured `out_dir` does not exist, print a warning and fall back to the default output folder `<app-root>\output`.
+
+Do not create the configured `out_dir` automatically. This prevents mistyped output paths from creating arbitrary directories users cannot find.
+
+If fallback `<app-root>\output` also does not exist, print an error and abort processing for that input directory.
+
+When `output_mode = "dir"` and `recursive = true`, preserve relative paths under the accepted output root.
+
+Example:
+
+```text
+Input root:
+C:\Images\Trip
+
+Input files:
+C:\Images\Trip\a.jpg
+C:\Images\Trip\day1\b.png
+
+out_dir:
+C:\Optimized
+
+Output files:
+C:\Optimized\a.jpg
+C:\Optimized\day1\b.png
+```
+
+Creating subfolders under an accepted output root is allowed:
+
+```text
+C:\Optimized\day1\
+```
+
+Creating the output root itself is not allowed:
+
+```text
+C:\Optimized
+```
+
+## Resize Rules
+
+All JPEG and PNG files go through a resize/orientation step before encoding/optimization.
+
+Use ImageMagick to apply:
+
+```text
+-auto-orient -filter Lanczos -resize <max_dimension>x<max_dimension>
+```
+
+Append `>` to the resize geometry:
+
+```text
+1920x1920>
+```
+
+This means:
+
+1. Keep original aspect ratio.
+2. Shrink only if width or height exceeds `max_dimension`.
+3. Never enlarge smaller images.
+
+Examples with `max_dimension = 1920`:
+
+```text
+1536x2048 -> 1440x1920
+2048x1536 -> 1920x1440
+1080x1920 -> unchanged
+```
+
+## JPEG Pipeline
+
+JPEG files are processed with ImageMagick plus MozJPEG.
+
+Command shape:
+
+```text
+tools\imagemagick\magick.exe input.jpg -auto-orient -filter Lanczos -resize 1920x1920> ppm:-
+tools\mozjpeg\mozjpeg.exe -quality 100 -progressive -optimize -sample 2x2 -quant-table 3 -outfile temp.jpg
+```
+
+Implementation should pipe ImageMagick stdout into MozJPEG stdin rather than writing an intermediate PPM file when practical.
+
+JPEG config maps to MozJPEG flags:
+
+```text
+jpeg.quality      -> -quality N
+jpeg.progressive  -> -progressive when true
+jpeg.optimize     -> -optimize when true
+jpeg.sample       -> -sample HxV
+jpeg.quant_table  -> -quant-table N
+```
+
+Write MozJPEG output to a temp file first, then apply output mode rules.
+
+## PNG Pipeline
+
+PNG files are processed with ImageMagick plus Oxipng.
+
+Command shape:
+
+```text
+tools\imagemagick\magick.exe input.png -auto-orient -filter Lanczos -resize 1920x1920> temp.resized.png
+tools\oxipng\oxipng.exe -o 6 --strip safe --interlace off --out temp.optimized.png temp.resized.png
+```
+
+PNG config maps to Oxipng flags:
+
+```text
+png.level      -> -o N
+png.interlace  -> --interlace on/off
+png.strip      -> --strip safe/all/<list>, omitted if set to none
+png.alpha      -> --alpha when true
+```
+
+Default PNG behavior should match the intended Squoosh-like OxiPNG settings as closely as practical:
+
+```text
+-o 6 --interlace off --strip safe
+```
+
+`--strip safe` is configurable.
+
+## Slugify Output Names
+
+Every successfully optimized image has a third processing step: slugify the final output file name.
+
+Slugify behavior will be implemented with a pre-existing Odin slugify script that will be copied into this codebase later.
+
+Expected behavior:
+
+```text
+Ảnh 1.jpg -> anh-1.jpg
+```
+
+Preserve the image extension after slugifying the file stem. Prefer lowercase extensions for final names.
+
+In `output_mode = "in-place"`, slugify after the original has been replaced by the smaller optimized file.
+
+In `output_mode = "dir"`, slugify before writing the final optimized file into the output directory.
+
+If slugified file names collide, append a numeric suffix before the extension:
+
+```text
+img.jpg
+img-1.jpg
+img-2.jpg
+```
+
+Collision handling is scoped to the destination directory. For recursive `dir` output, each preserved relative subdirectory has its own collision scope.
+
+Skipped files that do not get smaller do not produce renamed output.
+
+## GPU and OpenCL
+
+ImageMagick can use OpenCL for resize, and local `magick.exe` reports OpenCL support.
+
+Behavior:
+
+1. If `gpu = false`, never probe and never enable GPU.
+2. If `gpu = true`, run a lightweight startup probe.
+3. If probe succeeds, set `MAGICK_OCL_DEVICE=GPU` for ImageMagick child processes.
+4. If probe fails, warn and fall back to CPU.
+5. Never blindly enable GPU without a successful probe.
+
+GPU only applies to ImageMagick resize work. MozJPEG and Oxipng remain CPU tools.
+
+## Worker Strategy
+
+Use Odin as the orchestration layer and external tools for the heavy image work.
+
+Default `workers = "auto"` should choose a balanced worker count instead of pushing the machine to the limit.
+
+Initial heuristic:
+
+```text
+logical cores <= 4   -> 1 worker
+logical cores 6-8    -> 2 workers
+logical cores 10-16  -> 4 workers
+logical cores 24+    -> 6-8 workers
+available RAM < 8GB  -> max 2 workers
+available RAM < 16GB -> max 4 workers
+```
+
+Also consider current system load if accessible from Odin/Windows APIs.
+
+Avoid thread oversubscription:
+
+```text
+MAGICK_THREAD_LIMIT=1 or 2
+oxipng --threads 1 when app-level workers > 1
+```
+
+If workers is explicitly configured as an integer, respect it after clamping to a safe minimum of 1.
+
+## Temp Files and Safety
+
+Never overwrite original files directly during processing.
+
+Use temp files beside the original for `in-place` mode, because same-volume replacement is safer and usually atomic enough for this use case.
+
+For `dir` mode, temp files can be created in the destination output folder or in a temporary work location, but final output should only appear after successful optimization and size comparison.
+
+Temp file naming should avoid collisions:
+
+```text
+<original>.imgoptz.<pid>.<counter>.tmp
+```
+
+Failure handling:
+
+1. If ImageMagick fails, delete temp files and mark file failed.
+2. If MozJPEG/Oxipng fails, delete temp files and mark file failed.
+3. If temp output does not exist or is empty, delete temp files and mark file failed.
+4. If final output is not smaller, delete temp files and mark file skipped.
+5. If replacement/copy fails, preserve original and mark file failed.
+
+## Console Output
+
+Print concise progress and summary.
+
+Startup example:
+
+```text
+== imgoptz ==
+Working directory: C:\path\to\imgoptz-root
+Config: imgoptz.json loaded
+GPU: enabled via ImageMagick OpenCL
+Workers: 4
+```
+
+Prompt:
+
+```text
+Paste one image directory path, or type 'exit':
+```
+
+Discovery example:
+
+```text
+Found 42 images: 30 JPG, 12 PNG
+```
+
+Per-file result examples:
+
+```text
+[1/42] OK   photo.jpg -> photo.jpg  4.2 MB -> 2.8 MB  33.3% smaller
+[2/42] SKIP icon.png   optimized output was not smaller
+[3/42] ERR  bad.jpg    mozjpeg exited with code 1
+```
+
+Per-file success output should include the percentage size reduction.
+
+Summary example:
+
+```text
+Done.
+Succeeded: 38
+Skipped: 3
+Failed: 1
+```
+
+## Debug Logging
+
+Default is console-only.
+
+If `debug_log = true`, append detailed logs to `debug_log_file`.
+
+Relative `debug_log_file` resolves against `<app-root>/`.
+
+Do not require logging for normal operation.
+
+## Build
+
+Current build script emits the development binary to `dist/imgoptz.exe`:
+
+```bash
+odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o:speed -strict-style -vet -vet-packages:main -vet-unused-procedures -vet-tabs -disallow-do -warnings-as-errors
+```
+
+`run.sh` should call `build.sh` first, then launch the built binary:
+
+```bash
+./build.sh
+./dist/imgoptz.exe
+```
+
+## Implementation Phases
+
+1. Keep and clean up the current `src/main.odin` UI loop.
+2. Add `exit` handling.
+3. Add path trimming, quote stripping, and one-input-directory validation.
+4. Add config model with built-in defaults.
+5. Add `imgoptz.json` parser and validation warnings.
+6. Add tool validation for the final distribution paths.
+7. Add output mode validation and output root resolution.
+8. Add ImageMagick GPU probe when `gpu = true`.
+9. Add supported file discovery with optional recursion.
+10. Add relative path preservation for recursive `dir` output mode.
+11. Add JPEG pipeline with Magick-to-MozJPEG piping.
+12. Add PNG pipeline with Magick temp resize plus Oxipng output.
+13. Add temp file cleanup and size comparison.
+14. Add safe original replacement for `in-place` mode.
+15. Add slugify final output names and collision handling.
+16. Add output copy/move for `dir` mode.
+17. Add worker pool and auto worker heuristic.
+18. Add progress output and final summary, including percentage size reduction.
+19. Add optional debug logging.
+20. Test with spaces, special characters, Unicode paths, and quoted paths.
+21. Test relative and absolute input directories.
+22. Test relative and absolute `out_dir`.
+23. Test missing configured `out_dir` fallback to default output.
+24. Test missing default output folder error.
+25. Test recursive input with preserved output paths.
+26. Test slugify collisions.
+27. Test uppercase extensions.
+28. Test corrupt images.
+29. Test missing tools.
+30. Test repeated prompt loop and `exit`.
