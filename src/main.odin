@@ -21,7 +21,8 @@ main :: proc() {
 		}
 	}
 
-	logger := log.create_console_logger(.Info, {.Level})
+	logger := log.create_console_logger(.Info, {})
+	logger.procedure = app_console_logger_proc
 	context.logger = logger
 	defer log.destroy_console_logger(logger)
 
@@ -31,4 +32,14 @@ main :: proc() {
 	}
 
 	run_imgoptz()
+}
+
+app_console_logger_proc :: proc(logger_data: rawptr, level: log.Level, text: string, options: log.Options, location := #caller_location) {
+	options := options
+	switch level {
+	case .Debug, .Info:
+	case .Warning, .Error, .Fatal:
+		options += {.Level}
+	}
+	log.console_logger_proc(logger_data, level, text, options, location)
 }
