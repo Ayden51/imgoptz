@@ -6,9 +6,19 @@
 - `dist/` is ignored but is the current development distribution root with `imgoptz.exe` and runtime tools.
 
 ## Commands
-- Build exactly with `./build.sh`, which runs `odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o:speed -strict-style -vet -vet-packages:main -vet-unused-procedures -vet-tabs -disallow-do -warnings-as-errors`.
-- Run with `./run.sh`; it builds first, then launches `./dist/imgoptz.exe`.
-- There are no Odin tests yet. When adding tests, use Odin's runner with `odin test src` and focused runs via `-define:ODIN_TEST_NAMES=package.test_name`.
+- Production build exactly with `./build.sh`, which runs `odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o:speed -strict-style -vet -vet-packages:main -vet-unused-procedures -vet-tabs -disallow-do -warnings-as-errors`.
+- Development build with `./build_dev.sh`, which emits `dist/imgoptz_dev.exe` with `-debug` so the debug memory tracker is active.
+- Run with `./run.sh`; it builds via `./build_dev.sh`, then launches `./dist/imgoptz_dev.exe`.
+- Run Odin tests with `odin test src`; focused runs use `-define:ODIN_TEST_NAMES=package.test_name`.
+- Before handing back code changes, run `odin test src`, a production build, and a development build.
+- For memory leak checks, run the development executable through at least an `exit` prompt path. If it prints `=== N allocations not freed: ===`, treat that as a failure and fix the leak before handoff. No leak report means the app-level debug tracker found no outstanding allocations.
+- Odin's test runner has its own memory tracking enabled by default; investigate any memory diagnostics it prints before considering tests passing.
+
+## Branch Flow
+- `main`: stable baseline.
+- `develop`: integration branch for accepted task tracker and approved feature work.
+- Feature branches: branch from `develop`, use `feat/<short-name>` because Git ref names cannot contain `:`.
+- Merge back to `develop` only after review and explicit approval.
 
 ## Runtime Contract
 - This is Windows-only; keep the `when ODIN_OS != .Windows` guard and console-subsystem, double-click flow.
@@ -32,6 +42,10 @@
 ## Odin Conventions For This Repo
 - `src/` is one directory-based package; every `.odin` file there must use `package main`.
 - Prefer a single package while features are still coupled. New subpackages must be independent because Odin forbids cyclic imports.
+- Split source by feature/responsibility within `src/` instead of growing `main.odin` into a catch-all file.
+- Keep `main.odin` limited to startup orchestration. Move input parsing, validation, processing, config, tool probing, discovery, and output behavior into focused files as those responsibilities appear.
+- Each procedure should either orchestrate a small flow or do exactly one job. Do not mix user interaction, validation, filesystem work, and processing decisions in one procedure.
+- Extract reusable business logic into pure or low-side-effect procedures where practical, so it can be tested without console I/O or child processes.
 - Follow the enforced Odin style: tabs for indentation, opening braces at end of line, `Ada_Case` types, `snake_case` procedures/values, `SCREAMING_SNAKE_CASE` constants.
 - Prefer `value := Type { ... }` initializers and type inference unless the explicit type clarifies conversion or allocation lifetime.
 - Procedures that allocate returned memory should take `allocator := context.allocator`; use `context.temp_allocator` for short-lived intermediate strings/data and clone only durable results.

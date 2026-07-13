@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
-./build.sh
-./dist/imgoptz.exe
+./build_dev.sh
+./dist/imgoptz_dev.exe
