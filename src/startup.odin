@@ -1,6 +1,7 @@
 package main
 
 import "core:os"
+import win "core:sys/windows"
 
 App_Root_Error :: enum {
 	None,
@@ -26,4 +27,14 @@ initialize_app_root :: proc() -> App_Root {
 	}
 
 	return App_Root {path = exe_dir, err = .None}
+}
+
+configure_console_utf8 :: proc() -> bool {
+	when ODIN_OS != .Windows {
+		return true
+	}
+
+	input_ok := win.SetConsoleCP(.UTF8) != win.FALSE
+	output_ok := win.SetConsoleOutputCP(.UTF8) != win.FALSE
+	return input_ok && output_ok
 }

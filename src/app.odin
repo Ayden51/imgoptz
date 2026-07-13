@@ -3,6 +3,10 @@ package main
 import "core:log"
 
 run_imgoptz :: proc() {
+	if !configure_console_utf8() {
+		log.warn("Failed to set console code page to UTF-8; Unicode pasted paths may not work correctly.")
+	}
+
 	app_root := initialize_app_root()
 	if app_root.err != .None {
 		print_app_root_error(app_root)
