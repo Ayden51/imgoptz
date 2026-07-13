@@ -6,12 +6,12 @@ Source of truth: `PLAN.md`. Keep this tracker aligned with the spec before chang
 
 Goal: establish leak tracking and unified console logging before feature work grows.
 
-- [ ] Add Odin debug memory tracking directly in `src/main.odin`.
-- [ ] Report outstanding tracked allocations on app exit during debug builds.
-- [ ] Keep memory tracker code in `main.odin`; do not move it to a module because it does not compose reliably with logging setup.
-- [ ] Initialize Odin `core:log` console logging at startup.
-- [ ] Standardize user-facing console output through the logging API.
-- [ ] Destroy the logger before reporting tracked allocations so logger internals do not appear as leaks.
+- [x] Add Odin debug memory tracking directly in `src/main.odin`.
+- [x] Report outstanding tracked allocations on app exit during debug builds.
+- [x] Keep memory tracker code in `main.odin`; do not move it to a module because it does not compose reliably with logging setup.
+- [x] Initialize Odin `core:log` console logging at startup.
+- [x] Standardize user-facing console output through the logging API.
+- [x] Destroy the logger before reporting tracked allocations so logger internals do not appear as leaks.
 - [ ] Run unit tests with Odin's test runner.
 - [ ] Run a debug executable smoke test and check memory tracker output for leaks.
 
