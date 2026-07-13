@@ -34,7 +34,13 @@ main :: proc() {
 	run_imgoptz()
 }
 
-app_console_logger_proc :: proc(logger_data: rawptr, level: log.Level, text: string, options: log.Options, location := #caller_location) {
+app_console_logger_proc :: proc(
+	logger_data: rawptr,
+	level: log.Level,
+	text: string,
+	options: log.Options,
+	location := #caller_location,
+) {
 	options := options
 	switch level {
 	case .Debug, .Info:

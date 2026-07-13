@@ -18,15 +18,15 @@ App_Root :: struct {
 initialize_app_root :: proc() -> App_Root {
 	exe_dir, exe_dir_err := os.get_executable_directory(context.allocator)
 	if exe_dir_err != os.ERROR_NONE {
-		return App_Root {err = .Get_Executable_Directory_Failed, os_err = exe_dir_err}
+		return App_Root{err = .Get_Executable_Directory_Failed, os_err = exe_dir_err}
 	}
 
 	if change_dir_err := os.change_directory(exe_dir); change_dir_err != os.ERROR_NONE {
 		delete(exe_dir)
-		return App_Root {err = .Change_Directory_Failed, os_err = change_dir_err}
+		return App_Root{err = .Change_Directory_Failed, os_err = change_dir_err}
 	}
 
-	return App_Root {path = exe_dir, err = .None}
+	return App_Root{path = exe_dir, err = .None}
 }
 
 configure_console_utf8 :: proc() -> bool {

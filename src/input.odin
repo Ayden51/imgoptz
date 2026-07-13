@@ -16,12 +16,12 @@ Prompt_Input :: struct {
 parse_prompt_input :: proc(raw: string) -> Prompt_Input {
 	path := normalize_input_path(raw)
 	if is_exit_command(path) {
-		return Prompt_Input {kind = .Exit}
+		return Prompt_Input{kind = .Exit}
 	}
 	if len(path) == 0 {
-		return Prompt_Input {kind = .Invalid}
+		return Prompt_Input{kind = .Invalid}
 	}
-	return Prompt_Input {kind = .Directory_Path, path = path}
+	return Prompt_Input{kind = .Directory_Path, path = path}
 }
 
 normalize_input_path :: proc(raw: string) -> string {
@@ -34,9 +34,11 @@ normalize_input_path :: proc(raw: string) -> string {
 }
 
 is_exit_command :: proc(s: string) -> bool {
-	return len(s) == 4 &&
+	return(
+		len(s) == 4 &&
 		(s[0] == 'e' || s[0] == 'E') &&
 		(s[1] == 'x' || s[1] == 'X') &&
 		(s[2] == 'i' || s[2] == 'I') &&
-		(s[3] == 't' || s[3] == 'T')
+		(s[3] == 't' || s[3] == 'T') \
+	)
 }
