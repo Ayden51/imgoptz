@@ -37,16 +37,16 @@ Goal: turn the launcher demo into the real prompt shell without image processing
 
 Goal: add typed runtime settings while preserving default behavior.
 
-- [ ] Add config data model with built-in defaults from `PLAN.md`.
-- [ ] Load only `imgoptz.json` from app root when present.
-- [ ] Warn and use full defaults for invalid JSON.
-- [ ] Warn for unknown options and ignore them.
-- [ ] Validate individual option values and fall back per option.
-- [ ] Enforce `gpu` as JSON boolean only.
-- [ ] Enforce `output_mode` as `in-place` or `dir` only.
-- [ ] Enforce `workers` as `auto` or positive integer.
-- [ ] Print active config summary at startup.
-- [ ] Verify missing, invalid, partial, unknown, and invalid-value configs.
+- [x] Add config data model with built-in defaults from `PLAN.md`.
+- [x] Load only `imgoptz.json` from app root when present.
+- [x] Warn and use full defaults for invalid JSON.
+- [x] Warn for unknown options and ignore them.
+- [x] Validate individual option values and fall back per option.
+- [x] Enforce `gpu` as JSON boolean only.
+- [x] Enforce `output_mode` as `in-place` or `dir` only.
+- [x] Enforce `workers` as `auto` or positive integer.
+- [x] Print active config summary at startup.
+- [x] Verify missing, invalid, partial, unknown, and invalid-value configs.
 
 ## Phase 3: Runtime Environment Validation
 
@@ -131,6 +131,6 @@ Goal: finish operator diagnostics and broad edge-case coverage.
 
 ## Current Feature Selection
 
-- First feature branch: `feat/console-input-foundation`.
-- Scope: Phase 1 only.
-- Reason: every later feature depends on a correct Windows console loop, path normalization, and directory validation.
+- Current feature branch: `feat/config-defaults-parsing`.
+- Scope: Phase 2 only.
+- Reason: later runtime validation, discovery, and processing depend on typed config values and predictable fallback behavior.
