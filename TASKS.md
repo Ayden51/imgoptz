@@ -38,6 +38,8 @@ Goal: turn the launcher demo into the real prompt shell without image processing
 Goal: add typed runtime settings while preserving default behavior.
 
 - [x] Add config data model with built-in defaults from `PLAN.md`.
+- [ ] Update defaults for the selected JPEG pipeline: quality 78, quant table 2, `tune = "ms-ssim"`, and ICC profile preservation.
+- [ ] Update defaults for the selected PNG pipeline: pngquant quality/speed/dither plus Oxipng level/interlace/strip/alpha.
 - [x] Load only `imgoptz.json` from app root when present.
 - [x] Warn and use full defaults for invalid JSON.
 - [x] Warn for unknown options and ignore them.
@@ -45,6 +47,8 @@ Goal: add typed runtime settings while preserving default behavior.
 - [x] Enforce `gpu` as JSON boolean only.
 - [x] Enforce `output_mode` as `in-place` or `dir` only.
 - [x] Enforce `workers` as `auto` or positive integer.
+- [ ] Validate JPEG `quality`, `sample`, `quant_table`, `tune`, and `preserve_profiles`.
+- [ ] Validate PNG `pngquant_quality`, `pngquant_speed`, `pngquant_dither`, `oxipng_level`, `interlace`, `strip`, and `alpha`.
 - [x] Print active config summary at startup.
 - [x] Verify missing, invalid, partial, unknown, and invalid-value configs.
 
@@ -54,7 +58,9 @@ Goal: fail early when the app distribution is incomplete.
 
 - [ ] Validate `tools\mozjpeg\mozjpeg.exe`.
 - [ ] Validate `tools\oxipng\oxipng.exe`.
+- [ ] Validate `tools\pngquant\pngquant.exe`.
 - [ ] Validate `tools\imagemagick\magick.exe`.
+- [ ] Validate `profiles\sRGB2014.icc`.
 - [ ] Validate required third-party notice files beside each tool.
 - [ ] Resolve `out_dir` according to app root rules.
 - [ ] Implement `dir` output root fallback warnings.
@@ -82,11 +88,12 @@ Goal: process one image at a time correctly and safely.
 
 - [ ] Generate collision-resistant temp file names.
 - [ ] Implement JPEG ImageMagick-to-MozJPEG pipeline.
-- [ ] Implement PNG ImageMagick-to-temp plus Oxipng pipeline.
+- [ ] Implement JPEG ICC profile retention/conversion and `*.source.icc` cleanup.
+- [ ] Implement PNG ImageMagick-to-temp plus pngquant plus Oxipng pipeline.
 - [ ] Pass child process arguments as arrays, not shell-concatenated commands.
 - [ ] Apply ImageMagick resize/orientation rules.
 - [ ] Map JPEG config to MozJPEG flags.
-- [ ] Map PNG config to Oxipng flags.
+- [ ] Map PNG config to pngquant and Oxipng flags.
 - [ ] Limit child tool threads where needed for later worker scaling.
 - [ ] Verify valid JPEG, valid PNG, corrupt inputs, command failures, and temp cleanup.
 
