@@ -1,5 +1,6 @@
 package main
 
+import "core:os"
 import "core:strings"
 import "core:testing"
 
@@ -9,6 +10,71 @@ test_missing_config_uses_defaults :: proc(t: ^testing.T) {
 	defer destroy_config_load_result(&result)
 
 	testing.expect_value(t, result.status, Config_Load_Status.Missing)
+	testing.expect_value(t, len(result.warnings), 0)
+	expect_default_config(t, result.config)
+}
+
+@(test, require)
+test_load_app_config_missing_file_uses_embedded_defaults :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-config-missing-*", context.allocator)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer delete(temp_dir)
+	defer os.remove_all(temp_dir)
+
+	result := load_app_config_from_directory(temp_dir)
+	defer destroy_config_load_result(&result)
+
+	testing.expect_value(t, result.status, Config_Load_Status.Missing)
+	testing.expect_value(t, len(result.warnings), 0)
+	expect_default_config(t, result.config)
+}
+
+@(test, require)
+test_load_app_config_reads_real_imgoptz_json_file :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-config-loaded-*", context.allocator)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer delete(temp_dir)
+	defer os.remove_all(temp_dir)
+
+	write_err := os.write_entire_file(config_file_path(temp_dir), `{
+		"recursive": true,
+		"workers": 2,
+		"jpeg": {"quality": 82},
+		"png": {"pngquant_quality": "70-90", "oxipng_level": 5}
+	}`)
+	if !testing.expect_value(t, write_err, nil) {
+		return
+	}
+
+	result := load_app_config_from_directory(temp_dir)
+	defer destroy_config_load_result(&result)
+
+	testing.expect_value(t, result.status, Config_Load_Status.Loaded)
+	testing.expect_value(t, len(result.warnings), 0)
+	testing.expect_value(t, result.config.recursive, true)
+	testing.expect_value(t, result.config.workers.kind, Config_Workers_Kind.Explicit)
+	testing.expect_value(t, result.config.workers.count, 2)
+	testing.expect_value(t, result.config.jpeg.quality, 82)
+	testing.expect_value(t, result.config.png.pngquant_quality, "70-90")
+	testing.expect_value(t, result.config.png.oxipng_level, 5)
+}
+
+@(test, require)
+test_dist_default_config_file_matches_embedded_defaults :: proc(t: ^testing.T) {
+	data, read_err := os.read_entire_file("dist/imgoptz.json", context.allocator)
+	if !testing.expect_value(t, read_err, nil) {
+		return
+	}
+	defer delete(data)
+
+	result := parse_config_text(string(data))
+	defer destroy_config_load_result(&result)
+
+	testing.expect_value(t, result.status, Config_Load_Status.Loaded)
 	testing.expect_value(t, len(result.warnings), 0)
 	expect_default_config(t, result.config)
 }

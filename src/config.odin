@@ -36,7 +36,7 @@ Jpeg_Config :: struct {
 }
 
 Png_Config :: struct {
-	enabled:           bool,
+	enabled:          bool,
 	pngquant_quality: string,
 	pngquant_speed:   int,
 	pngquant_dither:  bool,
@@ -126,17 +126,25 @@ destroy_config_load_result :: proc(result: ^Config_Load_Result) {
 }
 
 load_app_config :: proc() -> Config_Load_Result {
-	if !os.exists(CONFIG_FILE_NAME) {
+	return load_app_config_from_directory(".")
+}
+
+load_app_config_from_directory :: proc(app_root: string) -> Config_Load_Result {
+	config_path := config_file_path(app_root)
+	if !os.exists(config_path) {
 		return missing_config_result()
 	}
 
-	data, read_err := os.read_entire_file(CONFIG_FILE_NAME, context.allocator)
+	data, read_err := os.read_entire_file(config_path, context.allocator)
 	if read_err != nil {
-		result := Config_Load_Result{config = default_config(), status = .Read_Failed}
-		add_config_warning(&result, fmt.aprintf(
-			"Failed to read %s; using default config.",
-			CONFIG_FILE_NAME,
-		))
+		result := Config_Load_Result {
+			config = default_config(),
+			status = .Read_Failed,
+		}
+		add_config_warning(
+			&result,
+			fmt.aprintf("Failed to read %s; using default config.", CONFIG_FILE_NAME),
+		)
 		return result
 	}
 	defer delete(data)
@@ -144,20 +152,33 @@ load_app_config :: proc() -> Config_Load_Result {
 	return parse_config_text(string(data))
 }
 
+config_file_path :: proc(app_root: string) -> string {
+	if app_root == "" || app_root == "." {
+		return CONFIG_FILE_NAME
+	}
+	if os.is_path_separator(app_root[len(app_root) - 1]) {
+		return fmt.tprintf("%s%s", app_root, CONFIG_FILE_NAME)
+	}
+	return fmt.tprintf("%s%s%s", app_root, os.Path_Separator_String, CONFIG_FILE_NAME)
+}
+
 missing_config_result :: proc() -> Config_Load_Result {
 	return Config_Load_Result{config = default_config(), status = .Missing}
 }
 
 parse_config_text :: proc(text: string) -> Config_Load_Result {
-	result := Config_Load_Result{config = default_config(), status = .Loaded}
+	result := Config_Load_Result {
+		config = default_config(),
+		status = .Loaded,
+	}
 
 	root, parse_err := parse_strict_json(text)
 	if parse_err != .None {
 		result.status = .Invalid_JSON
-		add_config_warning(&result, fmt.aprintf(
-			"Invalid %s; using default config.",
-			CONFIG_FILE_NAME,
-		))
+		add_config_warning(
+			&result,
+			fmt.aprintf("Invalid %s; using default config.", CONFIG_FILE_NAME),
+		)
 		return result
 	}
 	defer json.destroy_value(root)
@@ -167,10 +188,10 @@ parse_config_text :: proc(text: string) -> Config_Load_Result {
 		apply_config_object(&result, object)
 	case:
 		result.status = .Invalid_Root
-		add_config_warning(&result, fmt.aprintf(
-			"%s must contain a JSON object; using default config.",
-			CONFIG_FILE_NAME,
-		))
+		add_config_warning(
+			&result,
+			fmt.aprintf("%s must contain a JSON object; using default config.", CONFIG_FILE_NAME),
+		)
 	}
 
 	return result
@@ -246,12 +267,17 @@ apply_workers_config :: proc(result: ^Config_Load_Result, value: json.Value) {
 	#partial switch typed in value {
 	case json.String:
 		if typed == "auto" {
-			result.config.workers = Config_Workers{kind = .Auto}
+			result.config.workers = Config_Workers {
+				kind = .Auto,
+			}
 			return
 		}
 	case json.Integer:
 		if typed > 0 && typed <= i64(max(int)) {
-			result.config.workers = Config_Workers{kind = .Explicit, count = int(typed)}
+			result.config.workers = Config_Workers {
+				kind  = .Explicit,
+				count = int(typed),
+			}
 			return
 		}
 	}
@@ -519,17 +545,11 @@ replace_config_string :: proc(slot: ^string, value: string) {
 }
 
 warn_invalid_config_value :: proc(result: ^Config_Load_Result, path: string) {
-	add_config_warning(result, fmt.aprintf(
-		"Invalid config value for %s; using default.",
-		path,
-	))
+	add_config_warning(result, fmt.aprintf("Invalid config value for %s; using default.", path))
 }
 
 warn_unknown_config_option :: proc(result: ^Config_Load_Result, path: string) {
-	add_config_warning(result, fmt.aprintf(
-		"Unknown config option %s; ignoring.",
-		path,
-	))
+	add_config_warning(result, fmt.aprintf("Unknown config option %s; ignoring.", path))
 }
 
 add_config_warning :: proc(result: ^Config_Load_Result, warning: string) {
