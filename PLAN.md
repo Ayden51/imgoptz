@@ -17,6 +17,9 @@ The distributed app root should use this layout:
   imgoptz.exe
   imgoptz.json          optional
   output/               required only when output_mode = "dir" and default out_dir is used
+  profiles/
+    sRGB2014.icc
+    sRGB2014.LICENSE.txt
   tools/
     mozjpeg/
       mozjpeg.exe
@@ -26,6 +29,9 @@ The distributed app root should use this layout:
     oxipng/
       oxipng.exe
       LICENSE
+    pngquant/
+      pngquant.exe
+      COPYRIGHT
     imagemagick/
       magick.exe
       LICENSE.txt
@@ -40,7 +46,9 @@ Required executable paths:
 ```text
 tools\mozjpeg\mozjpeg.exe
 tools\oxipng\oxipng.exe
+tools\pngquant\pngquant.exe
 tools\imagemagick\magick.exe
+profiles\sRGB2014.icc
 ```
 
 ## License Files
@@ -65,6 +73,14 @@ tools\oxipng\LICENSE
 
 Oxipng is MIT licensed, so include its copyright and permission notice with the binary.
 
+pngquant/libimagequant:
+
+```text
+tools\pngquant\COPYRIGHT
+```
+
+Keep pngquant's copyright and license notice beside the binary.
+
 ImageMagick:
 
 ```text
@@ -74,6 +90,15 @@ tools\imagemagick\policy.xml
 ```
 
 `policy.xml` is not strictly required for the basic resize-to-PPM command, but keep it so runtime resource/security policy is explicit and distributable.
+
+ICC sRGB profile:
+
+```text
+profiles\sRGB2014.icc
+profiles\sRGB2014.LICENSE.txt
+```
+
+Use ICC's official `sRGB2014.icc`, not a copied Windows system `sRGB Color Space Profile.icm`, for distribution. The ICC profile may be copied, distributed, embedded, made, used, and sold without restriction when unaltered. Keep the profile copyright tag intact and include the ICC license text in `sRGB2014.LICENSE.txt`.
 
 ## User Flow
 
@@ -165,18 +190,23 @@ Default config:
   "out_dir": "output",
   "jpeg": {
     "enabled": true,
-    "quality": 100,
+    "quality": 78,
     "progressive": true,
     "optimize": true,
     "sample": "2x2",
-    "quant_table": 3
+    "quant_table": 2,
+    "tune": "ms-ssim",
+    "preserve_profiles": true
   },
   "png": {
     "enabled": true,
-    "level": 6,
+    "pngquant_quality": "80-95",
+    "pngquant_speed": 1,
+    "pngquant_dither": false,
+    "oxipng_level": 4,
     "interlace": false,
     "strip": "safe",
-    "alpha": false
+    "alpha": true
   }
 }
 ```
@@ -212,6 +242,28 @@ Do not accept `inplace` and do not normalize alternate spellings.
 ```text
 "auto"
 positive integer
+```
+
+JPEG option validation:
+
+```text
+jpeg.quality           integer 0..100
+jpeg.sample            HxV sampling string accepted by MozJPEG, default 2x2
+jpeg.quant_table       integer table id accepted by MozJPEG, default 2
+jpeg.tune              "ms-ssim" only for the final default pipeline
+jpeg.preserve_profiles JSON boolean
+```
+
+PNG option validation:
+
+```text
+png.pngquant_quality   MIN-MAX integer range accepted by pngquant, default 80-95
+png.pngquant_speed     integer accepted by pngquant, default 1
+png.pngquant_dither    JSON boolean; false means pass --nofs
+png.oxipng_level       integer accepted by Oxipng, default 4
+png.interlace          JSON boolean
+png.strip              safe/all/<list>/none
+png.alpha              JSON boolean
 ```
 
 ## Output Modes
@@ -316,16 +368,41 @@ Examples with `max_dimension = 1920`:
 
 ## JPEG Pipeline
 
-JPEG files are processed with ImageMagick plus MozJPEG.
+JPEG files use the pipeline: ImageMagick resize/orient, ICC profile decision, then MozJPEG compression with the selected ICC profile embedded.
 
-Command shape:
+Final MozJPEG flags:
 
 ```text
-tools\imagemagick\magick.exe input.jpg -auto-orient -filter Lanczos -resize 1920x1920> ppm:-
-tools\mozjpeg\mozjpeg.exe -quality 100 -progressive -optimize -sample 2x2 -quant-table 3 -outfile temp.jpg
+-quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim
 ```
 
-Implementation should pipe ImageMagick stdout into MozJPEG stdin rather than writing an intermediate PPM file when practical.
+PPM cannot carry ICC profiles, so the pixel stream and ICC profile must be handled separately.
+
+Profile decision rules:
+
+1. If the source JPEG has an sRGB-family or P3-family ICC profile, extract that exact source profile to a temporary `*.source.icc` sidecar and embed it in the MozJPEG output.
+2. If the source JPEG has any other ICC profile, convert pixels to sRGB with `profiles\sRGB2014.icc` during the ImageMagick step, then embed `profiles\sRGB2014.icc` in the MozJPEG output.
+3. If the source JPEG has no ICC profile, treat it as unsupported/unknown, convert pixels to sRGB with `profiles\sRGB2014.icc`, then embed `profiles\sRGB2014.icc` in the MozJPEG output.
+
+Retained profile families include at minimum profiles identified as `sRGB`, `IEC 61966-2-1`, `IEC61966-2.1`, `IEC61966-2-1`, `Display P3`, `DCI-P3 D65 Gamut with sRGB Transfer`, or other descriptions containing `P3`.
+
+Retained-profile command shape:
+
+```text
+tools\imagemagick\magick.exe identify -quiet -format %[profile:icc] input.jpg
+tools\imagemagick\magick.exe input.jpg icc:temp.source.icc
+tools\imagemagick\magick.exe input.jpg -auto-orient -filter Lanczos -resize 1920x1920> ppm:-
+tools\mozjpeg\mozjpeg.exe -quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim -icc temp.source.icc -outfile temp.jpg
+```
+
+Unsupported/no-profile command shape:
+
+```text
+tools\imagemagick\magick.exe input.jpg -auto-orient -filter Lanczos -resize 1920x1920> -profile profiles\sRGB2014.icc ppm:-
+tools\mozjpeg\mozjpeg.exe -quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim -icc profiles\sRGB2014.icc -outfile temp.jpg
+```
+
+Implementation should pipe ImageMagick stdout into MozJPEG stdin when practical. If the process API makes piping impractical, write a temporary resized PPM and delete it on all success, failure, and skip-larger paths.
 
 JPEG config maps to MozJPEG flags:
 
@@ -335,37 +412,36 @@ jpeg.progressive  -> -progressive when true
 jpeg.optimize     -> -optimize when true
 jpeg.sample       -> -sample HxV
 jpeg.quant_table  -> -quant-table N
+jpeg.tune         -> -tune-ms-ssim when set to "ms-ssim"
 ```
 
-Write MozJPEG output to a temp file first, then apply output mode rules.
+Write MozJPEG output to a temp `.jpg` first, then apply output mode rules. Delete any temporary `*.source.icc` sidecar after a successful output is accepted. Also delete `*.source.icc` when processing fails, and when the generated JPEG is equal/larger than the original and is skipped.
 
 ## PNG Pipeline
 
-PNG files are processed with ImageMagick plus Oxipng.
+PNG files use the pipeline: ImageMagick resize/orient to a temporary PNG, pngquant lossy quantization without dithering, then Oxipng optimization.
 
 Command shape:
 
 ```text
 tools\imagemagick\magick.exe input.png -auto-orient -filter Lanczos -resize 1920x1920> temp.resized.png
-tools\oxipng\oxipng.exe -o 6 --strip safe --interlace off --out temp.optimized.png temp.resized.png
+tools\pngquant\pngquant.exe --force --output temp.quant.png --quality 80-95 --speed 1 --nofs --strip -- temp.resized.png
+tools\oxipng\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.quant.png
 ```
 
-PNG config maps to Oxipng flags:
+PNG config maps to tool flags:
 
 ```text
-png.level      -> -o N
-png.interlace  -> --interlace on/off
-png.strip      -> --strip safe/all/<list>, omitted if set to none
-png.alpha      -> --alpha when true
+png.pngquant_quality -> pngquant --quality MIN-MAX
+png.pngquant_speed   -> pngquant --speed N
+png.pngquant_dither  -> omit --nofs when true, pass --nofs when false
+png.oxipng_level     -> oxipng -o N
+png.interlace        -> oxipng --interlace on/off
+png.strip            -> oxipng --strip safe/all/<list>, omitted if set to none
+png.alpha            -> oxipng --alpha when true
 ```
 
-Default PNG behavior should match the intended Squoosh-like OxiPNG settings as closely as practical:
-
-```text
--o 6 --interlace off --strip safe
-```
-
-`--strip safe` is configurable.
+Write Oxipng output to a temp `.png` first, then apply output mode rules. Delete `temp.resized.png` and `temp.quant.png` on all success, failure, and skip-larger paths.
 
 ## Slugify Output Names
 
@@ -409,7 +485,7 @@ Behavior:
 4. If probe fails, warn and fall back to CPU.
 5. Never blindly enable GPU without a successful probe.
 
-GPU only applies to ImageMagick resize work. MozJPEG and Oxipng remain CPU tools.
+GPU only applies to ImageMagick resize work. MozJPEG, pngquant, and Oxipng remain CPU tools.
 
 ## Worker Strategy
 
@@ -456,10 +532,12 @@ Temp file naming should avoid collisions:
 Failure handling:
 
 1. If ImageMagick fails, delete temp files and mark file failed.
-2. If MozJPEG/Oxipng fails, delete temp files and mark file failed.
+2. If MozJPEG/pngquant/Oxipng fails, delete temp files and mark file failed.
 3. If temp output does not exist or is empty, delete temp files and mark file failed.
 4. If final output is not smaller, delete temp files and mark file skipped.
 5. If replacement/copy fails, preserve original and mark file failed.
+
+JPEG ICC sidecars are temp files. Delete `*.source.icc` on every path: successful accepted output, tool failure, empty output, skip-larger, and replacement/copy failure.
 
 ## Console Output
 
@@ -543,8 +621,8 @@ odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o
 8. Add ImageMagick GPU probe when `gpu = true`.
 9. Add supported file discovery with optional recursion.
 10. Add relative path preservation for recursive `dir` output mode.
-11. Add JPEG pipeline with Magick-to-MozJPEG piping.
-12. Add PNG pipeline with Magick temp resize plus Oxipng output.
+11. Add JPEG pipeline with ICC retention/conversion and `*.source.icc` cleanup.
+12. Add PNG pipeline with Magick temp resize, pngquant, and Oxipng output.
 13. Add temp file cleanup and size comparison.
 14. Add safe original replacement for `in-place` mode.
 15. Add slugify final output names and collision handling.
