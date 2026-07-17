@@ -4,6 +4,7 @@ import json "core:encoding/json"
 import "core:fmt"
 import "core:log"
 import "core:os"
+import "core:strconv"
 import "core:strings"
 
 CONFIG_FILE_NAME :: "imgoptz.json"
@@ -24,20 +25,25 @@ Config_Workers :: struct {
 }
 
 Jpeg_Config :: struct {
-	enabled:     bool,
-	quality:     int,
-	progressive: bool,
-	optimize:    bool,
-	sample:      string,
-	quant_table: int,
+	enabled:           bool,
+	quality:           int,
+	progressive:       bool,
+	optimize:          bool,
+	sample:            string,
+	quant_table:       int,
+	tune:              string,
+	preserve_profiles: bool,
 }
 
 Png_Config :: struct {
-	enabled:   bool,
-	level:     int,
-	interlace: bool,
-	strip:     string,
-	alpha:     bool,
+	enabled:           bool,
+	pngquant_quality: string,
+	pngquant_speed:   int,
+	pngquant_dither:  bool,
+	oxipng_level:     int,
+	interlace:        bool,
+	strip:            string,
+	alpha:            bool,
 }
 
 App_Config :: struct {
@@ -79,18 +85,23 @@ default_config :: proc() -> App_Config {
 		out_dir = strings.clone("output"),
 		jpeg = Jpeg_Config {
 			enabled = true,
-			quality = 100,
+			quality = 78,
 			progressive = true,
 			optimize = true,
 			sample = strings.clone("2x2"),
-			quant_table = 3,
+			quant_table = 2,
+			tune = strings.clone("ms-ssim"),
+			preserve_profiles = true,
 		},
 		png = Png_Config {
 			enabled = true,
-			level = 6,
+			pngquant_quality = strings.clone("80-95"),
+			pngquant_speed = 1,
+			pngquant_dither = false,
+			oxipng_level = 4,
 			interlace = false,
 			strip = strings.clone("safe"),
-			alpha = false,
+			alpha = true,
 		},
 	}
 }
@@ -99,6 +110,8 @@ destroy_config :: proc(config: ^App_Config) {
 	delete(config.debug_log_file)
 	delete(config.out_dir)
 	delete(config.jpeg.sample)
+	delete(config.jpeg.tune)
+	delete(config.png.pngquant_quality)
 	delete(config.png.strip)
 	config^ = {}
 }
@@ -272,7 +285,7 @@ apply_jpeg_config :: proc(result: ^Config_Load_Result, value: json.Value) {
 					warn_invalid_config_value(result, "jpeg.enabled")
 				}
 			case "quality":
-				if value, ok := config_json_int_in_range(item, 1, 100); ok {
+				if value, ok := config_json_int_in_range(item, 0, 100); ok {
 					result.config.jpeg.quality = value
 				} else {
 					warn_invalid_config_value(result, "jpeg.quality")
@@ -290,7 +303,7 @@ apply_jpeg_config :: proc(result: ^Config_Load_Result, value: json.Value) {
 					warn_invalid_config_value(result, "jpeg.optimize")
 				}
 			case "sample":
-				if value, ok := config_json_non_empty_string(item); ok {
+				if value, ok := config_json_jpeg_sample(item); ok {
 					replace_config_string(&result.config.jpeg.sample, value)
 				} else {
 					warn_invalid_config_value(result, "jpeg.sample")
@@ -300,6 +313,18 @@ apply_jpeg_config :: proc(result: ^Config_Load_Result, value: json.Value) {
 					result.config.jpeg.quant_table = value
 				} else {
 					warn_invalid_config_value(result, "jpeg.quant_table")
+				}
+			case "tune":
+				if value, ok := config_json_jpeg_tune(item); ok {
+					replace_config_string(&result.config.jpeg.tune, value)
+				} else {
+					warn_invalid_config_value(result, "jpeg.tune")
+				}
+			case "preserve_profiles":
+				if value, ok := config_json_bool(item); ok {
+					result.config.jpeg.preserve_profiles = value
+				} else {
+					warn_invalid_config_value(result, "jpeg.preserve_profiles")
 				}
 			case:
 				warn_unknown_config_option(result, fmt.tprintf("jpeg.%s", key))
@@ -321,11 +346,29 @@ apply_png_config :: proc(result: ^Config_Load_Result, value: json.Value) {
 				} else {
 					warn_invalid_config_value(result, "png.enabled")
 				}
-			case "level":
-				if value, ok := config_json_int_in_range(item, 0, 6); ok {
-					result.config.png.level = value
+			case "pngquant_quality":
+				if value, ok := config_json_pngquant_quality(item); ok {
+					replace_config_string(&result.config.png.pngquant_quality, value)
 				} else {
-					warn_invalid_config_value(result, "png.level")
+					warn_invalid_config_value(result, "png.pngquant_quality")
+				}
+			case "pngquant_speed":
+				if value, ok := config_json_int_in_range(item, 1, 11); ok {
+					result.config.png.pngquant_speed = value
+				} else {
+					warn_invalid_config_value(result, "png.pngquant_speed")
+				}
+			case "pngquant_dither":
+				if value, ok := config_json_bool(item); ok {
+					result.config.png.pngquant_dither = value
+				} else {
+					warn_invalid_config_value(result, "png.pngquant_dither")
+				}
+			case "oxipng_level":
+				if value, ok := config_json_int_in_range(item, 0, 6); ok {
+					result.config.png.oxipng_level = value
+				} else {
+					warn_invalid_config_value(result, "png.oxipng_level")
 				}
 			case "interlace":
 				if value, ok := config_json_bool(item); ok {
@@ -334,7 +377,7 @@ apply_png_config :: proc(result: ^Config_Load_Result, value: json.Value) {
 					warn_invalid_config_value(result, "png.interlace")
 				}
 			case "strip":
-				if value, ok := config_json_non_empty_string(item); ok {
+				if value, ok := config_json_png_strip(item); ok {
 					replace_config_string(&result.config.png.strip, value)
 				} else {
 					warn_invalid_config_value(result, "png.strip")
@@ -352,6 +395,78 @@ apply_png_config :: proc(result: ^Config_Load_Result, value: json.Value) {
 	case:
 		warn_invalid_config_value(result, "png")
 	}
+}
+
+config_json_jpeg_sample :: proc(value: json.Value) -> (string, bool) {
+	sample, ok := config_json_non_empty_string(value)
+	if !ok {
+		return "", false
+	}
+
+	parts := strings.split(sample, "x", context.temp_allocator)
+	defer delete(parts, context.temp_allocator)
+	if len(parts) != 2 {
+		return "", false
+	}
+
+	for part in parts {
+		if _, part_ok := parse_positive_config_int(part); !part_ok {
+			return "", false
+		}
+	}
+
+	return sample, true
+}
+
+config_json_jpeg_tune :: proc(value: json.Value) -> (string, bool) {
+	tune, ok := config_json_non_empty_string(value)
+	if ok && tune == "ms-ssim" {
+		return tune, true
+	}
+	return "", false
+}
+
+config_json_pngquant_quality :: proc(value: json.Value) -> (string, bool) {
+	quality, ok := config_json_non_empty_string(value)
+	if !ok {
+		return "", false
+	}
+
+	parts := strings.split(quality, "-", context.temp_allocator)
+	defer delete(parts, context.temp_allocator)
+	if len(parts) != 2 {
+		return "", false
+	}
+
+	min_quality, min_ok := parse_config_int_in_range(parts[0], 0, 100)
+	max_quality, max_ok := parse_config_int_in_range(parts[1], 0, 100)
+	if !min_ok || !max_ok || min_quality > max_quality {
+		return "", false
+	}
+
+	return quality, true
+}
+
+config_json_png_strip :: proc(value: json.Value) -> (string, bool) {
+	strip, ok := config_json_non_empty_string(value)
+	if !ok {
+		return "", false
+	}
+
+	switch strip {
+	case "safe", "all", "none":
+		return strip, true
+	}
+
+	chunks := strings.split(strip, ",", context.temp_allocator)
+	defer delete(chunks, context.temp_allocator)
+	for chunk in chunks {
+		if len(chunk) != 4 {
+			return "", false
+		}
+	}
+
+	return strip, true
 }
 
 config_json_bool :: proc(value: json.Value) -> (bool, bool) {
@@ -384,6 +499,18 @@ config_json_non_empty_string :: proc(value: json.Value) -> (string, bool) {
 		}
 	}
 	return "", false
+}
+
+parse_positive_config_int :: proc(text: string) -> (int, bool) {
+	return parse_config_int_in_range(text, 1, max(int))
+}
+
+parse_config_int_in_range :: proc(text: string, min_value, max_value: int) -> (int, bool) {
+	value, ok := strconv.parse_int(text)
+	if !ok || value < min_value || value > max_value {
+		return 0, false
+	}
+	return value, true
 }
 
 replace_config_string :: proc(slot: ^string, value: string) {
@@ -449,4 +576,38 @@ config_workers_summary :: proc(workers: Config_Workers) -> string {
 		return fmt.tprintf("%d", workers.count)
 	}
 	return "auto"
+}
+
+config_jpeg_summary :: proc(jpeg: Jpeg_Config) -> string {
+	if !jpeg.enabled {
+		return "disabled"
+	}
+
+	return fmt.tprintf(
+		"enabled quality=%d progressive=%v optimize=%v sample=%s quant_table=%d tune=%s preserve_profiles=%v",
+		jpeg.quality,
+		jpeg.progressive,
+		jpeg.optimize,
+		jpeg.sample,
+		jpeg.quant_table,
+		jpeg.tune,
+		jpeg.preserve_profiles,
+	)
+}
+
+config_png_summary :: proc(png: Png_Config) -> string {
+	if !png.enabled {
+		return "disabled"
+	}
+
+	return fmt.tprintf(
+		"enabled pngquant_quality=%s pngquant_speed=%d pngquant_dither=%v oxipng_level=%d interlace=%v strip=%s alpha=%v",
+		png.pngquant_quality,
+		png.pngquant_speed,
+		png.pngquant_dither,
+		png.oxipng_level,
+		png.interlace,
+		png.strip,
+		png.alpha,
+	)
 }

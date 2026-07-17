@@ -37,12 +37,17 @@ test_parse_config_partial_file_overrides_only_present_options :: proc(t: ^testin
 		"out_dir": "optimized",
 		"jpeg": {
 			"quality": 82,
-			"progressive": false
+			"progressive": false,
+			"tune": "ms-ssim",
+			"preserve_profiles": false
 		},
 		"png": {
-			"level": 4,
+			"pngquant_quality": "70-90",
+			"pngquant_speed": 2,
+			"pngquant_dither": true,
+			"oxipng_level": 5,
 			"strip": "all",
-			"alpha": true
+			"alpha": false
 		}
 	}`)
 	defer destroy_config_load_result(&result)
@@ -63,12 +68,17 @@ test_parse_config_partial_file_overrides_only_present_options :: proc(t: ^testin
 	testing.expect_value(t, result.config.jpeg.progressive, false)
 	testing.expect_value(t, result.config.jpeg.optimize, true)
 	testing.expect_value(t, result.config.jpeg.sample, "2x2")
-	testing.expect_value(t, result.config.jpeg.quant_table, 3)
+	testing.expect_value(t, result.config.jpeg.quant_table, 2)
+	testing.expect_value(t, result.config.jpeg.tune, "ms-ssim")
+	testing.expect_value(t, result.config.jpeg.preserve_profiles, false)
 	testing.expect_value(t, result.config.png.enabled, true)
-	testing.expect_value(t, result.config.png.level, 4)
+	testing.expect_value(t, result.config.png.pngquant_quality, "70-90")
+	testing.expect_value(t, result.config.png.pngquant_speed, 2)
+	testing.expect_value(t, result.config.png.pngquant_dither, true)
+	testing.expect_value(t, result.config.png.oxipng_level, 5)
 	testing.expect_value(t, result.config.png.interlace, false)
 	testing.expect_value(t, result.config.png.strip, "all")
-	testing.expect_value(t, result.config.png.alpha, true)
+	testing.expect_value(t, result.config.png.alpha, false)
 }
 
 @(test, require)
@@ -87,8 +97,8 @@ test_parse_config_unknown_options_warn_and_are_ignored :: proc(t: ^testing.T) {
 	testing.expect(t, warning_contains(result, "jpeg.made_up"))
 	testing.expect(t, warning_contains(result, "png.surprise"))
 	testing.expect_value(t, result.config.recursive, true)
-	testing.expect_value(t, result.config.jpeg.quality, 100)
-	testing.expect_value(t, result.config.png.level, 6)
+	testing.expect_value(t, result.config.jpeg.quality, 78)
+	testing.expect_value(t, result.config.png.oxipng_level, 4)
 }
 
 @(test, require)
@@ -104,24 +114,29 @@ test_parse_config_invalid_values_fall_back_per_option :: proc(t: ^testing.T) {
 		"out_dir": "",
 		"jpeg": {
 			"enabled": "yes",
-			"quality": 101,
+			"quality": -1,
 			"progressive": "no",
 			"optimize": 1,
-			"sample": "",
-			"quant_table": 9
+			"sample": "2",
+			"quant_table": 9,
+			"tune": "hvs-psnr",
+			"preserve_profiles": "true"
 		},
 		"png": {
 			"enabled": "yes",
-			"level": 7,
+			"pngquant_quality": "95-80",
+			"pngquant_speed": 12,
+			"pngquant_dither": "false",
+			"oxipng_level": 7,
 			"interlace": "off",
-			"strip": "",
+			"strip": "abc",
 			"alpha": "false"
 		}
 	}`)
 	defer destroy_config_load_result(&result)
 
 	testing.expect_value(t, result.status, Config_Load_Status.Loaded)
-	testing.expect_value(t, len(result.warnings), 18)
+	testing.expect_value(t, len(result.warnings), 23)
 	testing.expect_value(t, result.config.recursive, true)
 	testing.expect_value(t, result.config.max_dimension, 1920)
 	testing.expect_value(t, result.config.workers.kind, Config_Workers_Kind.Auto)
@@ -131,16 +146,57 @@ test_parse_config_invalid_values_fall_back_per_option :: proc(t: ^testing.T) {
 	testing.expect_value(t, result.config.output_mode, Config_Output_Mode.In_Place)
 	testing.expect_value(t, result.config.out_dir, "output")
 	testing.expect_value(t, result.config.jpeg.enabled, true)
-	testing.expect_value(t, result.config.jpeg.quality, 100)
+	testing.expect_value(t, result.config.jpeg.quality, 78)
 	testing.expect_value(t, result.config.jpeg.progressive, true)
 	testing.expect_value(t, result.config.jpeg.optimize, true)
 	testing.expect_value(t, result.config.jpeg.sample, "2x2")
-	testing.expect_value(t, result.config.jpeg.quant_table, 3)
+	testing.expect_value(t, result.config.jpeg.quant_table, 2)
+	testing.expect_value(t, result.config.jpeg.tune, "ms-ssim")
+	testing.expect_value(t, result.config.jpeg.preserve_profiles, true)
 	testing.expect_value(t, result.config.png.enabled, true)
-	testing.expect_value(t, result.config.png.level, 6)
+	testing.expect_value(t, result.config.png.pngquant_quality, "80-95")
+	testing.expect_value(t, result.config.png.pngquant_speed, 1)
+	testing.expect_value(t, result.config.png.pngquant_dither, false)
+	testing.expect_value(t, result.config.png.oxipng_level, 4)
 	testing.expect_value(t, result.config.png.interlace, false)
 	testing.expect_value(t, result.config.png.strip, "safe")
-	testing.expect_value(t, result.config.png.alpha, false)
+	testing.expect_value(t, result.config.png.alpha, true)
+}
+
+@(test, require)
+test_parse_config_accepts_new_pipeline_options :: proc(t: ^testing.T) {
+	result := parse_config_text(`{
+		"jpeg": {
+			"quality": 0,
+			"sample": "1x1",
+			"quant_table": 0,
+			"tune": "ms-ssim",
+			"preserve_profiles": true
+		},
+		"png": {
+			"pngquant_quality": "0-100",
+			"pngquant_speed": 11,
+			"pngquant_dither": false,
+			"oxipng_level": 0,
+			"strip": "iCCP,tEXt",
+			"alpha": true
+		}
+	}`)
+	defer destroy_config_load_result(&result)
+
+	testing.expect_value(t, result.status, Config_Load_Status.Loaded)
+	testing.expect_value(t, len(result.warnings), 0)
+	testing.expect_value(t, result.config.jpeg.quality, 0)
+	testing.expect_value(t, result.config.jpeg.sample, "1x1")
+	testing.expect_value(t, result.config.jpeg.quant_table, 0)
+	testing.expect_value(t, result.config.jpeg.tune, "ms-ssim")
+	testing.expect_value(t, result.config.jpeg.preserve_profiles, true)
+	testing.expect_value(t, result.config.png.pngquant_quality, "0-100")
+	testing.expect_value(t, result.config.png.pngquant_speed, 11)
+	testing.expect_value(t, result.config.png.pngquant_dither, false)
+	testing.expect_value(t, result.config.png.oxipng_level, 0)
+	testing.expect_value(t, result.config.png.strip, "iCCP,tEXt")
+	testing.expect_value(t, result.config.png.alpha, true)
 }
 
 @(test, require)
@@ -171,16 +227,21 @@ expect_default_config :: proc(t: ^testing.T, config: App_Config) {
 	testing.expect_value(t, config.output_mode, Config_Output_Mode.In_Place)
 	testing.expect_value(t, config.out_dir, "output")
 	testing.expect_value(t, config.jpeg.enabled, true)
-	testing.expect_value(t, config.jpeg.quality, 100)
+	testing.expect_value(t, config.jpeg.quality, 78)
 	testing.expect_value(t, config.jpeg.progressive, true)
 	testing.expect_value(t, config.jpeg.optimize, true)
 	testing.expect_value(t, config.jpeg.sample, "2x2")
-	testing.expect_value(t, config.jpeg.quant_table, 3)
+	testing.expect_value(t, config.jpeg.quant_table, 2)
+	testing.expect_value(t, config.jpeg.tune, "ms-ssim")
+	testing.expect_value(t, config.jpeg.preserve_profiles, true)
 	testing.expect_value(t, config.png.enabled, true)
-	testing.expect_value(t, config.png.level, 6)
+	testing.expect_value(t, config.png.pngquant_quality, "80-95")
+	testing.expect_value(t, config.png.pngquant_speed, 1)
+	testing.expect_value(t, config.png.pngquant_dither, false)
+	testing.expect_value(t, config.png.oxipng_level, 4)
 	testing.expect_value(t, config.png.interlace, false)
 	testing.expect_value(t, config.png.strip, "safe")
-	testing.expect_value(t, config.png.alpha, false)
+	testing.expect_value(t, config.png.alpha, true)
 }
 
 warning_contains :: proc(result: Config_Load_Result, needle: string) -> bool {

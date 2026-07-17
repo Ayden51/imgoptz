@@ -43,4 +43,6 @@ print_startup_summary :: proc(app_root_path: string, config_result: Config_Load_
 	log.info("Workers:", config_workers_summary(config_result.config.workers))
 	log.info("GPU:", config_result.config.gpu)
 	log.info("Output mode:", config_output_mode_summary(config_result.config.output_mode))
+	log.info("JPEG:", config_jpeg_summary(config_result.config.jpeg))
+	log.info("PNG:", config_png_summary(config_result.config.png))
 }

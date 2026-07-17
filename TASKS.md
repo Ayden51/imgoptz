@@ -38,8 +38,8 @@ Goal: turn the launcher demo into the real prompt shell without image processing
 Goal: add typed runtime settings while preserving default behavior.
 
 - [x] Add config data model with built-in defaults from `PLAN.md`.
-- [ ] Update defaults for the selected JPEG pipeline: quality 78, quant table 2, `tune = "ms-ssim"`, and ICC profile preservation.
-- [ ] Update defaults for the selected PNG pipeline: pngquant quality/speed/dither plus Oxipng level/interlace/strip/alpha.
+- [x] Update defaults for the selected JPEG pipeline: quality 78, quant table 2, `tune = "ms-ssim"`, and ICC profile preservation.
+- [x] Update defaults for the selected PNG pipeline: pngquant quality/speed/dither plus Oxipng level/interlace/strip/alpha.
 - [x] Load only `imgoptz.json` from app root when present.
 - [x] Warn and use full defaults for invalid JSON.
 - [x] Warn for unknown options and ignore them.
@@ -47,8 +47,8 @@ Goal: add typed runtime settings while preserving default behavior.
 - [x] Enforce `gpu` as JSON boolean only.
 - [x] Enforce `output_mode` as `in-place` or `dir` only.
 - [x] Enforce `workers` as `auto` or positive integer.
-- [ ] Validate JPEG `quality`, `sample`, `quant_table`, `tune`, and `preserve_profiles`.
-- [ ] Validate PNG `pngquant_quality`, `pngquant_speed`, `pngquant_dither`, `oxipng_level`, `interlace`, `strip`, and `alpha`.
+- [x] Validate JPEG `quality`, `sample`, `quant_table`, `tune`, and `preserve_profiles`.
+- [x] Validate PNG `pngquant_quality`, `pngquant_speed`, `pngquant_dither`, `oxipng_level`, `interlace`, `strip`, and `alpha`.
 - [x] Print active config summary at startup.
 - [x] Verify missing, invalid, partial, unknown, and invalid-value configs.
 
