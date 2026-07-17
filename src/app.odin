@@ -38,11 +38,23 @@ print_startup_summary :: proc(app_root_path: string, config_result: Config_Load_
 	log.info("== imgoptz ==")
 	log.info("Working directory:", app_root_path)
 	log.info("Config:", config_status_summary(config_result.status))
-	log.info("Recursive:", config_result.config.recursive)
-	log.info("Max dimension:", config_result.config.max_dimension)
-	log.info("Workers:", config_workers_summary(config_result.config.workers))
-	log.info("GPU:", config_result.config.gpu)
-	log.info("Output mode:", config_output_mode_summary(config_result.config.output_mode))
-	log.info("JPEG:", config_jpeg_summary(config_result.config.jpeg))
-	log.info("PNG:", config_png_summary(config_result.config.png))
+	print_debug_startup_config(config_result.config)
+}
+
+print_debug_startup_config :: proc(config: App_Config) {
+	if !config.debug_log {
+		return
+	}
+
+	log.info("")
+	log.info("-- Debug config --")
+	log.info("Recursive:", config.recursive)
+	log.info("Max dimension:", config.max_dimension)
+	log.info("Workers:", config_workers_summary(config.workers))
+	log.info("GPU:", config.gpu)
+	log.info("Output mode:", config_output_mode_summary(config.output_mode))
+	log.info("JPEG:", config_jpeg_summary(config.jpeg))
+	log.info("PNG:", config_png_summary(config.png))
+	log.info("-- End debug config --")
+	log.info("")
 }
