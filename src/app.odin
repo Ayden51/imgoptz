@@ -16,7 +16,11 @@ run_imgoptz :: proc() {
 	}
 	defer delete(app_root.path)
 
-	print_startup_summary(app_root.path)
+	config_result := load_app_config()
+	defer destroy_config_load_result(&config_result)
+
+	print_startup_summary(app_root.path, config_result)
+	print_config_warnings(config_result)
 	run_prompt_loop()
 }
 
@@ -30,7 +34,27 @@ print_app_root_error :: proc(app_root: App_Root) {
 	}
 }
 
-print_startup_summary :: proc(app_root_path: string) {
+print_startup_summary :: proc(app_root_path: string, config_result: Config_Load_Result) {
 	log.info("== imgoptz ==")
 	log.info("Working directory:", app_root_path)
+	log.info("Config:", config_status_summary(config_result.status))
+	print_debug_startup_config(config_result.config)
+}
+
+print_debug_startup_config :: proc(config: App_Config) {
+	if !config.debug_log {
+		return
+	}
+
+	log.info("")
+	log.info("-- Debug config --")
+	log.info("Recursive:", config.recursive)
+	log.info("Max dimension:", config.max_dimension)
+	log.info("Workers:", config_workers_summary(config.workers))
+	log.info("GPU:", config.gpu)
+	log.info("Output mode:", config_output_mode_summary(config.output_mode))
+	log.info("JPEG:", config_jpeg_summary(config.jpeg))
+	log.info("PNG:", config_png_summary(config.png))
+	log.info("-- End debug config --")
+	log.info("")
 }
