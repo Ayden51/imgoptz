@@ -37,7 +37,11 @@ test_validate_required_runtime_files_reports_missing_file :: proc(t: ^testing.T)
 		return
 	}
 
-	missing_path := resolve_app_relative_path(temp_dir, "tools/pngquant/COPYRIGHT", context.temp_allocator)
+	missing_path := resolve_app_relative_path(
+		temp_dir,
+		"tools/pngquant/COPYRIGHT",
+		context.temp_allocator,
+	)
 	remove_err := os.remove(missing_path)
 	if !testing.expect_value(t, remove_err, nil) {
 		return
@@ -64,7 +68,11 @@ test_validate_required_runtime_files_reports_missing_executable :: proc(t: ^test
 		return
 	}
 
-	missing_path := resolve_app_relative_path(temp_dir, "tools/mozjpeg/mozjpeg.exe", context.temp_allocator)
+	missing_path := resolve_app_relative_path(
+		temp_dir,
+		"tools/mozjpeg/mozjpeg.exe",
+		context.temp_allocator,
+	)
 	remove_err := os.remove(missing_path)
 	if !testing.expect_value(t, remove_err, nil) {
 		return
@@ -129,7 +137,11 @@ test_resolve_output_root_falls_back_to_default_output :: proc(t: ^testing.T) {
 	defer delete(temp_dir)
 	defer os.remove_all(temp_dir)
 
-	default_output := resolve_app_relative_path(temp_dir, RUNTIME_DEFAULT_OUTPUT_DIR, context.temp_allocator)
+	default_output := resolve_app_relative_path(
+		temp_dir,
+		RUNTIME_DEFAULT_OUTPUT_DIR,
+		context.temp_allocator,
+	)
 	mkdir_err := os.make_directory(default_output)
 	if !testing.expect_value(t, mkdir_err, nil) {
 		return

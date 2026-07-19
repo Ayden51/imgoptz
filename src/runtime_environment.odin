@@ -88,14 +88,21 @@ load_runtime_environment_with_probe :: proc(
 	}
 
 	if config.gpu {
-		magick_path := resolve_app_relative_path(app_root, "tools/imagemagick/magick.exe", context.temp_allocator)
+		magick_path := resolve_app_relative_path(
+			app_root,
+			"tools/imagemagick/magick.exe",
+			context.temp_allocator,
+		)
 		if os.is_file(magick_path) {
 			if probe(magick_path) {
 				env.gpu_status = .Enabled
 				env.magick_use_gpu = true
 			} else {
 				env.gpu_status = .Probe_Failed
-				add_runtime_warning(&env, "ImageMagick OpenCL GPU probe failed; falling back to CPU.")
+				add_runtime_warning(
+					&env,
+					"ImageMagick OpenCL GPU probe failed; falling back to CPU.",
+				)
 			}
 		}
 	}
@@ -157,7 +164,11 @@ resolve_output_root :: proc(app_root: string, config: App_Config) -> Output_Root
 		)
 	}
 
-	default_path := resolve_app_relative_path(app_root, RUNTIME_DEFAULT_OUTPUT_DIR, context.allocator)
+	default_path := resolve_app_relative_path(
+		app_root,
+		RUNTIME_DEFAULT_OUTPUT_DIR,
+		context.allocator,
+	)
 	if len(default_path) == 0 {
 		result.err = .Resolve_Failed
 		return result
@@ -182,7 +193,10 @@ destroy_output_root_result :: proc(result: ^Output_Root_Result) {
 	result^ = {}
 }
 
-resolve_app_relative_path :: proc(app_root, path: string, allocator := context.allocator) -> string {
+resolve_app_relative_path :: proc(
+	app_root, path: string,
+	allocator := context.allocator,
+) -> string {
 	if os.is_absolute_path(path) {
 		absolute_path, absolute_path_err := os.get_absolute_path(path, allocator)
 		if absolute_path_err != os.ERROR_NONE {
@@ -220,7 +234,7 @@ probe_imagemagick_opencl :: proc(magick_path: string) -> bool {
 }
 
 probe_imagemagick_gpu_resize :: proc(magick_path: string) -> bool {
-	command := [?]string{
+	command := [?]string {
 		magick_path,
 		"-size",
 		"8x8",
