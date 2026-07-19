@@ -4,20 +4,20 @@ import "core:bufio"
 import "core:log"
 import "core:os"
 
-run_prompt_loop :: proc() {
+run_prompt_loop :: proc(runtime_env: Runtime_Environment) {
 	sc: bufio.Scanner
 	bufio.scanner_init(&sc, os.to_stream(os.stdin))
 	defer bufio.scanner_destroy(&sc)
 	sc.split = bufio.scan_lines
 
 	for {
-		if !prompt_once(&sc) {
+		if !prompt_once(&sc, runtime_env) {
 			break
 		}
 	}
 }
 
-prompt_once :: proc(sc: ^bufio.Scanner) -> bool {
+prompt_once :: proc(sc: ^bufio.Scanner, runtime_env: Runtime_Environment) -> bool {
 	log.info("Paste one image directory path, or type 'exit':")
 
 	if !bufio.scan(sc) {
@@ -32,18 +32,21 @@ prompt_once :: proc(sc: ^bufio.Scanner) -> bool {
 	case .Exit:
 		return false
 	case .Directory_Path:
-		process_input_directory(input.path)
+		process_input_directory(input.path, runtime_env)
 		return true
 	}
 
 	return true
 }
 
-process_input_directory :: proc(input_path: string) {
+process_input_directory :: proc(input_path: string, runtime_env: Runtime_Environment) {
 	absolute_path, input_dir_err := accept_input_directory(input_path)
 	switch input_dir_err {
 	case .None:
 		log.info("Accepted directory:", absolute_path)
+		if runtime_env.output_mode == .Dir {
+			log.info("Accepted output root:", runtime_env.output_root)
+		}
 		log.info("Image discovery and optimization are not implemented yet.")
 	case .Not_Directory:
 		log.error("Not a directory:", input_path)
