@@ -52,6 +52,34 @@ test_validate_required_runtime_files_reports_missing_file :: proc(t: ^testing.T)
 }
 
 @(test, require)
+test_validate_required_runtime_files_reports_missing_executable :: proc(t: ^testing.T) {
+	temp_dir := make_temp_runtime_root(t)
+	if len(temp_dir) == 0 {
+		return
+	}
+	defer delete(temp_dir)
+	defer os.remove_all(temp_dir)
+
+	if !write_required_runtime_tree(t, temp_dir) {
+		return
+	}
+
+	missing_path := resolve_app_relative_path(temp_dir, "tools/mozjpeg/mozjpeg.exe", context.temp_allocator)
+	remove_err := os.remove(missing_path)
+	if !testing.expect_value(t, remove_err, nil) {
+		return
+	}
+
+	env: Runtime_Environment
+	defer destroy_runtime_environment(&env)
+	validate_required_runtime_files(&env, temp_dir)
+
+	testing.expect_value(t, len(env.errors), 1)
+	testing.expect(t, strings.contains(env.errors[0], "MozJPEG executable"))
+	testing.expect(t, strings.contains(env.errors[0], "tools/mozjpeg/mozjpeg.exe"))
+}
+
+@(test, require)
 test_resolve_output_root_ignores_in_place_mode :: proc(t: ^testing.T) {
 	config := default_config()
 	defer destroy_config(&config)
@@ -174,6 +202,31 @@ test_load_runtime_environment_skips_gpu_probe_when_disabled :: proc(t: ^testing.
 }
 
 @(test, require)
+test_load_runtime_environment_enables_gpu_after_successful_probe :: proc(t: ^testing.T) {
+	temp_dir := make_temp_runtime_root(t)
+	if len(temp_dir) == 0 {
+		return
+	}
+	defer delete(temp_dir)
+	defer os.remove_all(temp_dir)
+
+	if !write_required_runtime_tree(t, temp_dir) {
+		return
+	}
+
+	config := default_config()
+	defer destroy_config(&config)
+
+	env := load_runtime_environment_with_probe(temp_dir, config, test_gpu_probe_success)
+	defer destroy_runtime_environment(&env)
+
+	testing.expect_value(t, env.ok, true)
+	testing.expect_value(t, env.gpu_status, Runtime_GPU_Status.Enabled)
+	testing.expect_value(t, env.magick_use_gpu, true)
+	testing.expect_value(t, len(env.warnings), 0)
+}
+
+@(test, require)
 test_load_runtime_environment_warns_when_gpu_probe_fails :: proc(t: ^testing.T) {
 	temp_dir := make_temp_runtime_root(t)
 	if len(temp_dir) == 0 {
@@ -221,4 +274,8 @@ write_required_runtime_tree :: proc(t: ^testing.T, app_root: string) -> bool {
 		}
 	}
 	return true
+}
+
+test_gpu_probe_success :: proc(magick_path: string) -> bool {
+	return len(magick_path) > 0
 }

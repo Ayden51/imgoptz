@@ -11,6 +11,8 @@ Runtime_GPU_Status :: enum {
 	Probe_Failed,
 }
 
+Runtime_GPU_Probe :: proc(magick_path: string) -> bool
+
 Runtime_Required_File :: struct {
 	relative_path: string,
 	label:         string,
@@ -58,6 +60,14 @@ RUNTIME_REQUIRED_FILES :: [?]Runtime_Required_File {
 }
 
 load_runtime_environment :: proc(app_root: string, config: App_Config) -> Runtime_Environment {
+	return load_runtime_environment_with_probe(app_root, config, probe_imagemagick_opencl)
+}
+
+load_runtime_environment_with_probe :: proc(
+	app_root: string,
+	config: App_Config,
+	probe: Runtime_GPU_Probe,
+) -> Runtime_Environment {
 	env := Runtime_Environment {
 		ok          = true,
 		output_mode = config.output_mode,
@@ -80,7 +90,7 @@ load_runtime_environment :: proc(app_root: string, config: App_Config) -> Runtim
 	if config.gpu {
 		magick_path := resolve_app_relative_path(app_root, "tools/imagemagick/magick.exe", context.temp_allocator)
 		if os.is_file(magick_path) {
-			if probe_imagemagick_opencl(magick_path) {
+			if probe(magick_path) {
 				env.gpu_status = .Enabled
 				env.magick_use_gpu = true
 			} else {
@@ -202,7 +212,53 @@ probe_imagemagick_opencl :: proc(magick_path: string) -> bool {
 		return false
 	}
 
-	return version_output_has_opencl(string(stdout)) || version_output_has_opencl(string(stderr))
+	if !(version_output_has_opencl(string(stdout)) || version_output_has_opencl(string(stderr))) {
+		return false
+	}
+
+	return probe_imagemagick_gpu_resize(magick_path)
+}
+
+probe_imagemagick_gpu_resize :: proc(magick_path: string) -> bool {
+	command := [?]string{
+		magick_path,
+		"-size",
+		"8x8",
+		"xc:white",
+		"-filter",
+		"Lanczos",
+		"-resize",
+		"4x4",
+		"null:",
+	}
+	environment, environment_ok := probe_imagemagick_gpu_environment(context.temp_allocator)
+	if !environment_ok {
+		return false
+	}
+
+	state, stdout, stderr, err := os.process_exec(
+		os.Process_Desc{command = command[:], env = environment},
+		context.allocator,
+	)
+	defer delete(stdout)
+	defer delete(stderr)
+
+	return err == nil && state.exited && state.exit_code == 0
+}
+
+probe_imagemagick_gpu_environment :: proc(allocator := context.allocator) -> ([]string, bool) {
+	inherited, inherited_err := os.environ(allocator)
+	if inherited_err != nil {
+		return nil, false
+	}
+
+	environment: [dynamic]string
+	environment.allocator = allocator
+	for entry in inherited {
+		append(&environment, entry)
+	}
+	append(&environment, "MAGICK_OCL_DEVICE=GPU")
+	return environment[:], true
 }
 
 version_output_has_opencl :: proc(text: string) -> bool {
