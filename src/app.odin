@@ -21,7 +21,16 @@ run_imgoptz :: proc() {
 
 	print_startup_summary(app_root.path, config_result)
 	print_config_warnings(config_result)
-	run_prompt_loop()
+
+	runtime_env := load_runtime_environment(app_root.path, config_result.config)
+	defer destroy_runtime_environment(&runtime_env)
+	print_runtime_warnings(runtime_env)
+	if !runtime_env.ok {
+		print_runtime_errors(runtime_env)
+		return
+	}
+	print_runtime_summary(runtime_env)
+	run_prompt_loop(runtime_env)
 }
 
 print_app_root_error :: proc(app_root: App_Root) {

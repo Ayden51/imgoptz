@@ -56,18 +56,18 @@ Goal: add typed runtime settings while preserving default behavior.
 
 Goal: fail early when the app distribution is incomplete.
 
-- [ ] Validate `tools\mozjpeg\mozjpeg.exe`.
-- [ ] Validate `tools\oxipng\oxipng.exe`.
-- [ ] Validate `tools\pngquant\pngquant.exe`.
-- [ ] Validate `tools\imagemagick\magick.exe`.
-- [ ] Validate `profiles\sRGB2014.icc`.
-- [ ] Validate required third-party notice files beside each tool.
-- [ ] Resolve `out_dir` according to app root rules.
-- [ ] Implement `dir` output root fallback warnings.
-- [ ] Error if the accepted `dir` output root does not exist.
-- [ ] Probe ImageMagick OpenCL only when `gpu = true`.
-- [ ] Set `MAGICK_OCL_DEVICE=GPU` only after a successful probe.
-- [ ] Verify missing tools, missing notices, GPU false, GPU probe success, and GPU probe failure.
+- [x] Validate `tools\mozjpeg\mozjpeg.exe`.
+- [x] Validate `tools\oxipng\oxipng.exe`.
+- [x] Validate `tools\pngquant\pngquant.exe`.
+- [x] Validate `tools\imagemagick\magick.exe`.
+- [x] Validate `profiles\sRGB2014.icc`.
+- [x] Validate required third-party notice files beside each tool.
+- [x] Resolve `out_dir` according to app root rules.
+- [x] Implement `dir` output root fallback warnings.
+- [x] Error if the accepted `dir` output root does not exist.
+- [x] Probe ImageMagick OpenCL only when `gpu = true`.
+- [x] Set `MAGICK_OCL_DEVICE=GPU` only after a successful probe.
+- [x] Verify missing tools, missing notices, GPU false, GPU probe success, and GPU probe failure.
 
 ## Phase 4: Discovery And Output Planning
 
@@ -138,6 +138,6 @@ Goal: finish operator diagnostics and broad edge-case coverage.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/config-defaults-parsing`.
-- Scope: Phase 2 only.
-- Reason: later runtime validation, discovery, and processing depend on typed config values and predictable fallback behavior.
+- Current feature branch: `feat/runtime-env-validation`.
+- Scope: Phase 3 only.
+- Reason: discovery and processing depend on validated runtime tools, profile files, output root rules, and GPU capability state.
