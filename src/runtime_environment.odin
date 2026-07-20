@@ -23,6 +23,11 @@ Runtime_Environment :: struct {
 	recursive:      bool,
 	output_mode:    Config_Output_Mode,
 	output_root:    string,
+	mozjpeg_path:   string,
+	oxipng_path:    string,
+	pngquant_path:  string,
+	magick_path:    string,
+	srgb_profile:   string,
 	gpu_status:     Runtime_GPU_Status,
 	magick_use_gpu: bool,
 	warnings:       [dynamic]string,
@@ -42,21 +47,26 @@ Output_Root_Result :: struct {
 }
 
 RUNTIME_DEFAULT_OUTPUT_DIR :: "output"
+RUNTIME_MOZJPEG_PATH :: "tools/mozjpeg/mozjpeg.exe"
+RUNTIME_OXIPNG_PATH :: "tools/oxipng/oxipng.exe"
+RUNTIME_PNGQUANT_PATH :: "tools/pngquant/pngquant.exe"
+RUNTIME_MAGICK_PATH :: "tools/imagemagick/magick.exe"
+RUNTIME_SRGB_PROFILE_PATH :: "profiles/sRGB2014.icc"
 
 RUNTIME_REQUIRED_FILES :: [?]Runtime_Required_File {
-	{relative_path = "tools/mozjpeg/mozjpeg.exe", label = "MozJPEG executable"},
+	{relative_path = RUNTIME_MOZJPEG_PATH, label = "MozJPEG executable"},
 	{relative_path = "tools/mozjpeg/LICENSE.md", label = "MozJPEG license"},
 	{relative_path = "tools/mozjpeg/README.ijg", label = "MozJPEG IJG notice"},
 	{relative_path = "tools/mozjpeg/README-mozilla.txt", label = "MozJPEG Mozilla notice"},
-	{relative_path = "tools/oxipng/oxipng.exe", label = "Oxipng executable"},
+	{relative_path = RUNTIME_OXIPNG_PATH, label = "Oxipng executable"},
 	{relative_path = "tools/oxipng/LICENSE", label = "Oxipng license"},
-	{relative_path = "tools/pngquant/pngquant.exe", label = "pngquant executable"},
+	{relative_path = RUNTIME_PNGQUANT_PATH, label = "pngquant executable"},
 	{relative_path = "tools/pngquant/COPYRIGHT", label = "pngquant copyright notice"},
-	{relative_path = "tools/imagemagick/magick.exe", label = "ImageMagick executable"},
+	{relative_path = RUNTIME_MAGICK_PATH, label = "ImageMagick executable"},
 	{relative_path = "tools/imagemagick/LICENSE.txt", label = "ImageMagick license"},
 	{relative_path = "tools/imagemagick/NOTICE.txt", label = "ImageMagick notice"},
 	{relative_path = "tools/imagemagick/policy.xml", label = "ImageMagick policy"},
-	{relative_path = "profiles/sRGB2014.icc", label = "sRGB ICC profile"},
+	{relative_path = RUNTIME_SRGB_PROFILE_PATH, label = "sRGB ICC profile"},
 	{relative_path = "profiles/sRGB2014.LICENSE.txt", label = "sRGB ICC profile license"},
 }
 
@@ -77,6 +87,7 @@ load_runtime_environment_with_probe :: proc(
 	}
 
 	validate_required_runtime_files(&env, app_root)
+	resolve_runtime_tool_paths(&env, app_root)
 
 	output_root := resolve_output_root(app_root, config)
 	defer destroy_output_root_result(&output_root)
@@ -90,13 +101,8 @@ load_runtime_environment_with_probe :: proc(
 	}
 
 	if config.gpu {
-		magick_path := resolve_app_relative_path(
-			app_root,
-			"tools/imagemagick/magick.exe",
-			context.temp_allocator,
-		)
-		if os.is_file(magick_path) {
-			if probe(magick_path) {
+		if os.is_file(env.magick_path) {
+			if probe(env.magick_path) {
 				env.gpu_status = .Enabled
 				env.magick_use_gpu = true
 			} else {
@@ -115,6 +121,11 @@ load_runtime_environment_with_probe :: proc(
 
 destroy_runtime_environment :: proc(env: ^Runtime_Environment) {
 	delete(env.output_root)
+	delete(env.mozjpeg_path)
+	delete(env.oxipng_path)
+	delete(env.pngquant_path)
+	delete(env.magick_path)
+	delete(env.srgb_profile)
 	for warning in env.warnings {
 		delete(warning)
 	}
@@ -124,6 +135,14 @@ destroy_runtime_environment :: proc(env: ^Runtime_Environment) {
 	}
 	delete(env.errors)
 	env^ = {}
+}
+
+resolve_runtime_tool_paths :: proc(env: ^Runtime_Environment, app_root: string) {
+	env.mozjpeg_path = resolve_app_relative_path(app_root, RUNTIME_MOZJPEG_PATH)
+	env.oxipng_path = resolve_app_relative_path(app_root, RUNTIME_OXIPNG_PATH)
+	env.pngquant_path = resolve_app_relative_path(app_root, RUNTIME_PNGQUANT_PATH)
+	env.magick_path = resolve_app_relative_path(app_root, RUNTIME_MAGICK_PATH)
+	env.srgb_profile = resolve_app_relative_path(app_root, RUNTIME_SRGB_PROFILE_PATH)
 }
 
 validate_required_runtime_files :: proc(env: ^Runtime_Environment, app_root: string) {
