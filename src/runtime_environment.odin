@@ -20,6 +20,7 @@ Runtime_Required_File :: struct {
 
 Runtime_Environment :: struct {
 	ok:             bool,
+	recursive:      bool,
 	output_mode:    Config_Output_Mode,
 	output_root:    string,
 	gpu_status:     Runtime_GPU_Status,
@@ -70,6 +71,7 @@ load_runtime_environment_with_probe :: proc(
 ) -> Runtime_Environment {
 	env := Runtime_Environment {
 		ok          = true,
+		recursive   = config.recursive,
 		output_mode = config.output_mode,
 		gpu_status  = .Disabled_By_Config,
 	}

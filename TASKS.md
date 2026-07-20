@@ -73,14 +73,14 @@ Goal: fail early when the app distribution is incomplete.
 
 Goal: enumerate work safely before optimization starts.
 
-- [ ] Discover only `.jpg`, `.jpeg`, and `.png`, case-insensitively.
-- [ ] Keep discovery non-recursive by default.
-- [ ] Add recursive discovery controlled by config.
-- [ ] Count JPEG and PNG files separately for console output.
-- [ ] Plan destination paths for `in-place` mode.
-- [ ] Plan destination paths for `dir` mode.
-- [ ] Preserve relative paths for recursive `dir` output mode.
-- [ ] Verify uppercase extensions, ignored files, empty folders, recursive folders, and preserved relative paths.
+- [x] Discover only `.jpg`, `.jpeg`, and `.png`, case-insensitively.
+- [x] Keep discovery non-recursive by default.
+- [x] Add recursive discovery controlled by config.
+- [x] Count JPEG and PNG files separately for console output.
+- [x] Plan destination paths for `in-place` mode.
+- [x] Plan destination paths for `dir` mode.
+- [x] Preserve relative paths for recursive `dir` output mode.
+- [x] Verify uppercase extensions, ignored files, empty folders, recursive folders, and preserved relative paths.
 
 ## Phase 5: Single-File Processing Pipelines
 
@@ -106,6 +106,7 @@ Goal: write optimized results only when smaller.
 - [ ] Safely replace originals for `in-place` mode.
 - [ ] Copy/move optimized files into accepted output root for `dir` mode.
 - [ ] Add slugify final output names after optimization.
+- [ ] Notice for slugify task: discovery currently plans `destination_path` before slugify/collision handling; verify Phase 6 treats it as a pre-slug destination and does not bypass final-name rules.
 - [ ] Preserve lowercase image extensions for final names.
 - [ ] Resolve slugify name collisions per destination directory.
 - [ ] Verify smaller output, larger output, replace failure, copy failure, slugify Unicode, and collisions.
@@ -122,6 +123,7 @@ Goal: process folders efficiently without oversubscribing tools.
 - [ ] Print per-file progress with status, output path, sizes, and percent reduction.
 - [ ] Print final succeeded/skipped/failed summary.
 - [ ] Preserve deterministic, readable console output under parallel work.
+- [ ] Notice for deterministic output task: discovery order follows OS directory enumeration; verify whether sorting discovered work items by relative path is needed before/while adding parallel reporting.
 - [ ] Verify worker counts on low/high CPU machines where practical and repeated prompt loop after processing.
 
 ## Phase 8: Debug Logging And Release Hardening
@@ -138,6 +140,6 @@ Goal: finish operator diagnostics and broad edge-case coverage.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/runtime-env-validation`.
-- Scope: Phase 3 only.
-- Reason: discovery and processing depend on validated runtime tools, profile files, output root rules, and GPU capability state.
+- Current feature branch: `feat/discovery-output-planning`.
+- Scope: Phase 4 only.
+- Reason: single-file processing depends on a safe, counted list of discovered inputs and planned destinations for each output mode.
