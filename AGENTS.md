@@ -1,30 +1,35 @@
 # AGENTS.md
 
 ## Sources Of Truth
+
 - Read `PLAN.md` before changing behavior; it is the product spec and implementation sequence.
 - Root app code is Odin in `src/`; `mozjpeg/` and `oxipng/` are git submodules/vendor sources, not the app implementation.
 - `dist/` is ignored but is the current development distribution root with `imgoptz.exe` and runtime tools.
 
 ## Commands
-- Production build exactly with `./build.sh`, which runs `odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o:speed -strict-style -vet -vet-packages:main -vet-unused-procedures -vet-tabs -disallow-do -warnings-as-errors`.
-- Development build with `./build_dev.sh`, which emits `dist/imgoptz_dev.exe` with `-debug` so the debug memory tracker is active.
-- Run with `./run.sh`; it builds via `./build_dev.sh`, then launches `./dist/imgoptz_dev.exe`.
+
+- Agent scripts live in `scripts/`; use the PowerShell scripts in this Windows workspace because `odin` is available from PowerShell here. Bash copies are retained for compatible shells.
+- Production build exactly with `./scripts/build.ps1`, which runs `odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o:speed -strict-style -vet -vet-packages:main -vet-unused-procedures -vet-tabs -disallow-do -warnings-as-errors`.
+- Development build with `./scripts/build_dev.ps1`, which emits `dist/imgoptz_dev.exe` with `-debug` so the debug memory tracker is active.
+- Run with `./scripts/run.ps1`; it builds via `./scripts/build_dev.ps1`, then launches `./dist/imgoptz_dev.exe`.
 - Run Odin tests with `odin test src`; focused runs use `-define:ODIN_TEST_NAMES=package.test_name`.
 - Use `dist\demo\in-place` only for in-place mode testing and demoing.
 - Use `dist\demo\out-dir` only as original-image fixtures and for `output_mode = "dir"` testing and demoing; never run in-place mode there.
 - For out-dir local testing, the default output directory is `<app-root>\output`, which is `dist\output` in this workspace.
 - Test discovery modes with their dedicated demo folders: `jpg`, `png`, `mixed`, and `recursive` exist under both `dist\demo\in-place` and `dist\demo\out-dir`.
-- Before handing back code changes, run `odin test src`, a production build, and a development build.
+- Before handing back code changes, run `odin test src`, `./scripts/build.ps1`, and `./scripts/build_dev.ps1`.
 - For memory leak checks, run the development executable through at least an `exit` prompt path. If it prints `=== N allocations not freed: ===`, treat that as a failure and fix the leak before handoff. No leak report means the app-level debug tracker found no outstanding allocations.
 - Odin's test runner has its own memory tracking enabled by default; investigate any memory diagnostics it prints before considering tests passing.
 
 ## Branch Flow
+
 - `main`: stable baseline.
 - `develop`: integration branch for accepted task tracker and approved feature work.
 - Feature branches: branch from `develop`, use `feat/<short-name>` because Git ref names cannot contain `:`.
 - Merge back to `develop` only after review and explicit approval.
 
 ## Runtime Contract
+
 - This is Windows-only; keep the `when ODIN_OS != .Windows` guard and console-subsystem, double-click flow.
 - Preserve the prompt loop UI: users paste one directory path, processing finishes, then the app prompts again; `exit` closes it.
 - At startup, change cwd to the executable directory. All relative paths, config, logs, tools, and default output resolve against that app root.
@@ -33,6 +38,7 @@
 - Accept only JPEG/PNG extensions case-insensitively: `.jpg`, `.jpeg`, `.png`; default discovery is non-recursive.
 
 ## Implementation Pitfalls
+
 - Do not replace the stdin console workflow with a GUI, command-line batch mode, watcher, or multi-directory interface.
 - Strip surrounding quotes from pasted paths and handle whitespace, Unicode, `&`, parentheses, and other Windows shell-special characters.
 - Start child tools with argument arrays where possible; avoid shell-concatenated commands. If `cmd.exe` is unavoidable, quote Windows paths deliberately.
@@ -44,6 +50,7 @@
 - Avoid oversubscription when worker pool is added: limit ImageMagick threads and pass `oxipng --threads 1` when app-level workers are greater than 1.
 
 ## Odin Conventions For This Repo
+
 - `src/` is one directory-based package; every `.odin` file there must use `package main`.
 - Prefer a single package while features are still coupled. New subpackages must be independent because Odin forbids cyclic imports.
 - Split source by feature/responsibility within `src/` instead of growing `main.odin` into a catch-all file.

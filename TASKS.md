@@ -135,7 +135,7 @@ Goal: finish operator diagnostics and broad edge-case coverage.
 - [ ] Append detailed child process and decision logs when enabled.
 - [ ] Keep normal operation console-only.
 - [ ] Run full manual matrix from `PLAN.md` implementation phases 20-30.
-- [ ] Re-run `./build.sh` with warnings as errors.
+- [ ] Re-run `./scripts/build.ps1` with warnings as errors.
 - [ ] Document any remaining operational constraints.
 
 ## Current Feature Selection
