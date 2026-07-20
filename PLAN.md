@@ -596,17 +596,17 @@ Do not require logging for normal operation.
 
 ## Build
 
-Current build script emits the development binary to `dist/imgoptz.exe`:
+Current production build script emits the release binary to `dist/imgoptz.exe`:
 
 ```bash
 odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o:speed -strict-style -vet -vet-packages:main -vet-unused-procedures -vet-tabs -disallow-do -warnings-as-errors
 ```
 
-`run.sh` should call `build.sh` first, then launch the built binary:
+`scripts/run.ps1` should call `scripts/build_dev.ps1` first, then launch the built development binary:
 
-```bash
-./build.sh
-./dist/imgoptz.exe
+```powershell
+./scripts/build_dev.ps1
+./dist/imgoptz_dev.exe
 ```
 
 ## Implementation Phases

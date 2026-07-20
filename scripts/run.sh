@@ -2,5 +2,5 @@
 
 set -e
 
-./build_dev.sh
+./scripts/build_dev.sh
 ./dist/imgoptz_dev.exe
