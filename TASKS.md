@@ -106,6 +106,7 @@ Goal: write optimized results only when smaller.
 - [ ] Safely replace originals for `in-place` mode.
 - [ ] Copy/move optimized files into accepted output root for `dir` mode.
 - [ ] Add slugify final output names after optimization.
+- [ ] Notice for slugify task: discovery currently plans `destination_path` before slugify/collision handling; verify Phase 6 treats it as a pre-slug destination and does not bypass final-name rules.
 - [ ] Preserve lowercase image extensions for final names.
 - [ ] Resolve slugify name collisions per destination directory.
 - [ ] Verify smaller output, larger output, replace failure, copy failure, slugify Unicode, and collisions.
@@ -122,6 +123,7 @@ Goal: process folders efficiently without oversubscribing tools.
 - [ ] Print per-file progress with status, output path, sizes, and percent reduction.
 - [ ] Print final succeeded/skipped/failed summary.
 - [ ] Preserve deterministic, readable console output under parallel work.
+- [ ] Notice for deterministic output task: discovery order follows OS directory enumeration; verify whether sorting discovered work items by relative path is needed before/while adding parallel reporting.
 - [ ] Verify worker counts on low/high CPU machines where practical and repeated prompt loop after processing.
 
 ## Phase 8: Debug Logging And Release Hardening
