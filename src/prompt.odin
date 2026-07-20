@@ -4,20 +4,24 @@ import "core:bufio"
 import "core:log"
 import "core:os"
 
-run_prompt_loop :: proc(runtime_env: Runtime_Environment) {
+run_prompt_loop :: proc(runtime_env: Runtime_Environment, config: App_Config) {
 	sc: bufio.Scanner
 	bufio.scanner_init(&sc, os.to_stream(os.stdin))
 	defer bufio.scanner_destroy(&sc)
 	sc.split = bufio.scan_lines
 
 	for {
-		if !prompt_once(&sc, runtime_env) {
+		if !prompt_once(&sc, runtime_env, config) {
 			break
 		}
 	}
 }
 
-prompt_once :: proc(sc: ^bufio.Scanner, runtime_env: Runtime_Environment) -> bool {
+prompt_once :: proc(
+	sc: ^bufio.Scanner,
+	runtime_env: Runtime_Environment,
+	config: App_Config,
+) -> bool {
 	log.info("Paste one image directory path, or type 'exit':")
 
 	if !bufio.scan(sc) {
@@ -32,14 +36,18 @@ prompt_once :: proc(sc: ^bufio.Scanner, runtime_env: Runtime_Environment) -> boo
 	case .Exit:
 		return false
 	case .Directory_Path:
-		process_input_directory(input.path, runtime_env)
+		process_input_directory(input.path, runtime_env, config)
 		return true
 	}
 
 	return true
 }
 
-process_input_directory :: proc(input_path: string, runtime_env: Runtime_Environment) {
+process_input_directory :: proc(
+	input_path: string,
+	runtime_env: Runtime_Environment,
+	config: App_Config,
+) {
 	absolute_path, input_dir_err := accept_input_directory(input_path)
 	switch input_dir_err {
 	case .None:
@@ -54,7 +62,7 @@ process_input_directory :: proc(input_path: string, runtime_env: Runtime_Environ
 			return
 		}
 		print_discovery_summary(result)
-		log.info("Optimization pipelines are not implemented yet.")
+		process_discovered_images(result, config, runtime_env)
 	case .Not_Directory:
 		log.error("Not a directory:", input_path)
 	case .Resolve_Failed:

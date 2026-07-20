@@ -30,7 +30,7 @@ run_imgoptz :: proc() {
 		return
 	}
 	print_runtime_summary(runtime_env)
-	run_prompt_loop(runtime_env)
+	run_prompt_loop(runtime_env, config_result.config)
 }
 
 print_app_root_error :: proc(app_root: App_Root) {

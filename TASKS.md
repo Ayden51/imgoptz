@@ -86,16 +86,16 @@ Goal: enumerate work safely before optimization starts.
 
 Goal: process one image at a time correctly and safely.
 
-- [ ] Generate collision-resistant temp file names.
-- [ ] Implement JPEG ImageMagick-to-MozJPEG pipeline.
-- [ ] Implement JPEG ICC profile retention/conversion and `*.source.icc` cleanup.
-- [ ] Implement PNG ImageMagick-to-temp plus pngquant plus Oxipng pipeline.
-- [ ] Pass child process arguments as arrays, not shell-concatenated commands.
-- [ ] Apply ImageMagick resize/orientation rules.
-- [ ] Map JPEG config to MozJPEG flags.
-- [ ] Map PNG config to pngquant and Oxipng flags.
-- [ ] Limit child tool threads where needed for later worker scaling.
-- [ ] Verify valid JPEG, valid PNG, corrupt inputs, command failures, and temp cleanup.
+- [x] Generate collision-resistant temp file names.
+- [x] Implement JPEG ImageMagick-to-MozJPEG pipeline.
+- [x] Implement JPEG ICC profile retention/conversion and `*.source.icc` cleanup.
+- [x] Implement PNG ImageMagick-to-temp plus pngquant plus Oxipng pipeline.
+- [x] Pass child process arguments as arrays, not shell-concatenated commands.
+- [x] Apply ImageMagick resize/orientation rules.
+- [x] Map JPEG config to MozJPEG flags.
+- [x] Map PNG config to pngquant and Oxipng flags.
+- [x] Limit child tool threads where needed for later worker scaling.
+- [x] Verify valid JPEG, valid PNG, corrupt inputs, command failures, and temp cleanup.
 
 ## Phase 6: Safe Outputs
 
@@ -140,6 +140,6 @@ Goal: finish operator diagnostics and broad edge-case coverage.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/discovery-output-planning`.
-- Scope: Phase 4 only.
-- Reason: single-file processing depends on a safe, counted list of discovered inputs and planned destinations for each output mode.
+- Current feature branch: `feat/single-file-pipelines`.
+- Scope: Phase 5 only.
+- Reason: safe output replacement/copying and slugification remain separated for Phase 6.
