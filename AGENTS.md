@@ -1,11 +1,13 @@
 # AGENTS.md
 
 ## Sources Of Truth
+
 - Read `PLAN.md` before changing behavior; it is the product spec and implementation sequence.
 - Root app code is Odin in `src/`; `mozjpeg/` and `oxipng/` are git submodules/vendor sources, not the app implementation.
 - `dist/` is ignored but is the current development distribution root with `imgoptz.exe` and runtime tools.
 
 ## Commands
+
 - Agent scripts live in `scripts/`; use the PowerShell scripts in this Windows workspace because `odin` is available from PowerShell here. Bash copies are retained for compatible shells.
 - Production build exactly with `./scripts/build.ps1`, which runs `odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o:speed -strict-style -vet -vet-packages:main -vet-unused-procedures -vet-tabs -disallow-do -warnings-as-errors`.
 - Development build with `./scripts/build_dev.ps1`, which emits `dist/imgoptz_dev.exe` with `-debug` so the debug memory tracker is active.
@@ -20,12 +22,14 @@
 - Odin's test runner has its own memory tracking enabled by default; investigate any memory diagnostics it prints before considering tests passing.
 
 ## Branch Flow
+
 - `main`: stable baseline.
 - `develop`: integration branch for accepted task tracker and approved feature work.
 - Feature branches: branch from `develop`, use `feat/<short-name>` because Git ref names cannot contain `:`.
 - Merge back to `develop` only after review and explicit approval.
 
 ## Runtime Contract
+
 - This is Windows-only; keep the `when ODIN_OS != .Windows` guard and console-subsystem, double-click flow.
 - Preserve the prompt loop UI: users paste one directory path, processing finishes, then the app prompts again; `exit` closes it.
 - At startup, change cwd to the executable directory. All relative paths, config, logs, tools, and default output resolve against that app root.
@@ -34,6 +38,7 @@
 - Accept only JPEG/PNG extensions case-insensitively: `.jpg`, `.jpeg`, `.png`; default discovery is non-recursive.
 
 ## Implementation Pitfalls
+
 - Do not replace the stdin console workflow with a GUI, command-line batch mode, watcher, or multi-directory interface.
 - Strip surrounding quotes from pasted paths and handle whitespace, Unicode, `&`, parentheses, and other Windows shell-special characters.
 - Start child tools with argument arrays where possible; avoid shell-concatenated commands. If `cmd.exe` is unavoidable, quote Windows paths deliberately.
@@ -45,6 +50,7 @@
 - Avoid oversubscription when worker pool is added: limit ImageMagick threads and pass `oxipng --threads 1` when app-level workers are greater than 1.
 
 ## Odin Conventions For This Repo
+
 - `src/` is one directory-based package; every `.odin` file there must use `package main`.
 - Prefer a single package while features are still coupled. New subpackages must be independent because Odin forbids cyclic imports.
 - Split source by feature/responsibility within `src/` instead of growing `main.odin` into a catch-all file.
