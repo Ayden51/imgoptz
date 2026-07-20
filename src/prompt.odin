@@ -47,7 +47,14 @@ process_input_directory :: proc(input_path: string, runtime_env: Runtime_Environ
 		if runtime_env.output_mode == .Dir {
 			log.info("Accepted output root:", runtime_env.output_root)
 		}
-		log.info("Image discovery and optimization are not implemented yet.")
+		result := discover_image_work(absolute_path, runtime_env)
+		defer destroy_discovery_result(&result)
+		if result.err != .None {
+			log.error(discovery_error_summary(result.err), result.err_path)
+			return
+		}
+		print_discovery_summary(result)
+		log.info("Optimization pipelines are not implemented yet.")
 	case .Not_Directory:
 		log.error("Not a directory:", input_path)
 	case .Resolve_Failed:

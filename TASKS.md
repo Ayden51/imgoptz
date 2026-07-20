@@ -73,14 +73,14 @@ Goal: fail early when the app distribution is incomplete.
 
 Goal: enumerate work safely before optimization starts.
 
-- [ ] Discover only `.jpg`, `.jpeg`, and `.png`, case-insensitively.
-- [ ] Keep discovery non-recursive by default.
-- [ ] Add recursive discovery controlled by config.
-- [ ] Count JPEG and PNG files separately for console output.
-- [ ] Plan destination paths for `in-place` mode.
-- [ ] Plan destination paths for `dir` mode.
-- [ ] Preserve relative paths for recursive `dir` output mode.
-- [ ] Verify uppercase extensions, ignored files, empty folders, recursive folders, and preserved relative paths.
+- [x] Discover only `.jpg`, `.jpeg`, and `.png`, case-insensitively.
+- [x] Keep discovery non-recursive by default.
+- [x] Add recursive discovery controlled by config.
+- [x] Count JPEG and PNG files separately for console output.
+- [x] Plan destination paths for `in-place` mode.
+- [x] Plan destination paths for `dir` mode.
+- [x] Preserve relative paths for recursive `dir` output mode.
+- [x] Verify uppercase extensions, ignored files, empty folders, recursive folders, and preserved relative paths.
 
 ## Phase 5: Single-File Processing Pipelines
 
@@ -138,6 +138,6 @@ Goal: finish operator diagnostics and broad edge-case coverage.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/runtime-env-validation`.
-- Scope: Phase 3 only.
-- Reason: discovery and processing depend on validated runtime tools, profile files, output root rules, and GPU capability state.
+- Current feature branch: `feat/discovery-output-planning`.
+- Scope: Phase 4 only.
+- Reason: single-file processing depends on a safe, counted list of discovered inputs and planned destinations for each output mode.
