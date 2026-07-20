@@ -25,7 +25,12 @@
 
 - `main`: stable baseline.
 - `develop`: integration branch for accepted task tracker and approved feature work.
-- Feature branches: branch from `develop`, use `feat/<short-name>` because Git ref names cannot contain `:`.
+- Agents must work in branch isolation for every user request that may change files.
+- Before editing, check the current branch. If it is `develop` or `main`, do not edit there unless the user directly instructs you to do so.
+- For normal work, create or use a request-specific `feat/<short-name>`, `fix/<short-name>`, or `release/<short-name>` branch based on `develop`.
+- Use `hotfix/<short-name>` only for urgent critical bug fixes, and branch it from `main`.
+- If already on a non-protected request branch, continue there only when it matches the current request; otherwise create a new isolated branch from the correct base.
+- Git ref names cannot contain `:`, so use slash-prefixed names like `feat/<short-name>` instead.
 - Merge back to `develop` only after review and explicit approval.
 
 ## Runtime Contract
