@@ -210,7 +210,7 @@ replace_in_place_with_slugged_output :: proc(
 			false
 	}
 
-	if !output_paths_match(item.source_path, final_path) {
+	if item.source_path != final_path {
 		rename_err := os.rename(item.source_path, final_path)
 		if rename_err != nil {
 			if replaced {

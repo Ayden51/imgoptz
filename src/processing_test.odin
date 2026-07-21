@@ -226,6 +226,47 @@ test_finalize_in_place_replaces_smaller_output_and_slugifies_name :: proc(t: ^te
 }
 
 @(test, require)
+test_finalize_in_place_applies_case_only_slugified_name :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp(
+		"",
+		"imgoptz-finalize-in-place-case-*",
+		context.allocator,
+	)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer delete(temp_dir)
+	defer os.remove_all(temp_dir)
+
+	source_path := processing_join(t, temp_dir, "Photo.JPG")
+	temp_output_path := processing_join(t, temp_dir, "optimized.tmp")
+	final_path := processing_join(t, temp_dir, "photo.jpg")
+	if len(source_path) == 0 ||
+	   len(temp_output_path) == 0 ||
+	   len(final_path) == 0 ||
+	   !testing.expect_value(t, os.write_entire_file(source_path, "original-large"), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(temp_output_path, "tiny"), nil) {
+		return
+	}
+
+	item := Image_Work_Item {
+		source_path      = source_path,
+		relative_path    = "Photo.JPG",
+		destination_path = source_path,
+		kind             = .Jpeg,
+	}
+	result := finalize_optimized_output(item, temp_output_path, .In_Place)
+	defer destroy_finalize_output_result(&result)
+
+	testing.expect_value(t, result.err, Image_Process_Error.None)
+	testing.expect_value(t, result.output_path, final_path)
+	testing.expect(t, !processing_directory_contains_name(t, temp_dir, "Photo.JPG"))
+	testing.expect(t, processing_directory_contains_name(t, temp_dir, "photo.jpg"))
+	testing.expect(t, os.exists(final_path))
+	testing.expect(t, processing_file_has_contents(t, final_path, "tiny"))
+}
+
+@(test, require)
 test_finalize_dir_copies_smaller_output_with_slug_collision_suffix :: proc(t: ^testing.T) {
 	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-finalize-dir-*", context.allocator)
 	if !testing.expect_value(t, temp_err, nil) {
@@ -470,4 +511,19 @@ processing_file_has_contents :: proc(t: ^testing.T, path, expected: string) -> b
 	defer delete(data)
 
 	return testing.expect_value(t, string(data), expected)
+}
+
+processing_directory_contains_name :: proc(t: ^testing.T, dir, name: string) -> bool {
+	entries, entries_err := os.read_directory_by_path(dir, 0, context.allocator)
+	if !testing.expect_value(t, entries_err, nil) {
+		return false
+	}
+	defer os.file_info_slice_delete(entries, context.allocator)
+
+	for entry in entries {
+		if entry.name == name {
+			return true
+		}
+	}
+	return false
 }
