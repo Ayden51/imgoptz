@@ -19,7 +19,7 @@
 	},
 	"png": {
 		"enabled": true,
-		"pngquant_quality": "80-95",
+		"pngquant_quality": "40-95",
 		"pngquant_speed": 1,
 		"pngquant_dither": false,
 		"oxipng_level": 4,

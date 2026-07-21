@@ -81,7 +81,7 @@ test_png_commands_map_config_flags :: proc(t: ^testing.T) {
 		"resized.png",
 	)
 	testing.expect(t, command_has_sequence(pngquant_command, []string{"--output", "quant.png"}))
-	testing.expect(t, command_has_sequence(pngquant_command, []string{"--quality", "80-95"}))
+	testing.expect(t, command_has_sequence(pngquant_command, []string{"--quality", "40-95"}))
 	testing.expect(t, command_has_sequence(pngquant_command, []string{"--speed", "1"}))
 	testing.expect(t, command_contains(pngquant_command, "--nofs"))
 	testing.expect(t, command_contains(pngquant_command, "--strip"))

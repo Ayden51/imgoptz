@@ -95,7 +95,7 @@ default_config :: proc() -> App_Config {
 		},
 		png = Png_Config {
 			enabled = true,
-			pngquant_quality = strings.clone("80-95"),
+			pngquant_quality = strings.clone("40-95"),
 			pngquant_speed = 1,
 			pngquant_dither = false,
 			oxipng_level = 4,
