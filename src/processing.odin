@@ -626,15 +626,13 @@ process_png_to_temp :: proc(
 }
 
 Icc_Profile_Result :: struct {
-	mode:         Icc_Profile_Mode,
-	err:          Image_Process_Error,
-	detail:       string,
-	profile_text: string,
+	mode:   Icc_Profile_Mode,
+	err:    Image_Process_Error,
+	detail: string,
 }
 
 destroy_icc_profile_result :: proc(result: ^Icc_Profile_Result) {
 	delete(result.detail)
-	delete(result.profile_text)
 	result^ = {}
 }
 
@@ -658,10 +656,7 @@ determine_icc_profile_mode :: proc(
 	}
 
 	if len(stdout) > 0 && icc_profile_family_is_retained(string(stdout)) {
-		return Icc_Profile_Result {
-			mode = .Embed_Source,
-			profile_text = strings.clone(string(stdout)),
-		}
+		return Icc_Profile_Result{mode = .Embed_Source}
 	}
 	return Icc_Profile_Result{mode = .Convert_To_Srgb}
 }
