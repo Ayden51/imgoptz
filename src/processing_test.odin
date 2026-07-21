@@ -150,6 +150,15 @@ test_corrupt_png_failure_cleans_intermediate_temps :: proc(t: ^testing.T) {
 	testing.expect(t, !processing_temp_artifacts_exist(source_path))
 }
 
+@(test, require)
+test_imagemagick_environment_filters_managed_entries :: proc(t: ^testing.T) {
+	testing.expect(t, imagemagick_environment_entry_is_managed("MAGICK_THREAD_LIMIT=8"))
+	testing.expect(t, imagemagick_environment_entry_is_managed("magick_ocl_device=CPU"))
+	testing.expect(t, !imagemagick_environment_entry_is_managed("PATH=C:/Tools"))
+	testing.expect(t, !imagemagick_environment_entry_is_managed("MAGICK_OCL_DEVICE_EXTRA=GPU"))
+	testing.expect(t, !imagemagick_environment_entry_is_managed("MAGICK_OCL_DEVICE"))
+}
+
 processing_join :: proc(t: ^testing.T, first, second: string) -> string {
 	parts := [?]string{first, second}
 	path, err := os.join_path(parts[:], context.temp_allocator)

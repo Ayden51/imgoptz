@@ -524,6 +524,9 @@ imagemagick_process_environment :: proc(runtime_env: Runtime_Environment) -> []s
 	environment: [dynamic]string
 	environment.allocator = context.temp_allocator
 	for entry in inherited {
+		if imagemagick_environment_entry_is_managed(entry) {
+			continue
+		}
 		append(&environment, entry)
 	}
 	append(&environment, fmt.tprintf("MAGICK_THREAD_LIMIT=%s", IMAGE_PROCESS_MAGICK_THREAD_LIMIT))
@@ -531,6 +534,26 @@ imagemagick_process_environment :: proc(runtime_env: Runtime_Environment) -> []s
 		append(&environment, "MAGICK_OCL_DEVICE=GPU")
 	}
 	return environment[:]
+}
+
+imagemagick_environment_entry_is_managed :: proc(entry: string) -> bool {
+	return(
+		environment_entry_name_equals(entry, "MAGICK_THREAD_LIMIT") ||
+		environment_entry_name_equals(entry, "MAGICK_OCL_DEVICE") \
+	)
+}
+
+environment_entry_name_equals :: proc(entry, name: string) -> bool {
+	if len(entry) <= len(name) || entry[len(name)] != '=' {
+		return false
+	}
+
+	for i in 0 ..< len(name) {
+		if ascii_lower(entry[i]) != ascii_lower(name[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 run_tool :: proc(command: []string, environment: []string, label: string) -> (string, bool) {
