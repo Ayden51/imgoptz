@@ -200,7 +200,7 @@ Default config:
   },
   "png": {
     "enabled": true,
-    "pngquant_quality": "80-95",
+    "pngquant_quality": "40-95",
     "pngquant_speed": 1,
     "pngquant_dither": false,
     "oxipng_level": 4,
@@ -257,7 +257,7 @@ jpeg.preserve_profiles JSON boolean
 PNG option validation:
 
 ```text
-png.pngquant_quality   MIN-MAX integer range accepted by pngquant, default 80-95
+png.pngquant_quality   MIN-MAX integer range accepted by pngquant, default 40-95
 png.pngquant_speed     integer accepted by pngquant, default 1
 png.pngquant_dither    JSON boolean; false means pass --nofs
 png.oxipng_level       integer accepted by Oxipng, default 4
@@ -425,7 +425,7 @@ Command shape:
 
 ```text
 tools\imagemagick\magick.exe input.png -auto-orient -filter Lanczos -resize 1920x1920> temp.resized.png
-tools\pngquant\pngquant.exe --force --output temp.quant.png --quality 80-95 --speed 1 --nofs --strip -- temp.resized.png
+tools\pngquant\pngquant.exe --force --output temp.quant.png --quality 40-95 --speed 1 --nofs --strip -- temp.resized.png
 tools\oxipng\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.quant.png
 ```
 
@@ -541,48 +541,120 @@ JPEG ICC sidecars are temp files. Delete `*.source.icc` on every path: successfu
 
 ## Console Output
 
-Print concise progress and summary.
+Normal console output should read like a structured console UI, not a raw log stream. Do not print `[INFO]`, `[WARN]`, or `[ERROR]` level prefixes in the default console UI. Reserve log-level prefixes for optional debug log files only.
 
-Startup example:
+Keep the stdin prompt loop and console-subsystem double-click flow. Do not replace it with a GUI, fullscreen TUI, command-line batch mode, watcher, or multi-directory interface.
+
+Use this startup banner:
 
 ```text
-== imgoptz ==
-Working directory: C:\path\to\imgoptz-root
-Config: imgoptz.json loaded
-GPU: enabled via ImageMagick OpenCL
-Workers: 4
+  ██╗███╗   ███╗ ██████╗  ██████╗ ██████╗ ████████╗███████╗   ┌──────────────────────────────┐
+  ██║████╗ ████║██╔════╝ ██╔═══██╗██╔══██╗╚══██╔══╝╚══███╔╝   │ >_ Imgoptz                   │
+  ██║██╔████╔██║██║  ███╗██║   ██║██████╔╝   ██║     ███╔╝    │                              │
+  ██║██║╚██╔╝██║██║   ██║██║   ██║██╔═══╝    ██║    ███╔╝     │ Folder image optimizer       │
+  ██║██║ ╚═╝ ██║╚██████╔╝╚██████╔╝██║        ██║   ███████╗   │ JPEG + PNG optimizer         │
+  ╚═╝╚═╝     ╚═╝ ╚═════╝  ╚═════╝ ╚═╝        ╚═╝   ╚══════╝   └──────────────────────────────┘
 ```
 
-Prompt:
+Use section headers for major UI areas:
 
 ```text
+>_ APP SETTINGS
+>_ INPUT
+>_ DISCOVERY
+>_ PROGRESS
+>_ SUMMARY
+```
+
+Use simple boxed blocks for summary-style information:
+
+```text
+>_ APP SETTINGS
+┌
+│ App root   "C:\Users\huydc\CongHuy\Programming\tools\imgoptz\dist"
+│ Config     ✅ imgoptz.json loaded
+│ GPU        ✅ ImageMagick OpenCL
+│ Workers    4
+│ Output     in-place
+└
+```
+
+Input block example:
+
+```text
+>_ INPUT
+
 Paste one image directory path, or type 'exit':
+C:\Users\tools\imgoptz\dist\demo\in-place\png
+
+✅ Accepted: C:\Users\tools\imgoptz\dist\demo\in-place\png
 ```
 
-Discovery example:
+Do not print an artificial prompt marker before the pasted input unless the app is responsible for rendering that text. Windows console input echo is enough.
+
+Discovery block example:
 
 ```text
-Found 42 images: 30 JPG, 12 PNG
+>_ DISCOVERY
+┌
+│ Found      5 images
+│ JPEG       0
+│ PNG        5
+│ Recursive  false
+└
 ```
 
-Per-file result examples:
+Progress block example:
 
 ```text
-[1/42] OK   photo.jpg -> photo.jpg  4.2 MB -> 2.8 MB  33.3% smaller
-[2/42] SKIP icon.png   optimized output was not smaller
-[3/42] ERR  bad.jpg    mozjpeg exited with code 1
+>_ PROGRESS
+
+[1/5] ✅ OK     Demo 1.png
+[2/5] ✅ OK     Demo 2.png
+[3/5] ❌ ERROR  Demo 3.png
+      ❌ ERROR  pngquant compression failed
+      ℹ️ INFO   Kept original unchanged; no optimized output was written.
+[4/5] ✅ OK     Demo 4.png
+[5/5] ❌ ERROR  Demo 5.png
+      ❌ ERROR  pngquant compression failed
+      ℹ️ INFO   Kept original unchanged; no optimized output was written.
 ```
 
-Per-file success output should include the percentage size reduction.
-
-Summary example:
+Use these status labels in progress rows and indented detail rows:
 
 ```text
-Done.
-Succeeded: 38
-Skipped: 3
-Failed: 1
+✅ OK
+⚠️ SKIP
+❌ ERROR
+ℹ️ INFO
 ```
+
+Use concise user-facing error copy rather than raw internal enum names where practical:
+
+```text
+ImageMagick resize/orientation failed
+MozJPEG compression failed
+pngquant compression failed
+Oxipng optimization failed
+Optimized output was not smaller
+Kept original unchanged; no optimized output was written.
+```
+
+Every error detail should be indented under the file row it belongs to. Per-file success output should include the output path, original size, optimized size, and percentage size reduction once safe output handling is implemented.
+
+Summary block example:
+
+```text
+>_ SUMMARY
+┌
+│ Succeeded  3
+│ Skipped    0
+│ Failed     2
+│ Result     Completed with failures
+└
+```
+
+Do not emit a separate warning block when the summary already communicates the final warning or failure state.
 
 ## Debug Logging
 
