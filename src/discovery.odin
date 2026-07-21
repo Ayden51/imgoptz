@@ -1,7 +1,5 @@
 package main
 
-import "core:fmt"
-import "core:log"
 import "core:os"
 import "core:strings"
 
@@ -57,17 +55,6 @@ destroy_discovery_result :: proc(result: ^Discovery_Result) {
 	delete(result.items)
 	delete(result.err_path)
 	result^ = {}
-}
-
-print_discovery_summary :: proc(result: Discovery_Result) {
-	log.info(
-		fmt.tprintf(
-			"Found %d images: %d JPG, %d PNG",
-			len(result.items),
-			result.jpeg_count,
-			result.png_count,
-		),
-	)
 }
 
 discovery_error_summary :: proc(err: Discovery_Error) -> string {

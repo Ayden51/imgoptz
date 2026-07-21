@@ -1,7 +1,6 @@
 package main
 
 import "core:fmt"
-import "core:log"
 import "core:os"
 import "core:strings"
 
@@ -326,31 +325,12 @@ add_runtime_error :: proc(env: ^Runtime_Environment, err: string) {
 
 print_runtime_warnings :: proc(env: Runtime_Environment) {
 	for warning in env.warnings {
-		log.warn(warning)
+		print_ui_warning(warning)
 	}
 }
 
 print_runtime_errors :: proc(env: Runtime_Environment) {
 	for err in env.errors {
-		log.error(err)
+		print_ui_error(err)
 	}
-}
-
-print_runtime_summary :: proc(env: Runtime_Environment) {
-	log.info("GPU:", runtime_gpu_status_summary(env.gpu_status))
-	if env.output_mode == .Dir {
-		log.info("Output root:", env.output_root)
-	}
-}
-
-runtime_gpu_status_summary :: proc(status: Runtime_GPU_Status) -> string {
-	switch status {
-	case .Disabled_By_Config:
-		return "disabled by config"
-	case .Enabled:
-		return "enabled via ImageMagick OpenCL"
-	case .Probe_Failed:
-		return "disabled; ImageMagick OpenCL probe failed"
-	}
-	return "disabled"
 }
