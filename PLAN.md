@@ -735,6 +735,10 @@ If `debug_log = true`, append detailed logs to `debug_log_file`.
 
 Relative `debug_log_file` resolves against `<app-root>/`.
 
+Implement debug file logging with Odin `core:log` facilities so existing user-facing logging calls can remain mostly untouched. Normal console output must keep the existing structured UI style and must not gain log-level or timestamp prefixes.
+
+Debug log file entries must include log level and date/time. The file should be easy to read: organize detailed logs with block structure matching the existing app settings, input, discovery, progress, and summary sections where practical. Add extra debug-only entries sparingly at high-value decision points such as config fallback, output-root resolution, tool command construction, child process failures, temp cleanup, size comparison, and final write decisions.
+
 Do not require logging for normal operation.
 
 ## Build

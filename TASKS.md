@@ -167,13 +167,12 @@ Goal: process folders efficiently without oversubscribing tools.
 - [ ] Add worker pool.
 - [ ] Implement `workers = auto` heuristic.
 - [ ] Clamp explicit worker counts to a safe minimum of 1.
-- [ ] Limit ImageMagick thread count for child processes.
+- [ ] Revisit ImageMagick thread limit for app-level parallelism instead of adding per-file oversubscription.
 - [ ] Pass `oxipng --threads 1` when app-level workers exceed 1.
 - [ ] Preserve the established per-file progress format under parallel execution.
-- [ ] Print final succeeded/skipped/failed summary.
 - [ ] Preserve deterministic, readable console output under parallel work.
 - [ ] Notice for deterministic output task: discovery order follows OS directory enumeration; verify whether sorting discovered work items by relative path is needed before/while adding parallel reporting.
-- [ ] Verify worker counts on low/high CPU machines where practical and repeated prompt loop after processing.
+- [ ] Verify worker counts on low/high CPU machines where practical.
 
 ## Phase 8: Debug Logging
 
@@ -181,10 +180,15 @@ Goal: finish operator diagnostics without changing the normal console UI.
 
 - [ ] Add optional debug logging controlled by config.
 - [ ] Resolve relative `debug_log_file` against app root.
+- [ ] Use Odin `core:log` file logging so existing user-facing logging calls can remain largely untouched.
+- [ ] Keep console output in the existing structured UI format without log-level prefixes.
+- [ ] Write log level and date/time on every debug log file entry.
 - [ ] Append detailed child process and decision logs when enabled.
+- [ ] Organize debug file output with readable block structure matching the existing app/input/discovery/progress/summary sections where practical.
+- [ ] Place additional debug-only entries sparsely at high-value decision points instead of logging noisy step-by-step internals.
 - [ ] Keep normal operation console-only.
 
-## Phase 9A: Dry-Run Approval Mode
+## Phase 9: Dry-Run Approval Mode
 
 Goal: make optimization preview-first and require explicit approval before final writes by default.
 
@@ -202,7 +206,7 @@ Goal: make optimization preview-first and require explicit approval before final
 - [ ] Update `dist/imgoptz.json` so the development distribution includes the new `dry_run` default.
 - [ ] Add tests for `dry_run` default config, approval parsing, approval finalization, decline cleanup, and no-prompt non-dry-run finalization.
 
-## Phase 9B: Target-Relative Output Directory Defaults
+## Phase 10: Target-Relative Output Directory Defaults
 
 Goal: make default `dir` output non-destructive and relative to the user's accepted input directory.
 
@@ -218,7 +222,7 @@ Goal: make default `dir` output non-destructive and relative to the user's accep
 - [ ] Auto-create target-relative output folders only immediately before writing final output files.
 - [ ] Add tests for target-relative output resolution, fallback behavior, delayed directory creation, and updated output defaults.
 
-## Phase 10: Release Hardening
+## Phase 11: Release Hardening
 
 Goal: run the broad manual and build matrix before release.
 
