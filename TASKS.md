@@ -134,19 +134,27 @@ Goal: write optimized results only when smaller.
 - [x] Resolve slugify name collisions per destination directory.
 - [x] Verify smaller output, larger output, replace failure, copy failure, slugify Unicode, and collisions.
 
-## Phase 6A: PNG Profiles And Size Progress
+## Phase 6A: PNG ICC Profile Preservation
 
-Goal: preserve PNG color profiles through optimization and make successful progress rows show the size win.
+Goal: preserve PNG color profiles through optimization without duplicating JPEG ICC decision logic.
 
 - [ ] Add `png.preserve_profiles` config defaulting to `true`.
 - [ ] Validate `png.preserve_profiles` as a JSON boolean.
 - [ ] Update default config, `dist/imgoptz.json`, and config tests for `png.preserve_profiles`.
 - [ ] Reject or fall back from PNG strip settings that remove color-management chunks while `png.preserve_profiles = true`.
+- [ ] Extract shared ICC profile-family detection from the current JPEG-specific helper.
+- [ ] Extract shared preserve-vs-convert ICC decision logic that both JPEG and PNG pipelines can call.
+- [ ] Keep format-specific profile extraction, embedding, and verification in JPEG/PNG pipeline code.
 - [ ] Remove `pngquant --strip` from the default PNG command path.
 - [ ] Preserve or convert PNG ICC profiles through ImageMagick, pngquant, and Oxipng according to `PLAN.md`.
 - [ ] Verify optimized temp PNGs still contain the expected profile before final output handling.
 - [ ] Update PNG command tests so pngquant does not include `--strip` and Oxipng still receives the configured strip mode.
 - [ ] Add tests for PNG ICC retention/conversion through the optimized temp output.
+
+## Phase 6B: Enhanced Progress Size Output
+
+Goal: make successful progress rows show the size win without adding noisy output-path details.
+
 - [ ] Carry original size, optimized size, and percentage reduction through successful finalization results.
 - [ ] Print success progress rows as `<original size> -> <optimized size> (<negative percent>%)`.
 - [ ] Do not print final or slugified output paths as indented progress detail rows.
@@ -161,7 +169,7 @@ Goal: process folders efficiently without oversubscribing tools.
 - [ ] Clamp explicit worker counts to a safe minimum of 1.
 - [ ] Limit ImageMagick thread count for child processes.
 - [ ] Pass `oxipng --threads 1` when app-level workers exceed 1.
-- [ ] Print per-file progress with status, sizes, and percent reduction.
+- [ ] Preserve the established per-file progress format under parallel execution.
 - [ ] Print final succeeded/skipped/failed summary.
 - [ ] Preserve deterministic, readable console output under parallel work.
 - [ ] Notice for deterministic output task: discovery order follows OS directory enumeration; verify whether sorting discovered work items by relative path is needed before/while adding parallel reporting.
@@ -176,21 +184,11 @@ Goal: finish operator diagnostics without changing the normal console UI.
 - [ ] Append detailed child process and decision logs when enabled.
 - [ ] Keep normal operation console-only.
 
-## Phase 9: Non-Destructive Defaults And Dry-Run Approval
+## Phase 9A: Dry-Run Approval Mode
 
-Goal: make the default workflow target-relative, preview-first, and non-destructive unless the user approves final writes.
+Goal: make optimization preview-first and require explicit approval before final writes by default.
 
 - [ ] Add `dry_run` config as a JSON boolean defaulting to `true`.
-- [ ] Change the built-in default `output_mode` to `dir` in this phase.
-- [ ] Change the built-in default `out_dir` to `~/imgoptz-output` in this phase.
-- [ ] Update `dist/imgoptz.json` so the development distribution matches the new defaults.
-- [ ] Resolve `~/...` output paths relative to the accepted user input directory.
-- [ ] Keep absolute `out_dir` paths resolved and existence-checked at startup.
-- [ ] Keep app-root-relative `out_dir` paths resolved and existence-checked at startup.
-- [ ] Warn and fall back to `~/imgoptz-output` when an absolute or app-root-relative configured output root is missing.
-- [ ] Skip startup existence checks for target-relative `~/...` output roots.
-- [ ] Do not create output roots during discovery.
-- [ ] Auto-create target-relative output folders only immediately before writing final output files.
 - [ ] In dry-run mode, run resize and optimization to temp files, then reject outputs that are not smaller before asking for approval.
 - [ ] Keep successful temp optimized files available for finalization after approval.
 - [ ] Prompt users to approve saving optimized files after dry-run results.
@@ -201,7 +199,24 @@ Goal: make the default workflow target-relative, preview-first, and non-destruct
 - [ ] On approval, finalize only successful dry-run temp outputs.
 - [ ] On decline, delete all temp artifacts and write nothing.
 - [ ] When `dry_run = false`, skip approval and finalize successful temp outputs immediately.
-- [ ] Add tests for default config changes, target-relative output resolution, fallback behavior, delayed directory creation, approval parsing, approval finalization, decline cleanup, and no-prompt non-dry-run finalization.
+- [ ] Update `dist/imgoptz.json` so the development distribution includes the new `dry_run` default.
+- [ ] Add tests for `dry_run` default config, approval parsing, approval finalization, decline cleanup, and no-prompt non-dry-run finalization.
+
+## Phase 9B: Target-Relative Output Directory Defaults
+
+Goal: make default `dir` output non-destructive and relative to the user's accepted input directory.
+
+- [ ] Change the built-in default `output_mode` to `dir` in this phase.
+- [ ] Change the built-in default `out_dir` to `~/imgoptz-output` in this phase.
+- [ ] Update `dist/imgoptz.json` so the development distribution matches the new output defaults.
+- [ ] Resolve `~/...` output paths relative to the accepted user input directory.
+- [ ] Keep absolute `out_dir` paths resolved and existence-checked at startup.
+- [ ] Keep app-root-relative `out_dir` paths resolved and existence-checked at startup.
+- [ ] Warn and fall back to `~/imgoptz-output` when an absolute or app-root-relative configured output root is missing.
+- [ ] Skip startup existence checks for target-relative `~/...` output roots.
+- [ ] Do not create output roots during discovery.
+- [ ] Auto-create target-relative output folders only immediately before writing final output files.
+- [ ] Add tests for target-relative output resolution, fallback behavior, delayed directory creation, and updated output defaults.
 
 ## Phase 10: Release Hardening
 

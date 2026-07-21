@@ -340,7 +340,7 @@ Creating the output root itself is not allowed:
 C:\Optimized
 ```
 
-## Future Non-Destructive Defaults And Dry-Run Approval
+## Future Dry-Run Approval And Output Defaults
 
 After the current safe-output behavior is complete, change the default UX to be non-destructive by default:
 
@@ -354,16 +354,7 @@ After the current safe-output behavior is complete, change the default UX to be 
 
 `dry_run` accepts only JSON booleans. Default `dry_run = true` means the app optimizes to temporary files and previews the accepted outputs before writing final files.
 
-Future `out_dir` path rules:
-
-1. Absolute `out_dir` paths resolve as absolute paths.
-2. App-root-relative `out_dir` paths that do not start with `~/`, such as `output`, `.\output`, `./output`, or `/output`, resolve against `<app-root>/`.
-3. Target-relative `out_dir` paths starting with `~/` resolve against the accepted user input directory.
-4. Missing absolute or app-root-relative configured output roots are checked at startup. If missing, warn and fall back to `~/imgoptz-output` for each accepted input directory.
-5. Target-relative `~/...` output roots are not checked at startup and are not created during discovery.
-6. The default/fallback target-relative output folder is created automatically only immediately before writing final output files.
-
-Dry-run approval flow:
+### Dry-run approval flow
 
 1. User enters one target directory path.
 2. App discovers supported images.
@@ -381,6 +372,15 @@ Dry-run approval flow:
 14. If `dry_run = false`, app skips the approval prompt and finalizes successful temp outputs immediately.
 
 The dry-run preview must not require re-running external optimizers after approval; approval finalizes the already-created successful temp outputs.
+
+### Target-relative output directory rules
+
+1. Absolute `out_dir` paths resolve as absolute paths.
+2. App-root-relative `out_dir` paths that do not start with `~/`, such as `output`, `.\output`, `./output`, or `/output`, resolve against `<app-root>/`.
+3. Target-relative `out_dir` paths starting with `~/` resolve against the accepted user input directory.
+4. Missing absolute or app-root-relative configured output roots are checked at startup. If missing, warn and fall back to `~/imgoptz-output` for each accepted input directory.
+5. Target-relative `~/...` output roots are not checked at startup and are not created during discovery.
+6. The default/fallback target-relative output folder is created automatically only immediately before writing final output files.
 
 ## Resize Rules
 
@@ -474,6 +474,8 @@ PNG profile decision rules mirror the JPEG pipeline when `png.preserve_profiles 
 3. If the source PNG has no ICC profile, treat it as unsupported/unknown, convert pixels to sRGB with `profiles\sRGB2014.icc`, then keep the sRGB ICC profile in the optimized PNG.
 
 Retained profile families use the same checks as JPEG: at minimum profiles identified as `sRGB`, `IEC 61966-2-1`, `IEC61966-2.1`, `IEC61966-2-1`, `Display P3`, `DCI-P3 D65 Gamut with sRGB Transfer`, or other descriptions containing `P3`.
+
+The PNG ICC implementation should not duplicate the JPEG-only ICC decision logic. Extract shared profile-family detection and preserve-vs-convert decision helpers that both JPEG and PNG pipelines call, while keeping format-specific extraction, embedding, and output verification in the relevant pipeline code.
 
 Do not pass `pngquant --strip` in the default pipeline. pngquant can copy PNG metadata and ICC data, while `--strip` disables metadata copying and conflicts with profile preservation. Let Oxipng own stripping behavior after quantization.
 
@@ -763,7 +765,7 @@ odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o
 9. Add supported file discovery with optional recursion.
 10. Add relative path preservation for recursive `dir` output mode.
 11. Add JPEG pipeline with ICC retention/conversion and `*.source.icc` cleanup.
-12. Add PNG pipeline with Magick temp resize, PNG ICC retention/conversion, pngquant without `--strip`, and Oxipng output.
+12. Add PNG pipeline with Magick temp resize, shared ICC retention/conversion logic, pngquant without `--strip`, and Oxipng output.
 13. Apply the updated PNG quality default: `png.pngquant_quality = "40-95"` across built-in defaults, config fallback behavior, distribution config, tests, and PNG command verification.
 14. Replace flat console log-style output with the structured console UI: banner, app settings block, input block, discovery block, progress block, and summary block.
 15. Add temp file cleanup and size comparison.
