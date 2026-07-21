@@ -127,6 +127,7 @@ Goal: write optimized results only when smaller.
 - [ ] Skip and delete temp files when output is not smaller.
 - [ ] Safely replace originals for `in-place` mode.
 - [ ] Copy/move optimized files into accepted output root for `dir` mode.
+- [ ] Copy the existing Odin slugify script into this codebase before wiring final-name behavior.
 - [ ] Add slugify final output names after optimization.
 - [ ] Notice for slugify task: discovery currently plans `destination_path` before slugify/collision handling; verify Phase 6 treats it as a pre-slug destination and does not bypass final-name rules.
 - [ ] Preserve lowercase image extensions for final names.

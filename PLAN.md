@@ -447,7 +447,7 @@ Write Oxipng output to a temp `.png` first, then apply output mode rules. Delete
 
 Every successfully optimized image has a third processing step: slugify the final output file name.
 
-Slugify behavior will be implemented with a pre-existing Odin slugify script that will be copied into this codebase later.
+Slugify behavior will be implemented with a pre-existing Odin slugify script. Copy that script into this codebase before wiring slugify into output handling, keep it in `package main`, and adapt only what is needed for allocator ownership, style, and tests.
 
 Expected behavior:
 
@@ -695,21 +695,24 @@ odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o
 10. Add relative path preservation for recursive `dir` output mode.
 11. Add JPEG pipeline with ICC retention/conversion and `*.source.icc` cleanup.
 12. Add PNG pipeline with Magick temp resize, pngquant, and Oxipng output.
-13. Add temp file cleanup and size comparison.
-14. Add safe original replacement for `in-place` mode.
-15. Add slugify final output names and collision handling.
-16. Add output copy/move for `dir` mode.
-17. Add worker pool and auto worker heuristic.
-18. Add progress output and final summary, including percentage size reduction.
-19. Add optional debug logging.
-20. Test with spaces, special characters, Unicode paths, and quoted paths.
-21. Test relative and absolute input directories.
-22. Test relative and absolute `out_dir`.
-23. Test missing configured `out_dir` fallback to default output.
-24. Test missing default output folder error.
-25. Test recursive input with preserved output paths.
-26. Test slugify collisions.
-27. Test uppercase extensions.
-28. Test corrupt images.
-29. Test missing tools.
-30. Test repeated prompt loop and `exit`.
+13. Apply the updated PNG quality default: `png.pngquant_quality = "40-95"` across built-in defaults, config fallback behavior, distribution config, tests, and PNG command verification.
+14. Replace flat console log-style output with the structured console UI: banner, app settings block, input block, discovery block, progress block, and summary block.
+15. Add temp file cleanup and size comparison.
+16. Add safe original replacement for `in-place` mode.
+17. Copy the existing Odin slugify script into this codebase and adapt it to repo style, package layout, allocator ownership, and tests.
+18. Add slugify final output names and collision handling.
+19. Add output copy/move for `dir` mode.
+20. Add worker pool and auto worker heuristic.
+21. Add progress output and final summary, including output path, original size, optimized size, and percentage size reduction.
+22. Add optional debug logging.
+23. Test with spaces, special characters, Unicode paths, and quoted paths.
+24. Test relative and absolute input directories.
+25. Test relative and absolute `out_dir`.
+26. Test missing configured `out_dir` fallback to default output.
+27. Test missing default output folder error.
+28. Test recursive input with preserved output paths.
+29. Test slugify collisions.
+30. Test uppercase extensions.
+31. Test corrupt images.
+32. Test missing tools.
+33. Test repeated prompt loop and `exit`.
