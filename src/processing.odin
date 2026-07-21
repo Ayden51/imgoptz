@@ -17,6 +17,11 @@ Image_Process_Error :: enum {
 	Pngquant_Failed,
 	Oxipng_Failed,
 	Empty_Output,
+	Size_Read_Failed,
+	Optimized_Not_Smaller,
+	Final_Path_Failed,
+	Replace_Failed,
+	Copy_Failed,
 }
 
 Jpeg_Icc_Mode :: enum {
@@ -26,6 +31,12 @@ Jpeg_Icc_Mode :: enum {
 }
 
 Process_Image_Result :: struct {
+	output_path: string,
+	err:         Image_Process_Error,
+	detail:      string,
+}
+
+Finalize_Output_Result :: struct {
 	output_path: string,
 	err:         Image_Process_Error,
 	detail:      string,
@@ -47,13 +58,11 @@ process_discovered_images :: proc(
 	}
 
 	succeeded := 0
+	skipped := 0
 	failed := 0
 	for item, index in discovery.items {
 		result := process_image_to_temp(item, config, runtime_env)
-		if result.err == .None {
-			succeeded += 1
-			print_progress_ok(index + 1, len(discovery.items), item.relative_path)
-		} else {
+		if result.err != .None {
 			failed += 1
 			print_progress_error(
 				index + 1,
@@ -62,11 +71,37 @@ process_discovered_images :: proc(
 				result.err,
 				result.detail,
 			)
+			cleanup_process_image_result(&result)
+			continue
 		}
+
+		finalize := finalize_optimized_output(item, result.output_path, runtime_env.output_mode)
+		if finalize.err == .None {
+			succeeded += 1
+			print_progress_ok(index + 1, len(discovery.items), item.relative_path)
+		} else if finalize.err == .Optimized_Not_Smaller {
+			skipped += 1
+			print_progress_skip(
+				index + 1,
+				len(discovery.items),
+				item.relative_path,
+				finalize.detail,
+			)
+		} else {
+			failed += 1
+			print_progress_error(
+				index + 1,
+				len(discovery.items),
+				item.relative_path,
+				finalize.err,
+				finalize.detail,
+			)
+		}
+		destroy_finalize_output_result(&finalize)
 		cleanup_process_image_result(&result)
 	}
 
-	print_processing_summary(succeeded, 0, failed)
+	print_processing_summary(succeeded, skipped, failed)
 }
 
 process_image_to_temp :: proc(
@@ -94,6 +129,180 @@ cleanup_process_image_result :: proc(result: ^Process_Image_Result) {
 		remove_if_exists(result.output_path)
 	}
 	destroy_process_image_result(result)
+}
+
+destroy_finalize_output_result :: proc(result: ^Finalize_Output_Result) {
+	delete(result.output_path)
+	delete(result.detail)
+	result^ = {}
+}
+
+finalize_optimized_output :: proc(
+	item: Image_Work_Item,
+	temp_output_path: string,
+	output_mode: Config_Output_Mode,
+) -> Finalize_Output_Result {
+	original_size, original_size_ok := file_size_by_path(item.source_path)
+	optimized_size, optimized_size_ok := file_size_by_path(temp_output_path)
+	if !original_size_ok || !optimized_size_ok {
+		return Finalize_Output_Result{err = .Size_Read_Failed}
+	}
+
+	if optimized_size >= original_size {
+		return Finalize_Output_Result {
+			err = .Optimized_Not_Smaller,
+			detail = fmt.aprintf(
+				"Optimized output was not smaller (%d bytes >= %d bytes).",
+				optimized_size,
+				original_size,
+			),
+		}
+	}
+
+	final_path, final_path_ok := final_output_path_for_item(item, output_mode)
+	if !final_path_ok {
+		return Finalize_Output_Result{err = .Final_Path_Failed}
+	}
+
+	switch output_mode {
+	case .In_Place:
+		if detail, ok := replace_in_place_with_slugged_output(item, temp_output_path, final_path);
+		   !ok {
+			delete(final_path)
+			return Finalize_Output_Result{err = .Replace_Failed, detail = detail}
+		}
+	case .Dir:
+		if detail, ok := copy_to_slugged_output(temp_output_path, final_path); !ok {
+			delete(final_path)
+			return Finalize_Output_Result{err = .Copy_Failed, detail = detail}
+		}
+	}
+
+	return Finalize_Output_Result{output_path = final_path}
+}
+
+replace_in_place_with_slugged_output :: proc(
+	item: Image_Work_Item,
+	temp_output_path, final_path: string,
+) -> (
+	string,
+	bool,
+) {
+	backup_path, backup_ok := make_process_temp_path(item.source_path, "original.bak")
+	if !backup_ok {
+		return "", false
+	}
+	defer delete(backup_path)
+
+	backup_err := os.rename(item.source_path, backup_path)
+	if backup_err != nil {
+		return fmt.aprintf("Failed to move original aside: %v", backup_err), false
+	}
+
+	replaced := false
+	replace_err := os.rename(temp_output_path, item.source_path)
+	if replace_err == nil {
+		replaced = true
+	}
+	if replace_err != nil {
+		_ = os.rename(backup_path, item.source_path)
+		return fmt.aprintf("Failed to replace original with optimized output: %v", replace_err),
+			false
+	}
+
+	if !output_paths_match(item.source_path, final_path) {
+		rename_err := os.rename(item.source_path, final_path)
+		if rename_err != nil {
+			if replaced {
+				remove_if_exists(item.source_path)
+			}
+			_ = os.rename(backup_path, item.source_path)
+			return fmt.aprintf("Failed to rename optimized output: %v", rename_err), false
+		}
+	}
+
+	remove_if_exists(backup_path)
+	return "", true
+}
+
+copy_to_slugged_output :: proc(temp_output_path, final_path: string) -> (string, bool) {
+	dir, _ := os.split_path(final_path)
+	if len(dir) > 0 {
+		mkdir_err := os.make_directory_all(dir)
+		if mkdir_err != nil {
+			return fmt.aprintf("Failed to create output directory: %v", mkdir_err), false
+		}
+	}
+
+	copy_err := os.copy_file(final_path, temp_output_path)
+	if copy_err != nil {
+		remove_if_exists(final_path)
+		return fmt.aprintf("Failed to copy optimized output: %v", copy_err), false
+	}
+	return "", true
+}
+
+final_output_path_for_item :: proc(
+	item: Image_Work_Item,
+	output_mode: Config_Output_Mode,
+) -> (
+	string,
+	bool,
+) {
+	dir, filename := os.split_path(item.destination_path)
+	stem, ext := os.split_filename(filename)
+
+	slug_stem := slugify(stem)
+	defer delete(slug_stem)
+	effective_stem := slug_stem
+	if len(slug_stem) == 0 {
+		effective_stem = "image"
+	}
+
+	lower_ext := ascii_lower_clone(ext)
+	defer delete(lower_ext)
+
+	ignored_existing_path := ""
+	if output_mode == .In_Place {
+		ignored_existing_path = item.source_path
+	}
+	return unique_output_path(dir, effective_stem, lower_ext, ignored_existing_path)
+}
+
+unique_output_path :: proc(dir, stem, ext, ignored_existing_path: string) -> (string, bool) {
+	for suffix in 0 ..< 1024 {
+		filename: string
+		if suffix == 0 {
+			filename = fmt.aprintf("%s.%s", stem, ext)
+		} else {
+			filename = fmt.aprintf("%s-%d.%s", stem, suffix, ext)
+		}
+
+		parts := [?]string{dir, filename}
+		candidate, join_err := os.join_path(parts[:], context.allocator)
+		delete(filename)
+		if join_err != nil {
+			return "", false
+		}
+
+		if !os.exists(candidate) || output_paths_match(candidate, ignored_existing_path) {
+			return candidate, true
+		}
+		delete(candidate)
+	}
+	return "", false
+}
+
+ascii_lower_clone :: proc(value: string) -> string {
+	result := make([]byte, len(value))
+	for i in 0 ..< len(value) {
+		result[i] = ascii_lower(value[i])
+	}
+	return string(result)
+}
+
+output_paths_match :: proc(a, b: string) -> bool {
+	return ascii_equal_fold(a, b)
 }
 
 process_jpeg_to_temp :: proc(
@@ -606,6 +815,20 @@ file_is_non_empty :: proc(path: string) -> bool {
 	return size_err == nil && size > 0
 }
 
+file_size_by_path :: proc(path: string) -> (i64, bool) {
+	file, open_err := os.open(path)
+	if open_err != nil {
+		return 0, false
+	}
+	defer os.close(file)
+
+	size, size_err := os.file_size(file)
+	if size_err != nil {
+		return 0, false
+	}
+	return size, true
+}
+
 remove_if_exists :: proc(path: string) {
 	if len(path) > 0 && os.exists(path) {
 		_ = os.remove(path)
@@ -634,6 +857,16 @@ image_process_error_summary :: proc(err: Image_Process_Error) -> string {
 		return "Oxipng optimization failed"
 	case .Empty_Output:
 		return "Optimized output was empty"
+	case .Size_Read_Failed:
+		return "Failed to compare output size"
+	case .Optimized_Not_Smaller:
+		return "Optimized output was not smaller"
+	case .Final_Path_Failed:
+		return "Failed to plan final output path"
+	case .Replace_Failed:
+		return "Failed to safely replace original"
+	case .Copy_Failed:
+		return "Failed to write optimized output"
 	}
 	return "Image processing failed"
 }

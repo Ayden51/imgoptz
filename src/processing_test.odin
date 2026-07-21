@@ -151,6 +151,255 @@ test_corrupt_png_failure_cleans_intermediate_temps :: proc(t: ^testing.T) {
 }
 
 @(test, require)
+test_finalize_output_skips_when_not_smaller :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-finalize-skip-*", context.allocator)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer delete(temp_dir)
+	defer os.remove_all(temp_dir)
+
+	source_path := processing_join(t, temp_dir, "Photo.JPG")
+	temp_output_path := processing_join(t, temp_dir, "optimized.tmp")
+	if len(source_path) == 0 ||
+	   len(temp_output_path) == 0 ||
+	   !testing.expect_value(t, os.write_entire_file(source_path, "small"), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(temp_output_path, "larger"), nil) {
+		return
+	}
+
+	item := Image_Work_Item {
+		source_path      = source_path,
+		relative_path    = "Photo.JPG",
+		destination_path = source_path,
+		kind             = .Jpeg,
+	}
+	result := finalize_optimized_output(item, temp_output_path, .In_Place)
+	defer destroy_finalize_output_result(&result)
+
+	testing.expect_value(t, result.err, Image_Process_Error.Optimized_Not_Smaller)
+	testing.expect(t, os.exists(source_path))
+	testing.expect(t, os.exists(temp_output_path))
+	testing.expect(t, processing_file_has_contents(t, source_path, "small"))
+}
+
+@(test, require)
+test_finalize_in_place_replaces_smaller_output_and_slugifies_name :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp(
+		"",
+		"imgoptz-finalize-in-place-*",
+		context.allocator,
+	)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer delete(temp_dir)
+	defer os.remove_all(temp_dir)
+
+	source_path := processing_join(t, temp_dir, "Ảnh Đẹp.JPG")
+	temp_output_path := processing_join(t, temp_dir, "optimized.tmp")
+	final_path := processing_join(t, temp_dir, "anh-dep.jpg")
+	if len(source_path) == 0 ||
+	   len(temp_output_path) == 0 ||
+	   len(final_path) == 0 ||
+	   !testing.expect_value(t, os.write_entire_file(source_path, "original-large"), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(temp_output_path, "tiny"), nil) {
+		return
+	}
+
+	item := Image_Work_Item {
+		source_path      = source_path,
+		relative_path    = "Ảnh Đẹp.JPG",
+		destination_path = source_path,
+		kind             = .Jpeg,
+	}
+	result := finalize_optimized_output(item, temp_output_path, .In_Place)
+	defer destroy_finalize_output_result(&result)
+
+	testing.expect_value(t, result.err, Image_Process_Error.None)
+	testing.expect_value(t, result.output_path, final_path)
+	testing.expect(t, !os.exists(source_path))
+	testing.expect(t, !os.exists(temp_output_path))
+	testing.expect(t, os.exists(final_path))
+	testing.expect(t, processing_file_has_contents(t, final_path, "tiny"))
+	testing.expect(t, !processing_temp_artifacts_exist(source_path))
+}
+
+@(test, require)
+test_finalize_dir_copies_smaller_output_with_slug_collision_suffix :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-finalize-dir-*", context.allocator)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer delete(temp_dir)
+	defer os.remove_all(temp_dir)
+
+	input_dir := processing_join(t, temp_dir, "input")
+	output_dir := processing_join(t, temp_dir, "output")
+	if len(input_dir) == 0 ||
+	   len(output_dir) == 0 ||
+	   !testing.expect_value(t, os.make_directory_all(input_dir), nil) ||
+	   !testing.expect_value(t, os.make_directory_all(output_dir), nil) {
+		return
+	}
+
+	source_path := processing_join(t, input_dir, "Ảnh Đẹp.PNG")
+	temp_output_path := processing_join(t, input_dir, "optimized.tmp")
+	pre_slug_destination := processing_join(t, output_dir, "nested/Ảnh Đẹp.PNG")
+	collision_path := processing_join(t, output_dir, "nested/anh-dep.png")
+	final_path := processing_join(t, output_dir, "nested/anh-dep-1.png")
+	if len(source_path) == 0 ||
+	   len(temp_output_path) == 0 ||
+	   len(pre_slug_destination) == 0 ||
+	   len(collision_path) == 0 ||
+	   len(final_path) == 0 {
+		return
+	}
+	collision_dir, _ := os.split_path(collision_path)
+	if !testing.expect_value(t, os.make_directory_all(collision_dir), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(source_path, "original-large"), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(temp_output_path, "tiny"), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(collision_path, "existing"), nil) {
+		return
+	}
+
+	item := Image_Work_Item {
+		source_path      = source_path,
+		relative_path    = "nested/Ảnh Đẹp.PNG",
+		destination_path = pre_slug_destination,
+		kind             = .Png,
+	}
+	result := finalize_optimized_output(item, temp_output_path, .Dir)
+	defer destroy_finalize_output_result(&result)
+
+	testing.expect_value(t, result.err, Image_Process_Error.None)
+	testing.expect_value(t, result.output_path, final_path)
+	testing.expect(t, os.exists(source_path))
+	testing.expect(t, os.exists(temp_output_path))
+	testing.expect(t, processing_file_has_contents(t, source_path, "original-large"))
+	testing.expect(t, processing_file_has_contents(t, collision_path, "existing"))
+	testing.expect(t, processing_file_has_contents(t, final_path, "tiny"))
+}
+
+@(test, require)
+test_finalize_dir_does_not_ignore_existing_destination_matching_source :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp(
+		"",
+		"imgoptz-finalize-overlap-*",
+		context.allocator,
+	)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer delete(temp_dir)
+	defer os.remove_all(temp_dir)
+
+	source_path := processing_join(t, temp_dir, "photo.jpg")
+	temp_output_path := processing_join(t, temp_dir, "optimized.tmp")
+	final_path := processing_join(t, temp_dir, "photo-1.jpg")
+	if len(source_path) == 0 ||
+	   len(temp_output_path) == 0 ||
+	   len(final_path) == 0 ||
+	   !testing.expect_value(t, os.write_entire_file(source_path, "original-large"), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(temp_output_path, "tiny"), nil) {
+		return
+	}
+
+	item := Image_Work_Item {
+		source_path      = source_path,
+		relative_path    = "photo.jpg",
+		destination_path = source_path,
+		kind             = .Jpeg,
+	}
+	result := finalize_optimized_output(item, temp_output_path, .Dir)
+	defer destroy_finalize_output_result(&result)
+
+	testing.expect_value(t, result.err, Image_Process_Error.None)
+	testing.expect_value(t, result.output_path, final_path)
+	testing.expect(t, processing_file_has_contents(t, source_path, "original-large"))
+	testing.expect(t, processing_file_has_contents(t, final_path, "tiny"))
+}
+
+@(test, require)
+test_replace_in_place_failure_restores_original :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-replace-fail-*", context.allocator)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer delete(temp_dir)
+	defer os.remove_all(temp_dir)
+
+	source_path := processing_join(t, temp_dir, "Photo.JPG")
+	temp_output_path := processing_join(t, temp_dir, "optimized.tmp")
+	final_path := processing_join(t, temp_dir, "missing/photo.jpg")
+	if len(source_path) == 0 ||
+	   len(temp_output_path) == 0 ||
+	   len(final_path) == 0 ||
+	   !testing.expect_value(t, os.write_entire_file(source_path, "original-large"), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(temp_output_path, "tiny"), nil) {
+		return
+	}
+
+	item := Image_Work_Item {
+		source_path      = source_path,
+		relative_path    = "Photo.JPG",
+		destination_path = source_path,
+		kind             = .Jpeg,
+	}
+	detail, ok := replace_in_place_with_slugged_output(item, temp_output_path, final_path)
+	defer delete(detail)
+
+	testing.expect_value(t, ok, false)
+	testing.expect(t, len(detail) > 0)
+	testing.expect(t, processing_file_has_contents(t, source_path, "original-large"))
+	testing.expect(t, !os.exists(temp_output_path))
+	testing.expect(t, !processing_temp_artifacts_exist(source_path))
+}
+
+@(test, require)
+test_finalize_dir_copy_failure_preserves_source_and_temp :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-copy-fail-*", context.allocator)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer delete(temp_dir)
+	defer os.remove_all(temp_dir)
+
+	input_dir := processing_join(t, temp_dir, "input")
+	blocking_path := processing_join(t, temp_dir, "blocking")
+	if len(input_dir) == 0 ||
+	   len(blocking_path) == 0 ||
+	   !testing.expect_value(t, os.make_directory_all(input_dir), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(blocking_path, "not a directory"), nil) {
+		return
+	}
+
+	source_path := processing_join(t, input_dir, "Photo.JPG")
+	temp_output_path := processing_join(t, input_dir, "optimized.tmp")
+	destination_path := processing_join(t, blocking_path, "Photo.JPG")
+	if len(source_path) == 0 ||
+	   len(temp_output_path) == 0 ||
+	   len(destination_path) == 0 ||
+	   !testing.expect_value(t, os.write_entire_file(source_path, "original-large"), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(temp_output_path, "tiny"), nil) {
+		return
+	}
+
+	item := Image_Work_Item {
+		source_path      = source_path,
+		relative_path    = "Photo.JPG",
+		destination_path = destination_path,
+		kind             = .Jpeg,
+	}
+	result := finalize_optimized_output(item, temp_output_path, .Dir)
+	defer destroy_finalize_output_result(&result)
+
+	testing.expect_value(t, result.err, Image_Process_Error.Copy_Failed)
+	testing.expect(t, processing_file_has_contents(t, source_path, "original-large"))
+	testing.expect(t, processing_file_has_contents(t, temp_output_path, "tiny"))
+}
+
+@(test, require)
 test_imagemagick_environment_filters_managed_entries :: proc(t: ^testing.T) {
 	testing.expect(t, imagemagick_environment_entry_is_managed("MAGICK_THREAD_LIMIT=8"))
 	testing.expect(t, imagemagick_environment_entry_is_managed("magick_ocl_device=CPU"))
@@ -211,4 +460,14 @@ processing_temp_artifacts_exist :: proc(source_path: string) -> bool {
 		}
 	}
 	return false
+}
+
+processing_file_has_contents :: proc(t: ^testing.T, path, expected: string) -> bool {
+	data, read_err := os.read_entire_file(path, context.allocator)
+	if !testing.expect_value(t, read_err, nil) {
+		return false
+	}
+	defer delete(data)
+
+	return testing.expect_value(t, string(data), expected)
 }

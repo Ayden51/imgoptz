@@ -123,16 +123,16 @@ Goal: replace dense flat log-style output with readable console UI blocks before
 
 Goal: write optimized results only when smaller.
 
-- [ ] Compare temp optimized size against original size.
-- [ ] Skip and delete temp files when output is not smaller.
-- [ ] Safely replace originals for `in-place` mode.
-- [ ] Copy/move optimized files into accepted output root for `dir` mode.
-- [ ] Copy the existing Odin slugify script into this codebase before wiring final-name behavior.
-- [ ] Add slugify final output names after optimization.
-- [ ] Notice for slugify task: discovery currently plans `destination_path` before slugify/collision handling; verify Phase 6 treats it as a pre-slug destination and does not bypass final-name rules.
-- [ ] Preserve lowercase image extensions for final names.
-- [ ] Resolve slugify name collisions per destination directory.
-- [ ] Verify smaller output, larger output, replace failure, copy failure, slugify Unicode, and collisions.
+- [x] Compare temp optimized size against original size.
+- [x] Skip and delete temp files when output is not smaller.
+- [x] Safely replace originals for `in-place` mode.
+- [x] Copy/move optimized files into accepted output root for `dir` mode.
+- [x] Copy the existing Odin slugify script into this codebase before wiring final-name behavior.
+- [x] Add slugify final output names after optimization.
+- [x] Notice for slugify task: discovery currently plans `destination_path` before slugify/collision handling; verify Phase 6 treats it as a pre-slug destination and does not bypass final-name rules.
+- [x] Preserve lowercase image extensions for final names.
+- [x] Resolve slugify name collisions per destination directory.
+- [x] Verify smaller output, larger output, replace failure, copy failure, slugify Unicode, and collisions.
 
 ## Phase 7: Parallel Processing And Reporting
 
@@ -163,6 +163,6 @@ Goal: finish operator diagnostics and broad edge-case coverage.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/structured-console-ui`.
-- Scope: Phase 5B only.
-- Reason: safe output replacement/copying and slugification remain separated for Phase 6.
+- Current feature branch: `feat/safe-outputs`.
+- Scope: Phase 6 only.
+- Reason: parallel processing and debug logging remain separated for later phases.
