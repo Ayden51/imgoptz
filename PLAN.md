@@ -206,7 +206,8 @@ Default config:
     "oxipng_level": 4,
     "interlace": false,
     "strip": "safe",
-    "alpha": true
+    "alpha": true,
+    "preserve_profiles": true
   }
 }
 ```
@@ -264,7 +265,10 @@ png.oxipng_level       integer accepted by Oxipng, default 4
 png.interlace          JSON boolean
 png.strip              safe/all/<list>/none
 png.alpha              JSON boolean
+png.preserve_profiles  JSON boolean
 ```
+
+When `png.preserve_profiles = true`, do not allow PNG stripping settings that remove color-management chunks. If `png.strip = "all"`, or if a chunk list explicitly strips `iCCP`, `sRGB`, or `cICP`, warn and use the default `png.strip = "safe"` for that option.
 
 ## Output Modes
 
@@ -335,6 +339,48 @@ Creating the output root itself is not allowed:
 ```text
 C:\Optimized
 ```
+
+## Future Non-Destructive Defaults And Dry-Run Approval
+
+After the current safe-output behavior is complete, change the default UX to be non-destructive by default:
+
+```json
+{
+  "output_mode": "dir",
+  "out_dir": "~/imgoptz-output",
+  "dry_run": true
+}
+```
+
+`dry_run` accepts only JSON booleans. Default `dry_run = true` means the app optimizes to temporary files and previews the accepted outputs before writing final files.
+
+Future `out_dir` path rules:
+
+1. Absolute `out_dir` paths resolve as absolute paths.
+2. App-root-relative `out_dir` paths that do not start with `~/`, such as `output`, `.\output`, `./output`, or `/output`, resolve against `<app-root>/`.
+3. Target-relative `out_dir` paths starting with `~/` resolve against the accepted user input directory.
+4. Missing absolute or app-root-relative configured output roots are checked at startup. If missing, warn and fall back to `~/imgoptz-output` for each accepted input directory.
+5. Target-relative `~/...` output roots are not checked at startup and are not created during discovery.
+6. The default/fallback target-relative output folder is created automatically only immediately before writing final output files.
+
+Dry-run approval flow:
+
+1. User enters one target directory path.
+2. App discovers supported images.
+3. App runs resize and optimization into temp files.
+4. App compares optimized temp size against the original size. Outputs that are equal or larger are rejected during this optimization pass and are not eligible for final writing.
+5. App reports successful, skipped, and failed files, including size reduction for successful temp outputs. Planned slugified final names may be shown in the dedicated approval preview, but not as indented progress detail rows.
+6. App clearly states that the user must check the results and approve saving optimized files.
+7. App prompts for approval.
+8. Accepted approval inputs are `y` exactly and `yes` case-insensitively.
+9. Accepted decline inputs are `N` exactly and `no` case-insensitively.
+10. Empty input is invalid and re-prompts, matching the main input step behavior.
+11. Invalid non-empty input re-prompts.
+12. On approval, app finalizes only successful temp outputs by replacing originals in `in-place` mode or writing to the output directory in `dir` mode.
+13. On decline, app deletes all temp artifacts and writes nothing.
+14. If `dry_run = false`, app skips the approval prompt and finalizes successful temp outputs immediately.
+
+The dry-run preview must not require re-running external optimizers after approval; approval finalizes the already-created successful temp outputs.
 
 ## Resize Rules
 
@@ -419,13 +465,33 @@ Write MozJPEG output to a temp `.jpg` first, then apply output mode rules. Delet
 
 ## PNG Pipeline
 
-PNG files use the pipeline: ImageMagick resize/orient to a temporary PNG, pngquant lossy quantization without dithering, then Oxipng optimization.
+PNG files use the pipeline: ImageMagick resize/orient with ICC profile decision, pngquant lossy quantization without dithering, then Oxipng optimization.
+
+PNG profile decision rules mirror the JPEG pipeline when `png.preserve_profiles = true`:
+
+1. If the source PNG has an sRGB-family or P3-family ICC profile, preserve that exact source profile through the optimized PNG.
+2. If the source PNG has any other ICC profile, convert pixels to sRGB with `profiles\sRGB2014.icc` during the ImageMagick step, then keep the sRGB ICC profile in the optimized PNG.
+3. If the source PNG has no ICC profile, treat it as unsupported/unknown, convert pixels to sRGB with `profiles\sRGB2014.icc`, then keep the sRGB ICC profile in the optimized PNG.
+
+Retained profile families use the same checks as JPEG: at minimum profiles identified as `sRGB`, `IEC 61966-2-1`, `IEC61966-2.1`, `IEC61966-2-1`, `Display P3`, `DCI-P3 D65 Gamut with sRGB Transfer`, or other descriptions containing `P3`.
+
+Do not pass `pngquant --strip` in the default pipeline. pngquant can copy PNG metadata and ICC data, while `--strip` disables metadata copying and conflicts with profile preservation. Let Oxipng own stripping behavior after quantization.
+
+Use Oxipng `--strip safe` by default. Oxipng safe stripping keeps PNG display/color-management chunks such as `iCCP`, `sRGB`, and `cICP`; `--strip all` is incompatible with `png.preserve_profiles = true`.
 
 Command shape:
 
 ```text
 tools\imagemagick\magick.exe input.png -auto-orient -filter Lanczos -resize 1920x1920> temp.resized.png
-tools\pngquant\pngquant.exe --force --output temp.quant.png --quality 40-95 --speed 1 --nofs --strip -- temp.resized.png
+tools\pngquant\pngquant.exe --force --output temp.quant.png --quality 40-95 --speed 1 --nofs -- temp.resized.png
+tools\oxipng\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.quant.png
+```
+
+Unsupported/no-profile command shape:
+
+```text
+tools\imagemagick\magick.exe input.png -auto-orient -filter Lanczos -resize 1920x1920> -profile profiles\sRGB2014.icc temp.resized.png
+tools\pngquant\pngquant.exe --force --output temp.quant.png --quality 40-95 --speed 1 --nofs -- temp.resized.png
 tools\oxipng\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.quant.png
 ```
 
@@ -439,9 +505,12 @@ png.oxipng_level     -> oxipng -o N
 png.interlace        -> oxipng --interlace on/off
 png.strip            -> oxipng --strip safe/all/<list>, omitted if set to none
 png.alpha            -> oxipng --alpha when true
+png.preserve_profiles -> PNG ICC profile retention/conversion before pngquant and Oxipng
 ```
 
 Write Oxipng output to a temp `.png` first, then apply output mode rules. Delete `temp.resized.png` and `temp.quant.png` on all success, failure, and skip-larger paths.
+
+When `png.preserve_profiles = true`, verify the optimized temp PNG still has the expected color profile before final output handling. If the expected profile is missing, delete temp files and mark the file failed rather than writing an unprofiled optimized PNG.
 
 ## Slugify Output Names
 
@@ -609,12 +678,12 @@ Progress block example:
 ```text
 >_ PROGRESS
 
-[1/5] ✅ OK     Demo 1.png
-[2/5] ✅ OK     Demo 2.png
+[1/5] ✅ OK     Demo 1.png  1 MB -> 220 KB (-78%)
+[2/5] ✅ OK     Demo 2.png  840 KB -> 410 KB (-51%)
 [3/5] ❌ ERROR  Demo 3.png
       ❌ ERROR  pngquant compression failed
       ℹ️ INFO   Kept original unchanged; no optimized output was written.
-[4/5] ✅ OK     Demo 4.png
+[4/5] ✅ OK     Demo 4.png  2.4 MB -> 1.1 MB (-54%)
 [5/5] ❌ ERROR  Demo 5.png
       ❌ ERROR  pngquant compression failed
       ℹ️ INFO   Kept original unchanged; no optimized output was written.
@@ -640,7 +709,7 @@ Optimized output was not smaller
 Kept original unchanged; no optimized output was written.
 ```
 
-Every error detail should be indented under the file row it belongs to. Per-file success output should include the output path, original size, optimized size, and percentage size reduction once safe output handling is implemented.
+Every error detail should be indented under the file row it belongs to. Per-file success output should include the original size, optimized size, and percentage size reduction in the success row. Do not print the final or slugified output path as an indented progress detail row.
 
 Summary block example:
 
@@ -694,7 +763,7 @@ odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o
 9. Add supported file discovery with optional recursion.
 10. Add relative path preservation for recursive `dir` output mode.
 11. Add JPEG pipeline with ICC retention/conversion and `*.source.icc` cleanup.
-12. Add PNG pipeline with Magick temp resize, pngquant, and Oxipng output.
+12. Add PNG pipeline with Magick temp resize, PNG ICC retention/conversion, pngquant without `--strip`, and Oxipng output.
 13. Apply the updated PNG quality default: `png.pngquant_quality = "40-95"` across built-in defaults, config fallback behavior, distribution config, tests, and PNG command verification.
 14. Replace flat console log-style output with the structured console UI: banner, app settings block, input block, discovery block, progress block, and summary block.
 15. Add temp file cleanup and size comparison.
@@ -703,7 +772,7 @@ odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o
 18. Add slugify final output names and collision handling.
 19. Add output copy/move for `dir` mode.
 20. Add worker pool and auto worker heuristic.
-21. Add progress output and final summary, including output path, original size, optimized size, and percentage size reduction.
+21. Add progress output and final summary, including original size, optimized size, and percentage size reduction in success rows, without final/slugified output path detail rows.
 22. Add optional debug logging.
 23. Test with spaces, special characters, Unicode paths, and quoted paths.
 24. Test relative and absolute input directories.
@@ -715,4 +784,6 @@ odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o
 30. Test uppercase extensions.
 31. Test corrupt images.
 32. Test missing tools.
-33. Test repeated prompt loop and `exit`.
+33. Test PNG ICC retention through ImageMagick, pngquant, and Oxipng.
+34. Test progress success rows include before/after sizes and percentage reduction, and do not print final/slugified output path detail rows.
+35. Test repeated prompt loop and `exit`.

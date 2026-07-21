@@ -134,6 +134,24 @@ Goal: write optimized results only when smaller.
 - [x] Resolve slugify name collisions per destination directory.
 - [x] Verify smaller output, larger output, replace failure, copy failure, slugify Unicode, and collisions.
 
+## Phase 6A: PNG Profiles And Size Progress
+
+Goal: preserve PNG color profiles through optimization and make successful progress rows show the size win.
+
+- [ ] Add `png.preserve_profiles` config defaulting to `true`.
+- [ ] Validate `png.preserve_profiles` as a JSON boolean.
+- [ ] Update default config, `dist/imgoptz.json`, and config tests for `png.preserve_profiles`.
+- [ ] Reject or fall back from PNG strip settings that remove color-management chunks while `png.preserve_profiles = true`.
+- [ ] Remove `pngquant --strip` from the default PNG command path.
+- [ ] Preserve or convert PNG ICC profiles through ImageMagick, pngquant, and Oxipng according to `PLAN.md`.
+- [ ] Verify optimized temp PNGs still contain the expected profile before final output handling.
+- [ ] Update PNG command tests so pngquant does not include `--strip` and Oxipng still receives the configured strip mode.
+- [ ] Add tests for PNG ICC retention/conversion through the optimized temp output.
+- [ ] Carry original size, optimized size, and percentage reduction through successful finalization results.
+- [ ] Print success progress rows as `<original size> -> <optimized size> (<negative percent>%)`.
+- [ ] Do not print final or slugified output paths as indented progress detail rows.
+- [ ] Add progress output tests for size formatting and omitted output-path detail rows.
+
 ## Phase 7: Parallel Processing And Reporting
 
 Goal: process folders efficiently without oversubscribing tools.
@@ -143,21 +161,53 @@ Goal: process folders efficiently without oversubscribing tools.
 - [ ] Clamp explicit worker counts to a safe minimum of 1.
 - [ ] Limit ImageMagick thread count for child processes.
 - [ ] Pass `oxipng --threads 1` when app-level workers exceed 1.
-- [ ] Print per-file progress with status, output path, sizes, and percent reduction.
+- [ ] Print per-file progress with status, sizes, and percent reduction.
 - [ ] Print final succeeded/skipped/failed summary.
 - [ ] Preserve deterministic, readable console output under parallel work.
 - [ ] Notice for deterministic output task: discovery order follows OS directory enumeration; verify whether sorting discovered work items by relative path is needed before/while adding parallel reporting.
 - [ ] Verify worker counts on low/high CPU machines where practical and repeated prompt loop after processing.
 
-## Phase 8: Debug Logging And Release Hardening
+## Phase 8: Debug Logging
 
-Goal: finish operator diagnostics and broad edge-case coverage.
+Goal: finish operator diagnostics without changing the normal console UI.
 
 - [ ] Add optional debug logging controlled by config.
 - [ ] Resolve relative `debug_log_file` against app root.
 - [ ] Append detailed child process and decision logs when enabled.
 - [ ] Keep normal operation console-only.
-- [ ] Run full manual matrix from `PLAN.md` implementation phases 23-33.
+
+## Phase 9: Non-Destructive Defaults And Dry-Run Approval
+
+Goal: make the default workflow target-relative, preview-first, and non-destructive unless the user approves final writes.
+
+- [ ] Add `dry_run` config as a JSON boolean defaulting to `true`.
+- [ ] Change the built-in default `output_mode` to `dir` in this phase.
+- [ ] Change the built-in default `out_dir` to `~/imgoptz-output` in this phase.
+- [ ] Update `dist/imgoptz.json` so the development distribution matches the new defaults.
+- [ ] Resolve `~/...` output paths relative to the accepted user input directory.
+- [ ] Keep absolute `out_dir` paths resolved and existence-checked at startup.
+- [ ] Keep app-root-relative `out_dir` paths resolved and existence-checked at startup.
+- [ ] Warn and fall back to `~/imgoptz-output` when an absolute or app-root-relative configured output root is missing.
+- [ ] Skip startup existence checks for target-relative `~/...` output roots.
+- [ ] Do not create output roots during discovery.
+- [ ] Auto-create target-relative output folders only immediately before writing final output files.
+- [ ] In dry-run mode, run resize and optimization to temp files, then reject outputs that are not smaller before asking for approval.
+- [ ] Keep successful temp optimized files available for finalization after approval.
+- [ ] Prompt users to approve saving optimized files after dry-run results.
+- [ ] Accept `y` exactly and `yes` case-insensitively as approval.
+- [ ] Accept `N` exactly and `no` case-insensitively as decline.
+- [ ] Treat empty approval input as invalid and re-prompt.
+- [ ] Treat other approval input as invalid and re-prompt.
+- [ ] On approval, finalize only successful dry-run temp outputs.
+- [ ] On decline, delete all temp artifacts and write nothing.
+- [ ] When `dry_run = false`, skip approval and finalize successful temp outputs immediately.
+- [ ] Add tests for default config changes, target-relative output resolution, fallback behavior, delayed directory creation, approval parsing, approval finalization, decline cleanup, and no-prompt non-dry-run finalization.
+
+## Phase 10: Release Hardening
+
+Goal: run the broad manual and build matrix before release.
+
+- [ ] Run full manual matrix from `PLAN.md` implementation phases 23-35.
 - [ ] Re-run `./scripts/build.ps1` with warnings as errors.
 - [ ] Document any remaining operational constraints.
 
