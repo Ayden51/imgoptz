@@ -120,6 +120,15 @@ print_progress_error :: proc(
 	print_ui_line("      ℹ️ INFO   Kept original unchanged; no optimized output was written.")
 }
 
+print_progress_skip :: proc(index, total: int, relative_path, detail: string) {
+	print_ui_linef("[%d/%d] ⚠️ SKIP   %s", index, total, relative_path)
+	print_ui_line("      ⚠️ SKIP   Optimized output was not smaller")
+	if len(detail) > 0 {
+		print_ui_linef("      ℹ️ INFO   %s", detail)
+	}
+	print_ui_line("      ℹ️ INFO   Kept original unchanged; no optimized output was written.")
+}
+
 print_progress_empty :: proc() {
 	print_ui_line("ℹ️ INFO   No supported images to process.")
 }
