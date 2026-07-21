@@ -84,7 +84,7 @@ test_png_commands_map_config_flags :: proc(t: ^testing.T) {
 	testing.expect(t, command_has_sequence(pngquant_command, []string{"--quality", "40-95"}))
 	testing.expect(t, command_has_sequence(pngquant_command, []string{"--speed", "1"}))
 	testing.expect(t, command_contains(pngquant_command, "--nofs"))
-	testing.expect(t, command_contains(pngquant_command, "--strip"))
+	testing.expect(t, !command_contains(pngquant_command, "--strip"))
 	testing.expect_value(t, pngquant_command[len(pngquant_command) - 1], "resized.png")
 
 	oxipng_command := build_oxipng_command("oxipng.exe", config.png, "out.png", "quant.png")
@@ -94,6 +94,27 @@ test_png_commands_map_config_flags :: proc(t: ^testing.T) {
 	testing.expect(t, command_has_sequence(oxipng_command, []string{"--interlace", "off"}))
 	testing.expect(t, command_has_sequence(oxipng_command, []string{"--out", "out.png"}))
 	testing.expect_value(t, oxipng_command[len(oxipng_command) - 1], "quant.png")
+}
+
+@(test, require)
+test_png_resize_command_converts_to_profile_when_requested :: proc(t: ^testing.T) {
+	command := build_png_magick_resize_command(
+		"magick.exe",
+		"source.png",
+		1920,
+		"srgb.icc",
+		"resized.png",
+	)
+
+	testing.expect(t, command_has_sequence(command, []string{"-profile", "srgb.icc"}))
+	testing.expect_value(t, command[len(command) - 1], "resized.png")
+}
+
+@(test, require)
+test_shared_icc_profile_family_detection_covers_srgb_and_p3 :: proc(t: ^testing.T) {
+	testing.expect(t, icc_profile_family_is_retained("IEC 61966-2-1 default RGB profile"))
+	testing.expect(t, icc_profile_family_is_retained("Display P3 color profile"))
+	testing.expect(t, !icc_profile_family_is_retained("Generic CMYK profile"))
 }
 
 @(test, require)
@@ -148,6 +169,137 @@ test_corrupt_png_failure_cleans_intermediate_temps :: proc(t: ^testing.T) {
 
 	testing.expect(t, result.err != .None)
 	testing.expect(t, !processing_temp_artifacts_exist(source_path))
+}
+
+@(test, require)
+test_process_png_preserves_source_srgb_icc_profile :: proc(t: ^testing.T) {
+	runtime_env := processing_test_runtime_environment(t)
+	if !processing_runtime_tools_exist(runtime_env) {
+		return
+	}
+
+	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-png-icc-retain-*", context.allocator)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer delete(temp_dir)
+	defer os.remove_all(temp_dir)
+
+	source_path := processing_join(t, temp_dir, "srgb.png")
+	if len(source_path) == 0 {
+		return
+	}
+	create_detail, create_ok := run_tool(
+		[]string {
+			runtime_env.magick_path,
+			"-size",
+			"64x64",
+			"gradient:red-blue",
+			"-profile",
+			runtime_env.srgb_profile,
+			source_path,
+		},
+		imagemagick_process_environment(runtime_env),
+		"ImageMagick test PNG create",
+	)
+	defer delete(create_detail)
+	if !testing.expect_value(t, create_ok, true) {
+		return
+	}
+
+	icc_result := determine_icc_profile_mode(source_path, runtime_env)
+	defer destroy_icc_profile_result(&icc_result)
+	if !testing.expect_value(t, icc_result.err, Image_Process_Error.None) ||
+	   !testing.expect_value(t, icc_result.mode, Icc_Profile_Mode.Embed_Source) {
+		return
+	}
+
+	config := default_config()
+	defer destroy_config(&config)
+	item := Image_Work_Item {
+		source_path   = source_path,
+		relative_path = "srgb.png",
+		kind          = .Png,
+	}
+	result := process_image_to_temp(item, config, runtime_env)
+	defer cleanup_process_image_result(&result)
+
+	testing.expectf(
+		t,
+		result.err == .None,
+		"expected no PNG processing error, got %v: %s",
+		result.err,
+		result.detail,
+	)
+}
+
+@(test, require)
+test_process_png_converts_missing_icc_profile_to_srgb :: proc(t: ^testing.T) {
+	runtime_env := processing_test_runtime_environment(t)
+	if !processing_runtime_tools_exist(runtime_env) {
+		return
+	}
+
+	temp_dir, temp_err := os.make_directory_temp(
+		"",
+		"imgoptz-png-icc-convert-*",
+		context.allocator,
+	)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer delete(temp_dir)
+	defer os.remove_all(temp_dir)
+
+	source_path := processing_join(t, temp_dir, "unprofiled.png")
+	if len(source_path) == 0 {
+		return
+	}
+	create_detail, create_ok := run_tool(
+		[]string{runtime_env.magick_path, "-size", "64x64", "gradient:red-blue", source_path},
+		imagemagick_process_environment(runtime_env),
+		"ImageMagick test PNG create",
+	)
+	defer delete(create_detail)
+	if !testing.expect_value(t, create_ok, true) {
+		return
+	}
+
+	icc_result := determine_icc_profile_mode(source_path, runtime_env)
+	defer destroy_icc_profile_result(&icc_result)
+	if !testing.expect_value(t, icc_result.err, Image_Process_Error.None) ||
+	   !testing.expect_value(t, icc_result.mode, Icc_Profile_Mode.Convert_To_Srgb) {
+		return
+	}
+
+	config := default_config()
+	defer destroy_config(&config)
+	item := Image_Work_Item {
+		source_path   = source_path,
+		relative_path = "unprofiled.png",
+		kind          = .Png,
+	}
+	result := process_image_to_temp(item, config, runtime_env)
+	defer cleanup_process_image_result(&result)
+
+	if !testing.expectf(
+		t,
+		result.err == .None,
+		"expected no PNG processing error, got %v: %s",
+		result.err,
+		result.detail,
+	) {
+		return
+	}
+	verify_detail, verify_ok := verify_png_icc_profile(
+		runtime_env.magick_path,
+		result.output_path,
+		"",
+		false,
+		runtime_env,
+	)
+	defer delete(verify_detail)
+	testing.expect_value(t, verify_ok, true)
 }
 
 @(test, require)
@@ -456,6 +608,28 @@ processing_join :: proc(t: ^testing.T, first, second: string) -> string {
 		return ""
 	}
 	return path
+}
+
+processing_test_runtime_environment :: proc(t: ^testing.T) -> Runtime_Environment {
+	return Runtime_Environment {
+		magick_path = processing_join(t, "dist/tools/imagemagick", "magick.exe"),
+		pngquant_path = processing_join(t, "dist/tools/pngquant", "pngquant.exe"),
+		oxipng_path = processing_join(t, "dist/tools/oxipng", "oxipng.exe"),
+		srgb_profile = processing_join(t, "dist/profiles", "sRGB2014.icc"),
+	}
+}
+
+processing_runtime_tools_exist :: proc(runtime_env: Runtime_Environment) -> bool {
+	return(
+		len(runtime_env.magick_path) > 0 &&
+		len(runtime_env.pngquant_path) > 0 &&
+		len(runtime_env.oxipng_path) > 0 &&
+		len(runtime_env.srgb_profile) > 0 &&
+		os.exists(runtime_env.magick_path) &&
+		os.exists(runtime_env.pngquant_path) &&
+		os.exists(runtime_env.oxipng_path) &&
+		os.exists(runtime_env.srgb_profile) \
+	)
 }
 
 command_contains :: proc(command: []string, value: string) -> bool {

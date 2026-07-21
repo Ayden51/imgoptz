@@ -12,6 +12,8 @@ Image_Process_Error :: enum {
 	Temp_Path_Failed,
 	Identify_Failed,
 	Icc_Extract_Failed,
+	Icc_Embed_Failed,
+	Icc_Verify_Failed,
 	Magick_Failed,
 	Mozjpeg_Failed,
 	Pngquant_Failed,
@@ -24,7 +26,7 @@ Image_Process_Error :: enum {
 	Copy_Failed,
 }
 
-Jpeg_Icc_Mode :: enum {
+Icc_Profile_Mode :: enum {
 	None,
 	Embed_Source,
 	Convert_To_Srgb,
@@ -129,6 +131,14 @@ cleanup_process_image_result :: proc(result: ^Process_Image_Result) {
 		remove_if_exists(result.output_path)
 	}
 	destroy_process_image_result(result)
+}
+
+cleanup_temp_path_slot :: proc(path: ^string) {
+	if len(path^) > 0 {
+		remove_if_exists(path^)
+		delete(path^)
+		path^ = ""
+	}
 }
 
 destroy_finalize_output_result :: proc(result: ^Finalize_Output_Result) {
@@ -326,12 +336,14 @@ process_jpeg_to_temp :: proc(
 		return Process_Image_Result{err = .Temp_Path_Failed}
 	}
 
-	icc_mode := Jpeg_Icc_Mode.None
+	icc_mode := Icc_Profile_Mode.None
 	embed_icc_path := ""
 	convert_icc_path := ""
+	source_icc_path := ""
+	defer cleanup_temp_path_slot(&source_icc_path)
 	if config.jpeg.preserve_profiles {
-		icc_result := determine_jpeg_icc_mode(item.source_path, runtime_env)
-		defer delete(icc_result.detail)
+		icc_result := determine_icc_profile_mode(item.source_path, runtime_env)
+		defer destroy_icc_profile_result(&icc_result)
 		if icc_result.err != .None {
 			delete(output_path)
 			return Process_Image_Result {
@@ -343,18 +355,14 @@ process_jpeg_to_temp :: proc(
 		icc_mode = icc_result.mode
 		switch icc_mode {
 		case .Embed_Source:
-			source_icc_path, source_icc_ok := make_process_temp_path(
-				item.source_path,
-				"source.icc",
-			)
+			source_icc_ok: bool
+			source_icc_path, source_icc_ok = make_process_temp_path(item.source_path, "source.icc")
 			if !source_icc_ok {
 				delete(output_path)
 				return Process_Image_Result{err = .Temp_Path_Failed}
 			}
-			defer delete(source_icc_path)
-			defer remove_if_exists(source_icc_path)
 
-			command := build_jpeg_icc_extract_command(
+			command := build_icc_extract_command(
 				runtime_env.magick_path,
 				item.source_path,
 				source_icc_path,
@@ -450,10 +458,63 @@ process_png_to_temp :: proc(
 		return Process_Image_Result{err = .Temp_Path_Failed}
 	}
 
+	convert_icc_path := ""
+	embed_icc_path := ""
+	expected_icc_profile := ""
+	expected_icc_exact := false
+	source_icc_path := ""
+	profiled_quant_path := ""
+	defer cleanup_temp_path_slot(&source_icc_path)
+	defer cleanup_temp_path_slot(&profiled_quant_path)
+	if config.png.preserve_profiles {
+		icc_result := determine_icc_profile_mode(item.source_path, runtime_env)
+		defer destroy_icc_profile_result(&icc_result)
+		if icc_result.err != .None {
+			delete(output_path)
+			return Process_Image_Result {
+				err = icc_result.err,
+				detail = strings.clone(icc_result.detail),
+			}
+		}
+
+		switch icc_result.mode {
+		case .Embed_Source:
+			source_icc_ok: bool
+			source_icc_path, source_icc_ok = make_process_temp_path(item.source_path, "source.icc")
+			if !source_icc_ok {
+				delete(output_path)
+				return Process_Image_Result{err = .Temp_Path_Failed}
+			}
+
+			command := build_icc_extract_command(
+				runtime_env.magick_path,
+				item.source_path,
+				source_icc_path,
+			)
+			if detail, ok := run_tool(
+				command,
+				imagemagick_process_environment(runtime_env),
+				"ImageMagick ICC extract",
+			); !ok {
+				delete(output_path)
+				return Process_Image_Result{err = .Icc_Extract_Failed, detail = detail}
+			}
+
+			embed_icc_path = source_icc_path
+			expected_icc_profile = source_icc_path
+			expected_icc_exact = true
+		case .Convert_To_Srgb:
+			convert_icc_path = runtime_env.srgb_profile
+			embed_icc_path = runtime_env.srgb_profile
+		case .None:
+		}
+	}
+
 	resize_command := build_png_magick_resize_command(
 		runtime_env.magick_path,
 		item.source_path,
 		config.max_dimension,
+		convert_icc_path,
 		resized_path,
 	)
 	if detail, ok := run_tool(
@@ -491,11 +552,47 @@ process_png_to_temp :: proc(
 		}
 	}
 
+	oxipng_input_path := quant_path
+	if config.png.preserve_profiles {
+		profiled_quant_ok: bool
+		profiled_quant_path, profiled_quant_ok = make_process_temp_path(
+			item.source_path,
+			"profiled.png",
+		)
+		if !profiled_quant_ok {
+			delete(output_path)
+			return Process_Image_Result{err = .Temp_Path_Failed}
+		}
+
+		profile_command := build_png_profile_command(
+			runtime_env.magick_path,
+			quant_path,
+			embed_icc_path,
+			profiled_quant_path,
+		)
+		if detail, ok := run_tool(
+			profile_command,
+			imagemagick_process_environment(runtime_env),
+			"ImageMagick PNG ICC embed",
+		); !ok {
+			delete(output_path)
+			return Process_Image_Result{err = .Icc_Embed_Failed, detail = detail}
+		}
+		if !file_is_non_empty(profiled_quant_path) {
+			delete(output_path)
+			return Process_Image_Result {
+				err = .Empty_Output,
+				detail = strings.clone("ImageMagick did not produce a profiled PNG."),
+			}
+		}
+		oxipng_input_path = profiled_quant_path
+	}
+
 	oxipng_command := build_oxipng_command(
 		runtime_env.oxipng_path,
 		config.png,
 		output_path,
-		quant_path,
+		oxipng_input_path,
 	)
 	if detail, ok := run_tool(oxipng_command, nil, "Oxipng"); !ok {
 		remove_if_exists(output_path)
@@ -511,20 +608,41 @@ process_png_to_temp :: proc(
 		}
 	}
 
+	if config.png.preserve_profiles {
+		if detail, ok := verify_png_icc_profile(
+			runtime_env.magick_path,
+			output_path,
+			expected_icc_profile,
+			expected_icc_exact,
+			runtime_env,
+		); !ok {
+			remove_if_exists(output_path)
+			delete(output_path)
+			return Process_Image_Result{err = .Icc_Verify_Failed, detail = detail}
+		}
+	}
+
 	return Process_Image_Result{output_path = output_path}
 }
 
-Jpeg_Icc_Result :: struct {
-	mode:   Jpeg_Icc_Mode,
-	err:    Image_Process_Error,
-	detail: string,
+Icc_Profile_Result :: struct {
+	mode:         Icc_Profile_Mode,
+	err:          Image_Process_Error,
+	detail:       string,
+	profile_text: string,
 }
 
-determine_jpeg_icc_mode :: proc(
+destroy_icc_profile_result :: proc(result: ^Icc_Profile_Result) {
+	delete(result.detail)
+	delete(result.profile_text)
+	result^ = {}
+}
+
+determine_icc_profile_mode :: proc(
 	source_path: string,
 	runtime_env: Runtime_Environment,
-) -> Jpeg_Icc_Result {
-	command := build_jpeg_icc_identify_command(runtime_env.magick_path, source_path)
+) -> Icc_Profile_Result {
+	command := build_icc_identify_command(runtime_env.magick_path, source_path)
 	state, stdout, stderr, err := os.process_exec(
 		os.Process_Desc{command = command, env = imagemagick_process_environment(runtime_env)},
 		context.allocator,
@@ -533,16 +651,19 @@ determine_jpeg_icc_mode :: proc(
 	defer delete(stderr)
 
 	if err != nil || !state.exited || state.exit_code != 0 {
-		return Jpeg_Icc_Result {
+		return Icc_Profile_Result {
 			err = .Identify_Failed,
 			detail = tool_failure_detail("ImageMagick ICC identify", state, stderr, err),
 		}
 	}
 
-	if len(stdout) > 0 && jpeg_icc_profile_is_retained(string(stdout)) {
-		return Jpeg_Icc_Result{mode = .Embed_Source}
+	if len(stdout) > 0 && icc_profile_family_is_retained(string(stdout)) {
+		return Icc_Profile_Result {
+			mode = .Embed_Source,
+			profile_text = strings.clone(string(stdout)),
+		}
 	}
-	return Jpeg_Icc_Result{mode = .Convert_To_Srgb}
+	return Icc_Profile_Result{mode = .Convert_To_Srgb}
 }
 
 make_process_temp_path :: proc(source_path, suffix: string) -> (string, bool) {
@@ -565,7 +686,7 @@ make_process_temp_path :: proc(source_path, suffix: string) -> (string, bool) {
 	return "", false
 }
 
-build_jpeg_icc_identify_command :: proc(magick_path, source_path: string) -> []string {
+build_icc_identify_command :: proc(magick_path, source_path: string) -> []string {
 	command: [dynamic]string
 	command.allocator = context.temp_allocator
 	append(&command, magick_path)
@@ -577,7 +698,7 @@ build_jpeg_icc_identify_command :: proc(magick_path, source_path: string) -> []s
 	return command[:]
 }
 
-build_jpeg_icc_extract_command :: proc(magick_path, source_path, output_path: string) -> []string {
+build_icc_extract_command :: proc(magick_path, source_path, output_path: string) -> []string {
 	command: [dynamic]string
 	command.allocator = context.temp_allocator
 	append(&command, magick_path)
@@ -607,6 +728,7 @@ build_jpeg_magick_resize_command :: proc(
 build_png_magick_resize_command :: proc(
 	magick_path, source_path: string,
 	max_dimension: int,
+	convert_profile_path: string,
 	output_path: string,
 ) -> []string {
 	command: [dynamic]string
@@ -614,6 +736,10 @@ build_png_magick_resize_command :: proc(
 	append(&command, magick_path)
 	append(&command, source_path)
 	append_magick_resize_args(&command, max_dimension)
+	if len(convert_profile_path) > 0 {
+		append(&command, "-profile")
+		append(&command, convert_profile_path)
+	}
 	append(&command, output_path)
 	return command[:]
 }
@@ -677,10 +803,87 @@ build_pngquant_command :: proc(
 	if !png.pngquant_dither {
 		append(&command, "--nofs")
 	}
-	append(&command, "--strip")
 	append(&command, "--")
 	append(&command, input_path)
 	return command[:]
+}
+
+build_png_profile_command :: proc(
+	magick_path, input_path, icc_path, output_path: string,
+) -> []string {
+	command: [dynamic]string
+	command.allocator = context.temp_allocator
+	append(&command, magick_path)
+	append(&command, input_path)
+	append(&command, "-profile")
+	append(&command, icc_path)
+	append(&command, output_path)
+	return command[:]
+}
+
+verify_png_icc_profile :: proc(
+	magick_path, output_path, expected_profile: string,
+	exact_match: bool,
+	runtime_env: Runtime_Environment,
+) -> (
+	string,
+	bool,
+) {
+	command := build_icc_identify_command(magick_path, output_path)
+	state, stdout, stderr, err := os.process_exec(
+		os.Process_Desc{command = command, env = imagemagick_process_environment(runtime_env)},
+		context.allocator,
+	)
+	defer delete(stdout)
+	defer delete(stderr)
+
+	if err != nil || !state.exited || state.exit_code != 0 {
+		return tool_failure_detail("ImageMagick PNG ICC verify", state, stderr, err), false
+	}
+	if len(stdout) == 0 {
+		return strings.clone("Optimized PNG is missing the expected ICC profile."), false
+	}
+
+	profile_text := string(stdout)
+	if exact_match {
+		if len(expected_profile) == 0 {
+			return strings.clone("Optimized PNG did not preserve the source ICC profile."), false
+		}
+
+		actual_profile_path, actual_profile_ok := make_process_temp_path(output_path, "verify.icc")
+		if !actual_profile_ok {
+			return strings.clone("Failed to create temporary ICC verification path."), false
+		}
+		defer cleanup_temp_path_slot(&actual_profile_path)
+
+		extract_command := build_icc_extract_command(magick_path, output_path, actual_profile_path)
+		extract_state, extract_stdout, extract_stderr, extract_err := os.process_exec(
+			os.Process_Desc {
+				command = extract_command,
+				env = imagemagick_process_environment(runtime_env),
+			},
+			context.allocator,
+		)
+		defer delete(extract_stdout)
+		defer delete(extract_stderr)
+		if extract_err != nil || !extract_state.exited || extract_state.exit_code != 0 {
+			return tool_failure_detail(
+					"ImageMagick PNG ICC extract",
+					extract_state,
+					extract_stderr,
+					extract_err,
+				),
+				false
+		}
+		if !files_have_same_contents(expected_profile, actual_profile_path) {
+			return strings.clone("Optimized PNG did not preserve the source ICC profile."), false
+		}
+		return "", true
+	}
+	if !icc_profile_family_is_retained(profile_text) {
+		return strings.clone("Optimized PNG does not contain an sRGB/P3 ICC profile."), false
+	}
+	return "", true
 }
 
 build_oxipng_command :: proc(
@@ -786,7 +989,7 @@ tool_failure_detail :: proc(
 	return fmt.aprintf("%s exited with code %d.", label, state.exit_code)
 }
 
-jpeg_icc_profile_is_retained :: proc(profile_text: string) -> bool {
+icc_profile_family_is_retained :: proc(profile_text: string) -> bool {
 	checks := [?]string {
 		"sRGB",
 		"IEC 61966-2-1",
@@ -829,6 +1032,30 @@ file_size_by_path :: proc(path: string) -> (i64, bool) {
 	return size, true
 }
 
+files_have_same_contents :: proc(a_path, b_path: string) -> bool {
+	a, a_err := os.read_entire_file(a_path, context.allocator)
+	if a_err != nil {
+		return false
+	}
+	defer delete(a)
+
+	b, b_err := os.read_entire_file(b_path, context.allocator)
+	if b_err != nil {
+		return false
+	}
+	defer delete(b)
+
+	if len(a) != len(b) {
+		return false
+	}
+	for value, index in a {
+		if value != b[index] {
+			return false
+		}
+	}
+	return true
+}
+
 remove_if_exists :: proc(path: string) {
 	if len(path) > 0 && os.exists(path) {
 		_ = os.remove(path)
@@ -844,9 +1071,13 @@ image_process_error_summary :: proc(err: Image_Process_Error) -> string {
 	case .Temp_Path_Failed:
 		return "Failed to create temporary file path"
 	case .Identify_Failed:
-		return "Failed to inspect JPEG ICC profile"
+		return "Failed to inspect ICC profile"
 	case .Icc_Extract_Failed:
-		return "Failed to extract JPEG ICC profile"
+		return "Failed to extract ICC profile"
+	case .Icc_Embed_Failed:
+		return "Failed to embed PNG ICC profile"
+	case .Icc_Verify_Failed:
+		return "Failed to verify PNG ICC profile"
 	case .Magick_Failed:
 		return "ImageMagick resize/orientation failed"
 	case .Mozjpeg_Failed:

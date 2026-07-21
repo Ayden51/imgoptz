@@ -35,14 +35,15 @@ Jpeg_Config :: struct {
 }
 
 Png_Config :: struct {
-	enabled:          bool,
-	pngquant_quality: string,
-	pngquant_speed:   int,
-	pngquant_dither:  bool,
-	oxipng_level:     int,
-	interlace:        bool,
-	strip:            string,
-	alpha:            bool,
+	enabled:           bool,
+	pngquant_quality:  string,
+	pngquant_speed:    int,
+	pngquant_dither:   bool,
+	oxipng_level:      int,
+	interlace:         bool,
+	strip:             string,
+	alpha:             bool,
+	preserve_profiles: bool,
 }
 
 App_Config :: struct {
@@ -101,6 +102,7 @@ default_config :: proc() -> App_Config {
 			interlace = false,
 			strip = strings.clone("safe"),
 			alpha = true,
+			preserve_profiles = true,
 		},
 	}
 }
@@ -260,6 +262,7 @@ apply_config_object :: proc(result: ^Config_Load_Result, object: json.Object) {
 			warn_unknown_config_option(result, key)
 		}
 	}
+	reconcile_png_profile_config(result)
 }
 
 apply_workers_config :: proc(result: ^Config_Load_Result, value: json.Value) {
@@ -413,12 +416,26 @@ apply_png_config :: proc(result: ^Config_Load_Result, value: json.Value) {
 				} else {
 					warn_invalid_config_value(result, "png.alpha")
 				}
+			case "preserve_profiles":
+				if value, ok := config_json_bool(item); ok {
+					result.config.png.preserve_profiles = value
+				} else {
+					warn_invalid_config_value(result, "png.preserve_profiles")
+				}
 			case:
 				warn_unknown_config_option(result, fmt.tprintf("png.%s", key))
 			}
 		}
 	case:
 		warn_invalid_config_value(result, "png")
+	}
+}
+
+reconcile_png_profile_config :: proc(result: ^Config_Load_Result) {
+	if result.config.png.preserve_profiles &&
+	   config_png_strip_removes_color_management(result.config.png.strip) {
+		warn_invalid_config_value(result, "png.strip")
+		replace_config_string(&result.config.png.strip, "safe")
 	}
 }
 
@@ -492,6 +509,25 @@ config_json_png_strip :: proc(value: json.Value) -> (string, bool) {
 	}
 
 	return strip, true
+}
+
+config_png_strip_removes_color_management :: proc(strip: string) -> bool {
+	if strip == "all" {
+		return true
+	}
+	if strip == "safe" || strip == "none" {
+		return false
+	}
+
+	chunks := strings.split(strip, ",", context.temp_allocator)
+	defer delete(chunks, context.temp_allocator)
+	for chunk in chunks {
+		switch chunk {
+		case "iCCP", "sRGB", "cICP":
+			return true
+		}
+	}
+	return false
 }
 
 config_json_bool :: proc(value: json.Value) -> (bool, bool) {
@@ -580,4 +616,3 @@ config_workers_summary :: proc(workers: Config_Workers) -> string {
 	}
 	return "auto"
 }
-
