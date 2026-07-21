@@ -200,7 +200,7 @@ Default config:
   },
   "png": {
     "enabled": true,
-    "pngquant_quality": "80-95",
+    "pngquant_quality": "40-95",
     "pngquant_speed": 1,
     "pngquant_dither": false,
     "oxipng_level": 4,
@@ -257,7 +257,7 @@ jpeg.preserve_profiles JSON boolean
 PNG option validation:
 
 ```text
-png.pngquant_quality   MIN-MAX integer range accepted by pngquant, default 80-95
+png.pngquant_quality   MIN-MAX integer range accepted by pngquant, default 40-95
 png.pngquant_speed     integer accepted by pngquant, default 1
 png.pngquant_dither    JSON boolean; false means pass --nofs
 png.oxipng_level       integer accepted by Oxipng, default 4
@@ -425,7 +425,7 @@ Command shape:
 
 ```text
 tools\imagemagick\magick.exe input.png -auto-orient -filter Lanczos -resize 1920x1920> temp.resized.png
-tools\pngquant\pngquant.exe --force --output temp.quant.png --quality 80-95 --speed 1 --nofs --strip -- temp.resized.png
+tools\pngquant\pngquant.exe --force --output temp.quant.png --quality 40-95 --speed 1 --nofs --strip -- temp.resized.png
 tools\oxipng\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.quant.png
 ```
 
@@ -447,7 +447,7 @@ Write Oxipng output to a temp `.png` first, then apply output mode rules. Delete
 
 Every successfully optimized image has a third processing step: slugify the final output file name.
 
-Slugify behavior will be implemented with a pre-existing Odin slugify script that will be copied into this codebase later.
+Slugify behavior will be implemented with a pre-existing Odin slugify script. Copy that script into this codebase before wiring slugify into output handling, keep it in `package main`, and adapt only what is needed for allocator ownership, style, and tests.
 
 Expected behavior:
 
@@ -541,48 +541,120 @@ JPEG ICC sidecars are temp files. Delete `*.source.icc` on every path: successfu
 
 ## Console Output
 
-Print concise progress and summary.
+Normal console output should read like a structured console UI, not a raw log stream. Do not print `[INFO]`, `[WARN]`, or `[ERROR]` level prefixes in the default console UI. Reserve log-level prefixes for optional debug log files only.
 
-Startup example:
+Keep the stdin prompt loop and console-subsystem double-click flow. Do not replace it with a GUI, fullscreen TUI, command-line batch mode, watcher, or multi-directory interface.
+
+Use this startup banner:
 
 ```text
-== imgoptz ==
-Working directory: C:\path\to\imgoptz-root
-Config: imgoptz.json loaded
-GPU: enabled via ImageMagick OpenCL
-Workers: 4
+  ██╗███╗   ███╗ ██████╗  ██████╗ ██████╗ ████████╗███████╗   ┌──────────────────────────────┐
+  ██║████╗ ████║██╔════╝ ██╔═══██╗██╔══██╗╚══██╔══╝╚══███╔╝   │ >_ Imgoptz                   │
+  ██║██╔████╔██║██║  ███╗██║   ██║██████╔╝   ██║     ███╔╝    │                              │
+  ██║██║╚██╔╝██║██║   ██║██║   ██║██╔═══╝    ██║    ███╔╝     │ Folder image optimizer       │
+  ██║██║ ╚═╝ ██║╚██████╔╝╚██████╔╝██║        ██║   ███████╗   │ JPEG + PNG optimizer         │
+  ╚═╝╚═╝     ╚═╝ ╚═════╝  ╚═════╝ ╚═╝        ╚═╝   ╚══════╝   └──────────────────────────────┘
 ```
 
-Prompt:
+Use section headers for major UI areas:
 
 ```text
+>_ APP SETTINGS
+>_ INPUT
+>_ DISCOVERY
+>_ PROGRESS
+>_ SUMMARY
+```
+
+Use simple boxed blocks for summary-style information:
+
+```text
+>_ APP SETTINGS
+┌
+│ App root   "C:\Users\huydc\CongHuy\Programming\tools\imgoptz\dist"
+│ Config     ✅ imgoptz.json loaded
+│ GPU        ✅ ImageMagick OpenCL
+│ Workers    4
+│ Output     in-place
+└
+```
+
+Input block example:
+
+```text
+>_ INPUT
+
 Paste one image directory path, or type 'exit':
+C:\Users\tools\imgoptz\dist\demo\in-place\png
+
+✅ Accepted: C:\Users\tools\imgoptz\dist\demo\in-place\png
 ```
 
-Discovery example:
+Do not print an artificial prompt marker before the pasted input unless the app is responsible for rendering that text. Windows console input echo is enough.
+
+Discovery block example:
 
 ```text
-Found 42 images: 30 JPG, 12 PNG
+>_ DISCOVERY
+┌
+│ Found      5 images
+│ JPEG       0
+│ PNG        5
+│ Recursive  false
+└
 ```
 
-Per-file result examples:
+Progress block example:
 
 ```text
-[1/42] OK   photo.jpg -> photo.jpg  4.2 MB -> 2.8 MB  33.3% smaller
-[2/42] SKIP icon.png   optimized output was not smaller
-[3/42] ERR  bad.jpg    mozjpeg exited with code 1
+>_ PROGRESS
+
+[1/5] ✅ OK     Demo 1.png
+[2/5] ✅ OK     Demo 2.png
+[3/5] ❌ ERROR  Demo 3.png
+      ❌ ERROR  pngquant compression failed
+      ℹ️ INFO   Kept original unchanged; no optimized output was written.
+[4/5] ✅ OK     Demo 4.png
+[5/5] ❌ ERROR  Demo 5.png
+      ❌ ERROR  pngquant compression failed
+      ℹ️ INFO   Kept original unchanged; no optimized output was written.
 ```
 
-Per-file success output should include the percentage size reduction.
-
-Summary example:
+Use these status labels in progress rows and indented detail rows:
 
 ```text
-Done.
-Succeeded: 38
-Skipped: 3
-Failed: 1
+✅ OK
+⚠️ SKIP
+❌ ERROR
+ℹ️ INFO
 ```
+
+Use concise user-facing error copy rather than raw internal enum names where practical:
+
+```text
+ImageMagick resize/orientation failed
+MozJPEG compression failed
+pngquant compression failed
+Oxipng optimization failed
+Optimized output was not smaller
+Kept original unchanged; no optimized output was written.
+```
+
+Every error detail should be indented under the file row it belongs to. Per-file success output should include the output path, original size, optimized size, and percentage size reduction once safe output handling is implemented.
+
+Summary block example:
+
+```text
+>_ SUMMARY
+┌
+│ Succeeded  3
+│ Skipped    0
+│ Failed     2
+│ Result     Completed with failures
+└
+```
+
+Do not emit a separate warning block when the summary already communicates the final warning or failure state.
 
 ## Debug Logging
 
@@ -623,21 +695,24 @@ odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o
 10. Add relative path preservation for recursive `dir` output mode.
 11. Add JPEG pipeline with ICC retention/conversion and `*.source.icc` cleanup.
 12. Add PNG pipeline with Magick temp resize, pngquant, and Oxipng output.
-13. Add temp file cleanup and size comparison.
-14. Add safe original replacement for `in-place` mode.
-15. Add slugify final output names and collision handling.
-16. Add output copy/move for `dir` mode.
-17. Add worker pool and auto worker heuristic.
-18. Add progress output and final summary, including percentage size reduction.
-19. Add optional debug logging.
-20. Test with spaces, special characters, Unicode paths, and quoted paths.
-21. Test relative and absolute input directories.
-22. Test relative and absolute `out_dir`.
-23. Test missing configured `out_dir` fallback to default output.
-24. Test missing default output folder error.
-25. Test recursive input with preserved output paths.
-26. Test slugify collisions.
-27. Test uppercase extensions.
-28. Test corrupt images.
-29. Test missing tools.
-30. Test repeated prompt loop and `exit`.
+13. Apply the updated PNG quality default: `png.pngquant_quality = "40-95"` across built-in defaults, config fallback behavior, distribution config, tests, and PNG command verification.
+14. Replace flat console log-style output with the structured console UI: banner, app settings block, input block, discovery block, progress block, and summary block.
+15. Add temp file cleanup and size comparison.
+16. Add safe original replacement for `in-place` mode.
+17. Copy the existing Odin slugify script into this codebase and adapt it to repo style, package layout, allocator ownership, and tests.
+18. Add slugify final output names and collision handling.
+19. Add output copy/move for `dir` mode.
+20. Add worker pool and auto worker heuristic.
+21. Add progress output and final summary, including output path, original size, optimized size, and percentage size reduction.
+22. Add optional debug logging.
+23. Test with spaces, special characters, Unicode paths, and quoted paths.
+24. Test relative and absolute input directories.
+25. Test relative and absolute `out_dir`.
+26. Test missing configured `out_dir` fallback to default output.
+27. Test missing default output folder error.
+28. Test recursive input with preserved output paths.
+29. Test slugify collisions.
+30. Test uppercase extensions.
+31. Test corrupt images.
+32. Test missing tools.
+33. Test repeated prompt loop and `exit`.

@@ -97,6 +97,28 @@ Goal: process one image at a time correctly and safely.
 - [x] Limit child tool threads where needed for later worker scaling.
 - [x] Verify valid JPEG, valid PNG, corrupt inputs, command failures, and temp cleanup.
 
+## Phase 5A: PNG Quality Default Update
+
+Goal: apply the selected lossy PNG quality default before safe output behavior changes make comparisons user-visible.
+
+- [ ] Change the built-in `png.pngquant_quality` default from `80-95` to `40-95`.
+- [ ] Update `dist/imgoptz.json` so the development distribution matches the spec default.
+- [ ] Update config fallback tests and PNG command tests that currently expect `80-95`.
+- [ ] Verify PNG config parsing, validation fallback, and command construction use `40-95` by default.
+
+## Phase 5B: Structured Console UI
+
+Goal: replace dense flat log-style output with readable console UI blocks before adding final output reporting.
+
+- [ ] Render the `Imgoptz` startup banner from `PLAN.md`.
+- [ ] Replace startup summary lines with the `>_ APP SETTINGS` block.
+- [ ] Replace prompt and accepted-directory output with the `>_ INPUT` block.
+- [ ] Replace discovery output with the `>_ DISCOVERY` block.
+- [ ] Replace per-file processing output with the `>_ PROGRESS` block and indented detail rows.
+- [ ] Replace completion warnings with the `>_ SUMMARY` block; do not emit a redundant warning block when failures are already summarized.
+- [ ] Keep normal console output free of `[INFO]`, `[WARN]`, and `[ERROR]` prefixes; reserve level prefixes for optional debug log files.
+- [ ] Verify the prompt loop remains line-based and works with `exit`, empty input, invalid paths, accepted paths, and repeated runs.
+
 ## Phase 6: Safe Outputs
 
 Goal: write optimized results only when smaller.
@@ -105,6 +127,7 @@ Goal: write optimized results only when smaller.
 - [ ] Skip and delete temp files when output is not smaller.
 - [ ] Safely replace originals for `in-place` mode.
 - [ ] Copy/move optimized files into accepted output root for `dir` mode.
+- [ ] Copy the existing Odin slugify script into this codebase before wiring final-name behavior.
 - [ ] Add slugify final output names after optimization.
 - [ ] Notice for slugify task: discovery currently plans `destination_path` before slugify/collision handling; verify Phase 6 treats it as a pre-slug destination and does not bypass final-name rules.
 - [ ] Preserve lowercase image extensions for final names.
@@ -134,7 +157,7 @@ Goal: finish operator diagnostics and broad edge-case coverage.
 - [ ] Resolve relative `debug_log_file` against app root.
 - [ ] Append detailed child process and decision logs when enabled.
 - [ ] Keep normal operation console-only.
-- [ ] Run full manual matrix from `PLAN.md` implementation phases 20-30.
+- [ ] Run full manual matrix from `PLAN.md` implementation phases 23-33.
 - [ ] Re-run `./scripts/build.ps1` with warnings as errors.
 - [ ] Document any remaining operational constraints.
 
