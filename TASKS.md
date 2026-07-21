@@ -101,10 +101,10 @@ Goal: process one image at a time correctly and safely.
 
 Goal: apply the selected lossy PNG quality default before safe output behavior changes make comparisons user-visible.
 
-- [ ] Change the built-in `png.pngquant_quality` default from `80-95` to `40-95`.
-- [ ] Update `dist/imgoptz.json` so the development distribution matches the spec default.
-- [ ] Update config fallback tests and PNG command tests that currently expect `80-95`.
-- [ ] Verify PNG config parsing, validation fallback, and command construction use `40-95` by default.
+- [x] Change the built-in `png.pngquant_quality` default from `80-95` to `40-95`.
+- [x] Update `dist/imgoptz.json` so the development distribution matches the spec default.
+- [x] Update config fallback tests and PNG command tests that currently expect `80-95`.
+- [x] Verify PNG config parsing, validation fallback, and command construction use `40-95` by default.
 
 ## Phase 5B: Structured Console UI
 
@@ -163,6 +163,6 @@ Goal: finish operator diagnostics and broad edge-case coverage.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/single-file-pipelines`.
-- Scope: Phase 5 only.
-- Reason: safe output replacement/copying and slugification remain separated for Phase 6.
+- Current feature branch: `feat/png-quality-default`.
+- Scope: Phase 5A only.
+- Reason: structured console UI, safe output replacement/copying, and slugification remain separated for later phases.
