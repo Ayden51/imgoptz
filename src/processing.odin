@@ -1,7 +1,6 @@
 package main
 
 import "core:fmt"
-import "core:log"
 import "core:os"
 import "core:strings"
 
@@ -39,45 +38,35 @@ process_discovered_images :: proc(
 	config: App_Config,
 	runtime_env: Runtime_Environment,
 ) {
+	print_progress_header()
+
 	if len(discovery.items) == 0 {
+		print_progress_empty()
+		print_processing_summary(0, 0, 0)
 		return
 	}
 
+	succeeded := 0
 	failed := 0
 	for item, index in discovery.items {
 		result := process_image_to_temp(item, config, runtime_env)
 		if result.err == .None {
-			log.info(
-				fmt.tprintf(
-					"[%d/%d] OK   %s",
-					index + 1,
-					len(discovery.items),
-					item.relative_path,
-				),
-			)
+			succeeded += 1
+			print_progress_ok(index + 1, len(discovery.items), item.relative_path)
 		} else {
 			failed += 1
-			log.error(
-				fmt.tprintf(
-					"[%d/%d] ERR  %s  %s",
-					index + 1,
-					len(discovery.items),
-					item.relative_path,
-					image_process_error_summary(result.err),
-				),
+			print_progress_error(
+				index + 1,
+				len(discovery.items),
+				item.relative_path,
+				result.err,
+				result.detail,
 			)
-			if len(result.detail) > 0 {
-				log.error(result.detail)
-			}
 		}
 		cleanup_process_image_result(&result)
 	}
 
-	if failed == 0 {
-		log.info("Optimization pipelines completed; safe output handling is not implemented yet.")
-	} else {
-		log.warn(fmt.tprintf("Optimization pipelines completed with %d failure(s).", failed))
-	}
+	print_processing_summary(succeeded, 0, failed)
 }
 
 process_image_to_temp :: proc(
@@ -628,23 +617,23 @@ image_process_error_summary :: proc(err: Image_Process_Error) -> string {
 	case .None:
 		return ""
 	case .Disabled_File_Type:
-		return "image type is disabled by config"
+		return "Image type is disabled by config"
 	case .Temp_Path_Failed:
-		return "failed to create temporary file path"
+		return "Failed to create temporary file path"
 	case .Identify_Failed:
-		return "failed to inspect JPEG ICC profile"
+		return "Failed to inspect JPEG ICC profile"
 	case .Icc_Extract_Failed:
-		return "failed to extract JPEG ICC profile"
+		return "Failed to extract JPEG ICC profile"
 	case .Magick_Failed:
-		return "ImageMagick failed"
+		return "ImageMagick resize/orientation failed"
 	case .Mozjpeg_Failed:
-		return "MozJPEG failed"
+		return "MozJPEG compression failed"
 	case .Pngquant_Failed:
-		return "pngquant failed"
+		return "pngquant compression failed"
 	case .Oxipng_Failed:
-		return "Oxipng failed"
+		return "Oxipng optimization failed"
 	case .Empty_Output:
-		return "tool produced an empty output"
+		return "Optimized output was empty"
 	}
-	return "image processing failed"
+	return "Image processing failed"
 }

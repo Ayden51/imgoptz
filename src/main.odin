@@ -27,7 +27,7 @@ main :: proc() {
 	defer log.destroy_console_logger(logger)
 
 	when ODIN_OS != .Windows {
-		log.error("This build targets Windows 10/11 only.")
+		print_ui_error("This build targets Windows 10/11 only.")
 		return
 	}
 
@@ -41,11 +41,5 @@ app_console_logger_proc :: proc(
 	options: log.Options,
 	location := #caller_location,
 ) {
-	options := options
-	switch level {
-	case .Debug, .Info:
-	case .Warning, .Error, .Fatal:
-		options += {.Level}
-	}
 	log.console_logger_proc(logger_data, level, text, options, location)
 }

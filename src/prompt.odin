@@ -1,7 +1,7 @@
 package main
 
 import "core:bufio"
-import "core:log"
+import "core:fmt"
 import "core:os"
 
 run_prompt_loop :: proc(runtime_env: Runtime_Environment, config: App_Config) {
@@ -22,7 +22,7 @@ prompt_once :: proc(
 	runtime_env: Runtime_Environment,
 	config: App_Config,
 ) -> bool {
-	log.info("Paste one image directory path, or type 'exit':")
+	print_input_header()
 
 	if !bufio.scan(sc) {
 		return false
@@ -31,7 +31,7 @@ prompt_once :: proc(
 	input := parse_prompt_input(bufio.scanner_text(sc))
 	switch input.kind {
 	case .Invalid:
-		log.error("Please paste one directory path.")
+		print_ui_error("Please paste one directory path.")
 		return true
 	case .Exit:
 		return false
@@ -51,21 +51,18 @@ process_input_directory :: proc(
 	absolute_path, input_dir_err := accept_input_directory(input_path)
 	switch input_dir_err {
 	case .None:
-		log.info("Accepted directory:", absolute_path)
-		if runtime_env.output_mode == .Dir {
-			log.info("Accepted output root:", runtime_env.output_root)
-		}
+		print_input_accepted(absolute_path)
 		result := discover_image_work(absolute_path, runtime_env)
 		defer destroy_discovery_result(&result)
 		if result.err != .None {
-			log.error(discovery_error_summary(result.err), result.err_path)
+			print_discovery_error(result)
 			return
 		}
-		print_discovery_summary(result)
+		print_discovery_summary(result, runtime_env.recursive)
 		process_discovered_images(result, config, runtime_env)
 	case .Not_Directory:
-		log.error("Not a directory:", input_path)
+		print_ui_error(fmt.tprintf("Not a directory: %s", input_path))
 	case .Resolve_Failed:
-		log.error("Failed to resolve directory path.")
+		print_ui_error("Failed to resolve directory path.")
 	}
 }

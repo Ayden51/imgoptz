@@ -110,14 +110,14 @@ Goal: apply the selected lossy PNG quality default before safe output behavior c
 
 Goal: replace dense flat log-style output with readable console UI blocks before adding final output reporting.
 
-- [ ] Render the `Imgoptz` startup banner from `PLAN.md`.
-- [ ] Replace startup summary lines with the `>_ APP SETTINGS` block.
-- [ ] Replace prompt and accepted-directory output with the `>_ INPUT` block.
-- [ ] Replace discovery output with the `>_ DISCOVERY` block.
-- [ ] Replace per-file processing output with the `>_ PROGRESS` block and indented detail rows.
-- [ ] Replace completion warnings with the `>_ SUMMARY` block; do not emit a redundant warning block when failures are already summarized.
-- [ ] Keep normal console output free of `[INFO]`, `[WARN]`, and `[ERROR]` prefixes; reserve level prefixes for optional debug log files.
-- [ ] Verify the prompt loop remains line-based and works with `exit`, empty input, invalid paths, accepted paths, and repeated runs.
+- [x] Render the `Imgoptz` startup banner from `PLAN.md`.
+- [x] Replace startup summary lines with the `>_ APP SETTINGS` block.
+- [x] Replace prompt and accepted-directory output with the `>_ INPUT` block.
+- [x] Replace discovery output with the `>_ DISCOVERY` block.
+- [x] Replace per-file processing output with the `>_ PROGRESS` block and indented detail rows.
+- [x] Replace completion warnings with the `>_ SUMMARY` block; do not emit a redundant warning block when failures are already summarized.
+- [x] Keep normal console output free of `[INFO]`, `[WARN]`, and `[ERROR]` prefixes; reserve level prefixes for optional debug log files.
+- [x] Verify the prompt loop remains line-based and works with `exit`, empty input, invalid paths, accepted paths, and repeated runs.
 
 ## Phase 6: Safe Outputs
 
@@ -163,6 +163,6 @@ Goal: finish operator diagnostics and broad edge-case coverage.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/png-quality-default`.
-- Scope: Phase 5A only.
-- Reason: structured console UI, safe output replacement/copying, and slugification remain separated for later phases.
+- Current feature branch: `feat/structured-console-ui`.
+- Scope: Phase 5B only.
+- Reason: safe output replacement/copying and slugification remain separated for Phase 6.

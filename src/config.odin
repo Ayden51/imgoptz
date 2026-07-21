@@ -2,7 +2,6 @@ package main
 
 import json "core:encoding/json"
 import "core:fmt"
-import "core:log"
 import "core:os"
 import "core:strconv"
 import "core:strings"
@@ -558,24 +557,8 @@ add_config_warning :: proc(result: ^Config_Load_Result, warning: string) {
 
 print_config_warnings :: proc(result: Config_Load_Result) {
 	for warning in result.warnings {
-		log.warn(warning)
+		print_ui_warning(warning)
 	}
-}
-
-config_status_summary :: proc(status: Config_Load_Status) -> string {
-	switch status {
-	case .Missing:
-		return "defaults (imgoptz.json not found)"
-	case .Loaded:
-		return "imgoptz.json loaded"
-	case .Invalid_JSON:
-		return "defaults (invalid imgoptz.json)"
-	case .Read_Failed:
-		return "defaults (failed to read imgoptz.json)"
-	case .Invalid_Root:
-		return "defaults (invalid imgoptz.json root)"
-	}
-	return "defaults"
 }
 
 config_output_mode_summary :: proc(mode: Config_Output_Mode) -> string {
@@ -598,36 +581,3 @@ config_workers_summary :: proc(workers: Config_Workers) -> string {
 	return "auto"
 }
 
-config_jpeg_summary :: proc(jpeg: Jpeg_Config) -> string {
-	if !jpeg.enabled {
-		return "disabled"
-	}
-
-	return fmt.tprintf(
-		"enabled quality=%d progressive=%v optimize=%v sample=%s quant_table=%d tune=%s preserve_profiles=%v",
-		jpeg.quality,
-		jpeg.progressive,
-		jpeg.optimize,
-		jpeg.sample,
-		jpeg.quant_table,
-		jpeg.tune,
-		jpeg.preserve_profiles,
-	)
-}
-
-config_png_summary :: proc(png: Png_Config) -> string {
-	if !png.enabled {
-		return "disabled"
-	}
-
-	return fmt.tprintf(
-		"enabled pngquant_quality=%s pngquant_speed=%d pngquant_dither=%v oxipng_level=%d interlace=%v strip=%s alpha=%v",
-		png.pngquant_quality,
-		png.pngquant_speed,
-		png.pngquant_dither,
-		png.oxipng_level,
-		png.interlace,
-		png.strip,
-		png.alpha,
-	)
-}
