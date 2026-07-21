@@ -1,7 +1,5 @@
 package main
 
-import "core:fmt"
-
 run_imgoptz :: proc() {
 	if !configure_console_utf8() {
 		print_ui_warning(
@@ -37,8 +35,8 @@ print_app_root_error :: proc(app_root: App_Root) {
 	switch app_root.err {
 	case .None:
 	case .Get_Executable_Directory_Failed:
-		print_ui_error(fmt.tprintf("Failed to get executable directory: %v", app_root.os_err))
+		print_ui_errorf("Failed to get executable directory: %v", app_root.os_err)
 	case .Change_Directory_Failed:
-		print_ui_error(fmt.tprintf("Failed to change directory to executable directory: %v", app_root.os_err))
+		print_ui_errorf("Failed to change directory to executable directory: %v", app_root.os_err)
 	}
 }

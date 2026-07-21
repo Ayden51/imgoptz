@@ -1,7 +1,6 @@
 package main
 
 import "core:bufio"
-import "core:fmt"
 import "core:os"
 
 run_prompt_loop :: proc(runtime_env: Runtime_Environment, config: App_Config) {
@@ -61,7 +60,7 @@ process_input_directory :: proc(
 		print_discovery_summary(result, runtime_env.recursive)
 		process_discovered_images(result, config, runtime_env)
 	case .Not_Directory:
-		print_ui_error(fmt.tprintf("Not a directory: %s", input_path))
+		print_ui_errorf("Not a directory: %s", input_path)
 	case .Resolve_Failed:
 		print_ui_error("Failed to resolve directory path.")
 	}
