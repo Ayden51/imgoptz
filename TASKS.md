@@ -155,10 +155,10 @@ Goal: preserve PNG color profiles through optimization without duplicating JPEG 
 
 Goal: make successful progress rows show the size win without adding noisy output-path details.
 
-- [ ] Carry original size, optimized size, and percentage reduction through successful finalization results.
-- [ ] Print success progress rows as `<original size> -> <optimized size> (<negative percent>%)`.
-- [ ] Do not print final or slugified output paths as indented progress detail rows.
-- [ ] Add progress output tests for size formatting and omitted output-path detail rows.
+- [x] Carry original size, optimized size, and percentage reduction through successful finalization results.
+- [x] Print success progress rows as `<original size> -> <optimized size> (<negative percent>%)`.
+- [x] Do not print final or slugified output paths as indented progress detail rows.
+- [x] Add progress output tests for size formatting and omitted output-path detail rows.
 
 ## Phase 7: Parallel Processing And Reporting
 
@@ -232,6 +232,6 @@ Goal: run the broad manual and build matrix before release.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/png-icc-preservation`.
-- Scope: Phase 6A only.
-- Reason: progress size output, parallel processing, debug logging, and dry-run approval remain separated for later phases.
+- Current feature branch: `feat/progress-size-output`.
+- Scope: Phase 6B only.
+- Reason: parallel processing, debug logging, and dry-run approval remain separated for later phases.

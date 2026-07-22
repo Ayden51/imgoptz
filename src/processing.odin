@@ -39,9 +39,12 @@ Process_Image_Result :: struct {
 }
 
 Finalize_Output_Result :: struct {
-	output_path: string,
-	err:         Image_Process_Error,
-	detail:      string,
+	output_path:       string,
+	original_size:     i64,
+	optimized_size:    i64,
+	reduction_percent: i64,
+	err:               Image_Process_Error,
+	detail:            string,
 }
 
 process_temp_counter: u64
@@ -80,7 +83,14 @@ process_discovered_images :: proc(
 		finalize := finalize_optimized_output(item, result.output_path, runtime_env.output_mode)
 		if finalize.err == .None {
 			succeeded += 1
-			print_progress_ok(index + 1, len(discovery.items), item.relative_path)
+			print_progress_ok(
+				index + 1,
+				len(discovery.items),
+				item.relative_path,
+				finalize.original_size,
+				finalize.optimized_size,
+				finalize.reduction_percent,
+			)
 		} else if finalize.err == .Optimized_Not_Smaller {
 			skipped += 1
 			print_progress_skip(
@@ -157,21 +167,26 @@ finalize_optimized_output :: proc(
 	if !original_size_ok || !optimized_size_ok {
 		return Finalize_Output_Result{err = .Size_Read_Failed}
 	}
+	result := Finalize_Output_Result {
+		original_size     = original_size,
+		optimized_size    = optimized_size,
+		reduction_percent = progress_reduction_percent(original_size, optimized_size),
+	}
 
 	if optimized_size >= original_size {
-		return Finalize_Output_Result {
-			err = .Optimized_Not_Smaller,
-			detail = fmt.aprintf(
-				"Optimized output was not smaller (%d bytes >= %d bytes).",
-				optimized_size,
-				original_size,
-			),
-		}
+		result.err = .Optimized_Not_Smaller
+		result.detail = fmt.aprintf(
+			"Optimized output was not smaller (%d bytes >= %d bytes).",
+			optimized_size,
+			original_size,
+		)
+		return result
 	}
 
 	final_path, final_path_ok := final_output_path_for_item(item, output_mode)
 	if !final_path_ok {
-		return Finalize_Output_Result{err = .Final_Path_Failed}
+		result.err = .Final_Path_Failed
+		return result
 	}
 
 	switch output_mode {
@@ -179,16 +194,21 @@ finalize_optimized_output :: proc(
 		if detail, ok := replace_in_place_with_slugged_output(item, temp_output_path, final_path);
 		   !ok {
 			delete(final_path)
-			return Finalize_Output_Result{err = .Replace_Failed, detail = detail}
+			result.err = .Replace_Failed
+			result.detail = detail
+			return result
 		}
 	case .Dir:
 		if detail, ok := copy_to_slugged_output(temp_output_path, final_path); !ok {
 			delete(final_path)
-			return Finalize_Output_Result{err = .Copy_Failed, detail = detail}
+			result.err = .Copy_Failed
+			result.detail = detail
+			return result
 		}
 	}
 
-	return Finalize_Output_Result{output_path = final_path}
+	result.output_path = final_path
+	return result
 }
 
 replace_in_place_with_slugged_output :: proc(
