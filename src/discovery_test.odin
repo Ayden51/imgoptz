@@ -10,8 +10,7 @@ test_discover_images_non_recursive_case_insensitive :: proc(t: ^testing.T) {
 	if len(temp_dir) == 0 {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	if !write_discovery_file(t, temp_dir, "a.jpg") ||
 	   !write_discovery_file(t, temp_dir, "b.JPEG") ||
@@ -46,8 +45,7 @@ test_discover_images_recursive_includes_nested_files :: proc(t: ^testing.T) {
 	if len(temp_dir) == 0 {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	if !write_discovery_file(t, temp_dir, "root.jpeg") ||
 	   !write_discovery_file(t, temp_dir, "nested/a.png") ||
@@ -63,15 +61,20 @@ test_discover_images_recursive_includes_nested_files :: proc(t: ^testing.T) {
 	result := discover_image_work(temp_dir, env)
 	defer destroy_discovery_result(&result)
 
+	nested_png := discovery_join(t, "nested", "a.png")
+	deep_jpg := discovery_join(t, "nested/deep", "b.JPG")
+	if len(nested_png) == 0 || len(deep_jpg) == 0 {
+		return
+	}
+	defer delete(nested_png)
+	defer delete(deep_jpg)
+
 	testing.expect_value(t, result.err, Discovery_Error.None)
 	testing.expect_value(t, len(result.items), 3)
 	testing.expect_value(t, result.jpeg_count, 2)
 	testing.expect_value(t, result.png_count, 1)
-	testing.expect(t, discovery_has_relative_path(result, discovery_join(t, "nested", "a.png")))
-	testing.expect(
-		t,
-		discovery_has_relative_path(result, discovery_join(t, "nested/deep", "b.JPG")),
-	)
+	testing.expect(t, discovery_has_relative_path(result, nested_png))
+	testing.expect(t, discovery_has_relative_path(result, deep_jpg))
 }
 
 @(test, require)
@@ -80,14 +83,15 @@ test_discover_images_dir_output_preserves_recursive_relative_paths :: proc(t: ^t
 	if len(temp_dir) == 0 {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	input_dir := discovery_join(t, temp_dir, "input")
 	output_dir := discovery_join(t, temp_dir, "output")
 	if len(input_dir) == 0 || len(output_dir) == 0 {
 		return
 	}
+	defer delete(input_dir)
+	defer delete(output_dir)
 
 	if !testing.expect_value(t, os.make_directory_all(input_dir), nil) ||
 	   !testing.expect_value(t, os.make_directory_all(output_dir), nil) ||
@@ -108,6 +112,16 @@ test_discover_images_dir_output_preserves_recursive_relative_paths :: proc(t: ^t
 	first_destination := discovery_join(t, output_dir, first_relative)
 	second_relative := discovery_join(t, "sub/deep", "B.png")
 	second_destination := discovery_join(t, output_dir, second_relative)
+	if len(first_relative) == 0 ||
+	   len(first_destination) == 0 ||
+	   len(second_relative) == 0 ||
+	   len(second_destination) == 0 {
+		return
+	}
+	defer delete(first_relative)
+	defer delete(first_destination)
+	defer delete(second_relative)
+	defer delete(second_destination)
 
 	testing.expect_value(t, result.err, Discovery_Error.None)
 	testing.expect_value(t, len(result.items), 2)
@@ -121,8 +135,7 @@ test_discover_images_empty_folder_succeeds :: proc(t: ^testing.T) {
 	if len(temp_dir) == 0 {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	env := Runtime_Environment {
 		output_mode = .In_Place,
@@ -167,6 +180,7 @@ write_discovery_file :: proc(t: ^testing.T, root, relative_path: string) -> bool
 	if len(path) == 0 {
 		return false
 	}
+	defer delete(path)
 	dir, _ := os.split_path(path)
 	if !testing.expect_value(t, os.make_directory_all(dir), nil) {
 		return false
@@ -176,7 +190,7 @@ write_discovery_file :: proc(t: ^testing.T, root, relative_path: string) -> bool
 
 discovery_join :: proc(t: ^testing.T, first, second: string) -> string {
 	parts := [?]string{first, second}
-	path, err := os.join_path(parts[:], context.temp_allocator)
+	path, err := os.join_path(parts[:], context.allocator)
 	if !testing.expect_value(t, err, nil) {
 		return ""
 	}

@@ -11,8 +11,7 @@ test_process_temp_paths_are_unique_and_beside_source :: proc(t: ^testing.T) {
 	if !testing.expect_value(t, temp_err, nil) {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	source_path := processing_join(t, temp_dir, "Photo 1.jpg")
 	if len(source_path) == 0 ||
@@ -24,12 +23,11 @@ test_process_temp_paths_are_unique_and_beside_source :: proc(t: ^testing.T) {
 	if !testing.expect_value(t, first_ok, true) {
 		return
 	}
-	defer delete(first_path)
+	defer cleanup_test_file(first_path)
 
 	if !testing.expect_value(t, os.write_entire_file(first_path, "existing temp"), nil) {
 		return
 	}
-	defer os.remove(first_path)
 
 	second_path, second_ok := make_process_temp_path(source_path, "optimized.jpg")
 	if !testing.expect_value(t, second_ok, true) {
@@ -148,8 +146,7 @@ test_corrupt_png_failure_cleans_intermediate_temps :: proc(t: ^testing.T) {
 	if !testing.expect_value(t, temp_err, nil) {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	source_path := processing_join(t, temp_dir, "bad.png")
 	if len(source_path) == 0 ||
@@ -193,8 +190,7 @@ test_process_png_preserves_source_srgb_icc_profile :: proc(t: ^testing.T) {
 	if !testing.expect_value(t, temp_err, nil) {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	source_path := processing_join(t, temp_dir, "srgb.png")
 	if len(source_path) == 0 {
@@ -259,8 +255,7 @@ test_process_png_converts_missing_icc_profile_to_srgb :: proc(t: ^testing.T) {
 	if !testing.expect_value(t, temp_err, nil) {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	source_path := processing_join(t, temp_dir, "unprofiled.png")
 	if len(source_path) == 0 {
@@ -319,8 +314,7 @@ test_finalize_output_skips_when_not_smaller :: proc(t: ^testing.T) {
 	if !testing.expect_value(t, temp_err, nil) {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	source_path := processing_join(t, temp_dir, "Photo.JPG")
 	temp_output_path := processing_join(t, temp_dir, "optimized.tmp")
@@ -356,8 +350,7 @@ test_finalize_in_place_replaces_smaller_output_and_slugifies_name :: proc(t: ^te
 	if !testing.expect_value(t, temp_err, nil) {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	source_path := processing_join(t, temp_dir, "Ảnh Đẹp.JPG")
 	temp_output_path := processing_join(t, temp_dir, "optimized.tmp")
@@ -401,8 +394,7 @@ test_finalize_in_place_applies_case_only_slugified_name :: proc(t: ^testing.T) {
 	if !testing.expect_value(t, temp_err, nil) {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	source_path := processing_join(t, temp_dir, "Photo.JPG")
 	temp_output_path := processing_join(t, temp_dir, "optimized.tmp")
@@ -438,8 +430,7 @@ test_finalize_dir_copies_smaller_output_with_slug_collision_suffix :: proc(t: ^t
 	if !testing.expect_value(t, temp_err, nil) {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	input_dir := processing_join(t, temp_dir, "input")
 	output_dir := processing_join(t, temp_dir, "output")
@@ -498,8 +489,7 @@ test_finalize_dir_does_not_ignore_existing_destination_matching_source :: proc(t
 	if !testing.expect_value(t, temp_err, nil) {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	source_path := processing_join(t, temp_dir, "photo.jpg")
 	temp_output_path := processing_join(t, temp_dir, "optimized.tmp")
@@ -533,8 +523,7 @@ test_replace_in_place_failure_restores_original :: proc(t: ^testing.T) {
 	if !testing.expect_value(t, temp_err, nil) {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	source_path := processing_join(t, temp_dir, "Photo.JPG")
 	temp_output_path := processing_join(t, temp_dir, "optimized.tmp")
@@ -569,8 +558,7 @@ test_finalize_dir_copy_failure_preserves_source_and_temp :: proc(t: ^testing.T) 
 	if !testing.expect_value(t, temp_err, nil) {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	input_dir := processing_join(t, temp_dir, "input")
 	blocking_path := processing_join(t, temp_dir, "blocking")

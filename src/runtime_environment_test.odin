@@ -10,8 +10,7 @@ test_validate_required_runtime_files_accepts_complete_distribution :: proc(t: ^t
 	if len(temp_dir) == 0 {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	if !write_required_runtime_tree(t, temp_dir) {
 		return
@@ -30,8 +29,7 @@ test_validate_required_runtime_files_reports_missing_file :: proc(t: ^testing.T)
 	if len(temp_dir) == 0 {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	if !write_required_runtime_tree(t, temp_dir) {
 		return
@@ -61,8 +59,7 @@ test_validate_required_runtime_files_reports_missing_executable :: proc(t: ^test
 	if len(temp_dir) == 0 {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	if !write_required_runtime_tree(t, temp_dir) {
 		return
@@ -106,8 +103,7 @@ test_resolve_output_root_accepts_existing_configured_dir :: proc(t: ^testing.T) 
 	if len(temp_dir) == 0 {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	custom_dir := resolve_app_relative_path(temp_dir, "optimized", context.temp_allocator)
 	mkdir_err := os.make_directory(custom_dir)
@@ -134,8 +130,7 @@ test_resolve_output_root_falls_back_to_default_output :: proc(t: ^testing.T) {
 	if len(temp_dir) == 0 {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	default_output := resolve_app_relative_path(
 		temp_dir,
@@ -167,8 +162,7 @@ test_resolve_output_root_errors_when_default_output_missing :: proc(t: ^testing.
 	if len(temp_dir) == 0 {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	config := default_config()
 	defer destroy_config(&config)
@@ -194,8 +188,7 @@ test_load_runtime_environment_skips_gpu_probe_when_disabled :: proc(t: ^testing.
 	if len(temp_dir) == 0 {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	if !write_required_runtime_tree(t, temp_dir) {
 		return
@@ -219,8 +212,7 @@ test_load_runtime_environment_enables_gpu_after_successful_probe :: proc(t: ^tes
 	if len(temp_dir) == 0 {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	if !write_required_runtime_tree(t, temp_dir) {
 		return
@@ -244,8 +236,7 @@ test_load_runtime_environment_warns_when_gpu_probe_fails :: proc(t: ^testing.T) 
 	if len(temp_dir) == 0 {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	if !write_required_runtime_tree(t, temp_dir) {
 		return
