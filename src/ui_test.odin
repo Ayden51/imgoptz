@@ -4,6 +4,36 @@ import "core:strings"
 import "core:testing"
 
 @(test, require)
+test_progress_started_line_describes_worker_count :: proc(t: ^testing.T) {
+	testing.expect_value(
+		t,
+		progress_started_line(5, 4),
+		"ℹ️ INFO   Optimizing 5 images with 4 workers...",
+	)
+	testing.expect_value(
+		t,
+		progress_started_line(1, 1),
+		"ℹ️ INFO   Optimizing 1 image with 1 worker...",
+	)
+}
+
+@(test, require)
+test_progress_active_line_shows_live_file_activity :: proc(t: ^testing.T) {
+	line := progress_active_line(2, 5, "Demo 2.png")
+
+	testing.expect_value(t, line, "[2/5] ℹ️ INFO   Optimizing Demo 2.png")
+}
+
+@(test, require)
+test_progress_done_line_shows_live_optimization_completion :: proc(t: ^testing.T) {
+	success_line := progress_done_line(2, 5, "Demo 2.png", .None)
+	error_line := progress_done_line(3, 5, "Broken.png", .Pngquant_Failed)
+
+	testing.expect_value(t, success_line, "[2/5] ✅ DONE   Demo 2.png optimized")
+	testing.expect_value(t, error_line, "[3/5] ❌ ERROR  Broken.png optimization failed")
+}
+
+@(test, require)
 test_progress_ok_line_includes_size_reduction :: proc(t: ^testing.T) {
 	line := progress_ok_line(3, 5, "Demo 1.png", 1_048_576, 225_280, -78)
 

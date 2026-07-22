@@ -111,6 +111,51 @@ print_progress_header :: proc() {
 	print_ui_blank()
 }
 
+print_progress_started :: proc(total, workers: int) {
+	print_ui_line(progress_started_line(total, workers))
+}
+
+progress_started_line :: proc(total, workers: int) -> string {
+	image_label := "images"
+	if total == 1 {
+		image_label = "image"
+	}
+	worker_label := "workers"
+	if workers == 1 {
+		worker_label = "worker"
+	}
+	return fmt.tprintf(
+		"ℹ️ INFO   Optimizing %d %s with %d %s...",
+		total,
+		image_label,
+		workers,
+		worker_label,
+	)
+}
+
+print_progress_active :: proc(index, total: int, relative_path: string) {
+	print_ui_line(progress_active_line(index, total, relative_path))
+}
+
+progress_active_line :: proc(index, total: int, relative_path: string) -> string {
+	return fmt.tprintf("[%d/%d] ℹ️ INFO   Optimizing %s", index, total, relative_path)
+}
+
+print_progress_done :: proc(index, total: int, relative_path: string, err: Image_Process_Error) {
+	print_ui_line(progress_done_line(index, total, relative_path, err))
+}
+
+progress_done_line :: proc(
+	index, total: int,
+	relative_path: string,
+	err: Image_Process_Error,
+) -> string {
+	if err == .None {
+		return fmt.tprintf("[%d/%d] ✅ DONE   %s optimized", index, total, relative_path)
+	}
+	return fmt.tprintf("[%d/%d] ❌ ERROR  %s optimization failed", index, total, relative_path)
+}
+
 print_progress_ok :: proc(
 	index, total: int,
 	relative_path: string,

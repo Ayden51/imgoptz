@@ -43,11 +43,12 @@ Process_Image_Result :: struct {
 }
 
 Image_Process_Worker_State :: struct {
-	items:       []Image_Work_Item,
-	config:      ^App_Config,
-	runtime_env: ^Runtime_Environment,
-	results:     []Process_Image_Result,
-	next_index:  int,
+	items:          []Image_Work_Item,
+	config:         ^App_Config,
+	runtime_env:    ^Runtime_Environment,
+	results:        []Process_Image_Result,
+	next_index:     int,
+	progress_mutex: sync.Mutex,
 }
 
 Finalize_Output_Result :: struct {
@@ -145,9 +146,13 @@ process_images_to_temp_parallel :: proc(
 ) -> []Process_Image_Result {
 	results := make([]Process_Image_Result, len(items))
 	worker_count := min(max(runtime_env.worker_count, 1), len(items))
+	print_progress_started(len(items), worker_count)
 	if worker_count <= 1 {
 		for item, index in items {
-			results[index] = process_image_to_temp(item, config^, runtime_env^)
+			print_progress_active(index + 1, len(items), item.relative_path)
+			result := process_image_to_temp(item, config^, runtime_env^)
+			print_progress_done(index + 1, len(items), item.relative_path, result.err)
+			results[index] = result
 		}
 		return results
 	}
@@ -187,11 +192,19 @@ process_image_worker :: proc(worker: ^thread.Thread) {
 		if index >= len(state.items) {
 			break
 		}
-		state.results[index] = process_image_to_temp(
-			state.items[index],
-			state.config^,
-			state.runtime_env^,
-		)
+		if sync.mutex_guard(&state.progress_mutex) {
+			print_progress_active(index + 1, len(state.items), state.items[index].relative_path)
+		}
+		result := process_image_to_temp(state.items[index], state.config^, state.runtime_env^)
+		if sync.mutex_guard(&state.progress_mutex) {
+			print_progress_done(
+				index + 1,
+				len(state.items),
+				state.items[index].relative_path,
+				result.err,
+			)
+		}
+		state.results[index] = result
 	}
 }
 

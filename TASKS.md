@@ -171,6 +171,8 @@ Goal: process folders efficiently without oversubscribing tools.
 - [x] Pass `oxipng --threads 1` when app-level workers exceed 1.
 - [x] Preserve the established per-file progress format under parallel execution.
 - [x] Preserve deterministic, readable console output under parallel work.
+- [x] Print live progress activity while workers are running so the console does not stay blank until all images finish.
+- [x] Print live worker completion rows as each temp optimization finishes, while keeping final result rows after all workers complete.
 - [x] Notice for deterministic output task: discovery order follows OS directory enumeration; verify whether sorting discovered work items by relative path is needed before/while adding parallel reporting.
 - [x] Verify worker counts on low/high CPU machines where practical.
 
