@@ -1,6 +1,7 @@
 package main
 
 import "core:fmt"
+import "core:mem"
 import "core:os"
 import "core:strings"
 import "core:sync"
@@ -151,6 +152,11 @@ process_images_to_temp_parallel :: proc(
 		return results
 	}
 
+	worker_allocator: mem.Mutex_Allocator
+	mem.mutex_allocator_init(&worker_allocator, context.allocator)
+	worker_context := context
+	worker_context.allocator = mem.mutex_allocator(&worker_allocator)
+
 	state := Image_Process_Worker_State {
 		items       = items,
 		config      = config,
@@ -162,6 +168,7 @@ process_images_to_temp_parallel :: proc(
 
 	for _, index in threads {
 		worker := thread.create(process_image_worker)
+		worker.init_context = worker_context
 		worker.data = &state
 		threads[index] = worker
 		thread.start(worker)
