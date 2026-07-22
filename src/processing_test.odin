@@ -90,8 +90,19 @@ test_png_commands_map_config_flags :: proc(t: ^testing.T) {
 	testing.expect(t, command_has_sequence(oxipng_command, []string{"--strip", "safe"}))
 	testing.expect(t, command_contains(oxipng_command, "--alpha"))
 	testing.expect(t, command_has_sequence(oxipng_command, []string{"--interlace", "off"}))
+	testing.expect(t, !command_contains(oxipng_command, "--threads"))
 	testing.expect(t, command_has_sequence(oxipng_command, []string{"--out", "out.png"}))
 	testing.expect_value(t, oxipng_command[len(oxipng_command) - 1], "quant.png")
+}
+
+@(test, require)
+test_oxipng_command_limits_threads_when_app_workers_are_parallel :: proc(t: ^testing.T) {
+	config := default_config()
+	defer destroy_config(&config)
+
+	command := build_oxipng_command("oxipng.exe", config.png, "out.png", "quant.png", 2)
+
+	testing.expect(t, command_has_sequence(command, []string{"--threads", "1"}))
 }
 
 @(test, require)
@@ -590,6 +601,20 @@ test_imagemagick_environment_filters_managed_entries :: proc(t: ^testing.T) {
 	testing.expect(t, !imagemagick_environment_entry_is_managed("PATH=C:/Tools"))
 	testing.expect(t, !imagemagick_environment_entry_is_managed("MAGICK_OCL_DEVICE_EXTRA=GPU"))
 	testing.expect(t, !imagemagick_environment_entry_is_managed("MAGICK_OCL_DEVICE"))
+}
+
+@(test, require)
+test_imagemagick_thread_limit_tracks_app_worker_count :: proc(t: ^testing.T) {
+	testing.expect_value(
+		t,
+		imagemagick_thread_limit(Runtime_Environment{worker_count = 1}),
+		IMAGE_PROCESS_MAGICK_THREAD_LIMIT_SINGLE_WORKER,
+	)
+	testing.expect_value(
+		t,
+		imagemagick_thread_limit(Runtime_Environment{worker_count = 4}),
+		IMAGE_PROCESS_MAGICK_THREAD_LIMIT_MULTI_WORKER,
+	)
 }
 
 processing_join :: proc(t: ^testing.T, first, second: string) -> string {

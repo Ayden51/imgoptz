@@ -1,10 +1,14 @@
 package main
 
 import "core:fmt"
+import "core:mem"
 import "core:os"
 import "core:strings"
+import "core:sync"
+import "core:thread"
 
-IMAGE_PROCESS_MAGICK_THREAD_LIMIT :: "2"
+IMAGE_PROCESS_MAGICK_THREAD_LIMIT_SINGLE_WORKER :: "2"
+IMAGE_PROCESS_MAGICK_THREAD_LIMIT_MULTI_WORKER :: "1"
 
 Image_Process_Error :: enum {
 	None,
@@ -38,6 +42,15 @@ Process_Image_Result :: struct {
 	detail:      string,
 }
 
+Image_Process_Worker_State :: struct {
+	items:          []Image_Work_Item,
+	config:         ^App_Config,
+	runtime_env:    ^Runtime_Environment,
+	results:        []Process_Image_Result,
+	next_index:     int,
+	progress_mutex: sync.Mutex,
+}
+
 Finalize_Output_Result :: struct {
 	output_path:       string,
 	original_size:     i64,
@@ -62,11 +75,20 @@ process_discovered_images :: proc(
 		return
 	}
 
+	worker_config := config
+	worker_runtime_env := runtime_env
+	results := process_images_to_temp_parallel(
+		discovery.items[:],
+		&worker_config,
+		&worker_runtime_env,
+	)
+	defer delete(results)
+
 	succeeded := 0
 	skipped := 0
 	failed := 0
 	for item, index in discovery.items {
-		result := process_image_to_temp(item, config, runtime_env)
+		result := &results[index]
 		if result.err != .None {
 			failed += 1
 			print_progress_error(
@@ -76,7 +98,6 @@ process_discovered_images :: proc(
 				result.err,
 				result.detail,
 			)
-			cleanup_process_image_result(&result)
 			continue
 		}
 
@@ -110,10 +131,81 @@ process_discovered_images :: proc(
 			)
 		}
 		destroy_finalize_output_result(&finalize)
-		cleanup_process_image_result(&result)
+	}
+	for index in 0 ..< len(results) {
+		cleanup_process_image_result(&results[index])
 	}
 
 	print_processing_summary(succeeded, skipped, failed)
+}
+
+process_images_to_temp_parallel :: proc(
+	items: []Image_Work_Item,
+	config: ^App_Config,
+	runtime_env: ^Runtime_Environment,
+) -> []Process_Image_Result {
+	results := make([]Process_Image_Result, len(items))
+	worker_count := min(max(runtime_env.worker_count, 1), len(items))
+	print_progress_started(len(items), worker_count)
+	if worker_count <= 1 {
+		for item, index in items {
+			print_progress_active(index + 1, len(items), item.relative_path)
+			result := process_image_to_temp(item, config^, runtime_env^)
+			print_progress_done(index + 1, len(items), item.relative_path, result.err)
+			results[index] = result
+		}
+		return results
+	}
+
+	worker_allocator: mem.Mutex_Allocator
+	mem.mutex_allocator_init(&worker_allocator, context.allocator)
+	worker_context := context
+	worker_context.allocator = mem.mutex_allocator(&worker_allocator)
+
+	state := Image_Process_Worker_State {
+		items       = items,
+		config      = config,
+		runtime_env = runtime_env,
+		results     = results,
+	}
+	threads := make([]^thread.Thread, worker_count)
+	defer delete(threads)
+
+	for _, index in threads {
+		worker := thread.create(process_image_worker)
+		worker.init_context = worker_context
+		worker.data = &state
+		threads[index] = worker
+		thread.start(worker)
+	}
+	for worker in threads {
+		thread.join(worker)
+		thread.destroy(worker)
+	}
+	return results
+}
+
+process_image_worker :: proc(worker: ^thread.Thread) {
+	state := cast(^Image_Process_Worker_State)worker.data
+	for {
+		index := sync.atomic_add(&state.next_index, 1)
+		if index >= len(state.items) {
+			break
+		}
+		if sync.mutex_guard(&state.progress_mutex) {
+			print_progress_active(index + 1, len(state.items), state.items[index].relative_path)
+		}
+		result := process_image_to_temp(state.items[index], state.config^, state.runtime_env^)
+		if sync.mutex_guard(&state.progress_mutex) {
+			print_progress_done(
+				index + 1,
+				len(state.items),
+				state.items[index].relative_path,
+				result.err,
+			)
+		}
+		state.results[index] = result
+	}
 }
 
 process_image_to_temp :: proc(
@@ -613,6 +705,7 @@ process_png_to_temp :: proc(
 		config.png,
 		output_path,
 		oxipng_input_path,
+		runtime_env.worker_count,
 	)
 	if detail, ok := run_tool(oxipng_command, nil, "Oxipng"); !ok {
 		remove_if_exists(output_path)
@@ -684,14 +777,8 @@ determine_icc_profile_mode :: proc(
 make_process_temp_path :: proc(source_path, suffix: string) -> (string, bool) {
 	pid := os.get_pid()
 	for attempt in 0 ..< 1024 {
-		process_temp_counter += 1
-		candidate := fmt.aprintf(
-			"%s.imgoptz.%d.%d.%s",
-			source_path,
-			pid,
-			process_temp_counter,
-			suffix,
-		)
+		counter := sync.atomic_add(&process_temp_counter, 1) + 1
+		candidate := fmt.aprintf("%s.imgoptz.%d.%d.%s", source_path, pid, counter, suffix)
 		if !os.exists(candidate) {
 			return candidate, true
 		}
@@ -905,6 +992,7 @@ build_oxipng_command :: proc(
 	oxipng_path: string,
 	png: Png_Config,
 	output_path, input_path: string,
+	app_worker_count: int = 1,
 ) -> []string {
 	command: [dynamic]string
 	command.allocator = context.temp_allocator
@@ -924,6 +1012,10 @@ build_oxipng_command :: proc(
 		append(&command, "on")
 	} else {
 		append(&command, "off")
+	}
+	if app_worker_count > 1 {
+		append(&command, "--threads")
+		append(&command, "1")
 	}
 	append(&command, "--out")
 	append(&command, output_path)
@@ -945,11 +1037,21 @@ imagemagick_process_environment :: proc(runtime_env: Runtime_Environment) -> []s
 		}
 		append(&environment, entry)
 	}
-	append(&environment, fmt.tprintf("MAGICK_THREAD_LIMIT=%s", IMAGE_PROCESS_MAGICK_THREAD_LIMIT))
+	append(
+		&environment,
+		fmt.tprintf("MAGICK_THREAD_LIMIT=%s", imagemagick_thread_limit(runtime_env)),
+	)
 	if runtime_env.magick_use_gpu {
 		append(&environment, "MAGICK_OCL_DEVICE=GPU")
 	}
 	return environment[:]
+}
+
+imagemagick_thread_limit :: proc(runtime_env: Runtime_Environment) -> string {
+	if runtime_env.worker_count > 1 {
+		return IMAGE_PROCESS_MAGICK_THREAD_LIMIT_MULTI_WORKER
+	}
+	return IMAGE_PROCESS_MAGICK_THREAD_LIMIT_SINGLE_WORKER
 }
 
 imagemagick_environment_entry_is_managed :: proc(entry: string) -> bool {

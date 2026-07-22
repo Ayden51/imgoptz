@@ -713,6 +713,8 @@ Kept original unchanged; no optimized output was written.
 
 Every error detail should be indented under the file row it belongs to. Per-file success output should include the original size, optimized size, and percentage size reduction in the success row. Do not print the final or slugified output path as an indented progress detail row.
 
+During parallel processing, print concise live `ℹ️ INFO` activity rows as work starts and live completion rows as each worker finishes temp optimization, so the console visibly updates while long-running optimization is still in progress. Keep final `OK`, `SKIP`, and `ERROR` result rows readable and preserve the established success size output.
+
 Summary block example:
 
 ```text

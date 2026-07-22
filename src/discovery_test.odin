@@ -1,6 +1,7 @@
 package main
 
 import "core:os"
+import "core:strings"
 import "core:testing"
 
 @(test, require)
@@ -146,6 +147,24 @@ test_discover_images_empty_folder_succeeds :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(result.items), 0)
 	testing.expect_value(t, result.jpeg_count, 0)
 	testing.expect_value(t, result.png_count, 0)
+}
+
+@(test, require)
+test_sort_discovered_work_items_orders_by_relative_path :: proc(t: ^testing.T) {
+	result: Discovery_Result
+	append(
+		&result.items,
+		Image_Work_Item{relative_path = strings.clone("z.png")},
+		Image_Work_Item{relative_path = strings.clone("a.jpg")},
+		Image_Work_Item{relative_path = strings.clone("nested/b.png")},
+	)
+	defer destroy_discovery_result(&result)
+
+	sort_discovered_work_items(&result)
+
+	testing.expect_value(t, result.items[0].relative_path, "a.jpg")
+	testing.expect_value(t, result.items[1].relative_path, "nested/b.png")
+	testing.expect_value(t, result.items[2].relative_path, "z.png")
 }
 
 make_temp_discovery_root :: proc(t: ^testing.T) -> string {

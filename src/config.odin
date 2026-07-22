@@ -606,13 +606,3 @@ config_output_mode_summary :: proc(mode: Config_Output_Mode) -> string {
 	}
 	return "in-place"
 }
-
-config_workers_summary :: proc(workers: Config_Workers) -> string {
-	switch workers.kind {
-	case .Auto:
-		return "auto"
-	case .Explicit:
-		return fmt.tprintf("%d", workers.count)
-	}
-	return "auto"
-}

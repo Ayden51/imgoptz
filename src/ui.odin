@@ -71,7 +71,7 @@ print_app_settings :: proc(
 	print_ui_linef("│ App root   \"%s\"", app_root_path)
 	print_ui_linef("│ Config     %s", config_status_ui_summary(config_result.status))
 	print_ui_linef("│ GPU        %s", runtime_gpu_status_ui_summary(runtime_env.gpu_status))
-	print_ui_linef("│ Workers    %s", config_workers_summary(config_result.config.workers))
+	print_ui_linef("│ Workers    %d", runtime_env.worker_count)
 	if runtime_env.output_mode == .Dir {
 		print_ui_linef("│ Output     dir -> \"%s\"", runtime_env.output_root)
 	} else {
@@ -109,6 +109,51 @@ print_discovery_error :: proc(result: Discovery_Result) {
 print_progress_header :: proc() {
 	print_ui_section("PROGRESS")
 	print_ui_blank()
+}
+
+print_progress_started :: proc(total, workers: int) {
+	print_ui_line(progress_started_line(total, workers))
+}
+
+progress_started_line :: proc(total, workers: int) -> string {
+	image_label := "images"
+	if total == 1 {
+		image_label = "image"
+	}
+	worker_label := "workers"
+	if workers == 1 {
+		worker_label = "worker"
+	}
+	return fmt.tprintf(
+		"ℹ️ INFO   Optimizing %d %s with %d %s...",
+		total,
+		image_label,
+		workers,
+		worker_label,
+	)
+}
+
+print_progress_active :: proc(index, total: int, relative_path: string) {
+	print_ui_line(progress_active_line(index, total, relative_path))
+}
+
+progress_active_line :: proc(index, total: int, relative_path: string) -> string {
+	return fmt.tprintf("[%d/%d] ℹ️ INFO   Optimizing %s", index, total, relative_path)
+}
+
+print_progress_done :: proc(index, total: int, relative_path: string, err: Image_Process_Error) {
+	print_ui_line(progress_done_line(index, total, relative_path, err))
+}
+
+progress_done_line :: proc(
+	index, total: int,
+	relative_path: string,
+	err: Image_Process_Error,
+) -> string {
+	if err == .None {
+		return fmt.tprintf("[%d/%d] ✅ DONE   %s optimized", index, total, relative_path)
+	}
+	return fmt.tprintf("[%d/%d] ❌ ERROR  %s optimization failed", index, total, relative_path)
 }
 
 print_progress_ok :: proc(
