@@ -25,6 +25,7 @@
 		"oxipng_level": 4,
 		"interlace": false,
 		"strip": "safe",
-		"alpha": true
+		"alpha": true,
+		"preserve_profiles": true
 	}
 }

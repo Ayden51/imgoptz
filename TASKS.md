@@ -138,18 +138,18 @@ Goal: write optimized results only when smaller.
 
 Goal: preserve PNG color profiles through optimization without duplicating JPEG ICC decision logic.
 
-- [ ] Add `png.preserve_profiles` config defaulting to `true`.
-- [ ] Validate `png.preserve_profiles` as a JSON boolean.
-- [ ] Update default config, `dist/imgoptz.json`, and config tests for `png.preserve_profiles`.
-- [ ] Reject or fall back from PNG strip settings that remove color-management chunks while `png.preserve_profiles = true`.
-- [ ] Extract shared ICC profile-family detection from the current JPEG-specific helper.
-- [ ] Extract shared preserve-vs-convert ICC decision logic that both JPEG and PNG pipelines can call.
-- [ ] Keep format-specific profile extraction, embedding, and verification in JPEG/PNG pipeline code.
-- [ ] Remove `pngquant --strip` from the default PNG command path.
-- [ ] Preserve or convert PNG ICC profiles through ImageMagick, pngquant, and Oxipng according to `PLAN.md`.
-- [ ] Verify optimized temp PNGs still contain the expected profile before final output handling.
-- [ ] Update PNG command tests so pngquant does not include `--strip` and Oxipng still receives the configured strip mode.
-- [ ] Add tests for PNG ICC retention/conversion through the optimized temp output.
+- [x] Add `png.preserve_profiles` config defaulting to `true`.
+- [x] Validate `png.preserve_profiles` as a JSON boolean.
+- [x] Update default config, `dist/imgoptz.json`, and config tests for `png.preserve_profiles`.
+- [x] Reject or fall back from PNG strip settings that remove color-management chunks while `png.preserve_profiles = true`.
+- [x] Extract shared ICC profile-family detection from the current JPEG-specific helper.
+- [x] Extract shared preserve-vs-convert ICC decision logic that both JPEG and PNG pipelines can call.
+- [x] Keep format-specific profile extraction, embedding, and verification in JPEG/PNG pipeline code.
+- [x] Remove `pngquant --strip` from the default PNG command path.
+- [x] Preserve or convert PNG ICC profiles through ImageMagick, pngquant, and Oxipng according to `PLAN.md`.
+- [x] Verify optimized temp PNGs still contain the expected profile before final output handling.
+- [x] Update PNG command tests so pngquant does not include `--strip` and Oxipng still receives the configured strip mode.
+- [x] Add tests for PNG ICC retention/conversion through the optimized temp output.
 
 ## Phase 6B: Enhanced Progress Size Output
 
@@ -232,6 +232,6 @@ Goal: run the broad manual and build matrix before release.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/safe-outputs`.
-- Scope: Phase 6 only.
-- Reason: parallel processing and debug logging remain separated for later phases.
+- Current feature branch: `feat/png-icc-preservation`.
+- Scope: Phase 6A only.
+- Reason: progress size output, parallel processing, debug logging, and dry-run approval remain separated for later phases.
