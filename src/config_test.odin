@@ -20,8 +20,7 @@ test_load_app_config_missing_file_uses_embedded_defaults :: proc(t: ^testing.T) 
 	if !testing.expect_value(t, temp_err, nil) {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	result := load_app_config_from_directory(temp_dir)
 	defer destroy_config_load_result(&result)
@@ -37,8 +36,7 @@ test_load_app_config_reads_real_imgoptz_json_file :: proc(t: ^testing.T) {
 	if !testing.expect_value(t, temp_err, nil) {
 		return
 	}
-	defer delete(temp_dir)
-	defer os.remove_all(temp_dir)
+	defer cleanup_test_directory(temp_dir)
 
 	write_err := os.write_entire_file(
 		config_file_path(temp_dir),
