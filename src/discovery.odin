@@ -43,6 +43,7 @@ discover_image_work :: proc(
 		runtime_env.output_mode,
 		runtime_env.output_root,
 	)
+	sort_discovered_work_items(&result)
 	return result
 }
 
@@ -55,6 +56,34 @@ destroy_discovery_result :: proc(result: ^Discovery_Result) {
 	delete(result.items)
 	delete(result.err_path)
 	result^ = {}
+}
+
+sort_discovered_work_items :: proc(result: ^Discovery_Result) {
+	if len(result.items) <= 1 {
+		return
+	}
+
+	for i in 1 ..< len(result.items) {
+		j := i
+		for j > 0 &&
+		    string_less(result.items[j].relative_path, result.items[j - 1].relative_path) {
+			result.items[j], result.items[j - 1] = result.items[j - 1], result.items[j]
+			j -= 1
+		}
+	}
+}
+
+string_less :: proc(a, b: string) -> bool {
+	limit := min(len(a), len(b))
+	for i in 0 ..< limit {
+		if a[i] < b[i] {
+			return true
+		}
+		if a[i] > b[i] {
+			return false
+		}
+	}
+	return len(a) < len(b)
 }
 
 discovery_error_summary :: proc(err: Discovery_Error) -> string {

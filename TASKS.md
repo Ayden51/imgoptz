@@ -164,15 +164,15 @@ Goal: make successful progress rows show the size win without adding noisy outpu
 
 Goal: process folders efficiently without oversubscribing tools.
 
-- [ ] Add worker pool.
-- [ ] Implement `workers = auto` heuristic.
-- [ ] Clamp explicit worker counts to a safe minimum of 1.
-- [ ] Revisit ImageMagick thread limit for app-level parallelism instead of adding per-file oversubscription.
-- [ ] Pass `oxipng --threads 1` when app-level workers exceed 1.
-- [ ] Preserve the established per-file progress format under parallel execution.
-- [ ] Preserve deterministic, readable console output under parallel work.
-- [ ] Notice for deterministic output task: discovery order follows OS directory enumeration; verify whether sorting discovered work items by relative path is needed before/while adding parallel reporting.
-- [ ] Verify worker counts on low/high CPU machines where practical.
+- [x] Add worker pool.
+- [x] Implement `workers = auto` heuristic.
+- [x] Clamp explicit worker counts to a safe minimum of 1.
+- [x] Revisit ImageMagick thread limit for app-level parallelism instead of adding per-file oversubscription.
+- [x] Pass `oxipng --threads 1` when app-level workers exceed 1.
+- [x] Preserve the established per-file progress format under parallel execution.
+- [x] Preserve deterministic, readable console output under parallel work.
+- [x] Notice for deterministic output task: discovery order follows OS directory enumeration; verify whether sorting discovered work items by relative path is needed before/while adding parallel reporting.
+- [x] Verify worker counts on low/high CPU machines where practical.
 
 ## Phase 8: Debug Logging
 
@@ -232,6 +232,6 @@ Goal: run the broad manual and build matrix before release.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/progress-size-output`.
-- Scope: Phase 6B only.
-- Reason: parallel processing, debug logging, and dry-run approval remain separated for later phases.
+- Current feature branch: `feat/parallel-processing-reporting`.
+- Scope: Phase 7 only.
+- Reason: debug logging, dry-run approval, and target-relative output defaults remain separated for later phases.

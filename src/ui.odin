@@ -71,7 +71,7 @@ print_app_settings :: proc(
 	print_ui_linef("│ App root   \"%s\"", app_root_path)
 	print_ui_linef("│ Config     %s", config_status_ui_summary(config_result.status))
 	print_ui_linef("│ GPU        %s", runtime_gpu_status_ui_summary(runtime_env.gpu_status))
-	print_ui_linef("│ Workers    %s", config_workers_summary(config_result.config.workers))
+	print_ui_linef("│ Workers    %d", runtime_env.worker_count)
 	if runtime_env.output_mode == .Dir {
 		print_ui_linef("│ Output     dir -> \"%s\"", runtime_env.output_root)
 	} else {

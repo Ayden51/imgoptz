@@ -264,6 +264,28 @@ test_load_runtime_environment_warns_when_gpu_probe_fails :: proc(t: ^testing.T) 
 	testing.expect(t, strings.contains(env.warnings[0], "GPU probe failed"))
 }
 
+@(test, require)
+test_resolve_auto_worker_count_uses_cpu_and_memory_caps :: proc(t: ^testing.T) {
+	GIB :: u64(1024 * 1024 * 1024)
+
+	testing.expect_value(t, resolve_auto_worker_count(4, 32 * GIB), 1)
+	testing.expect_value(t, resolve_auto_worker_count(8, 32 * GIB), 2)
+	testing.expect_value(t, resolve_auto_worker_count(16, 32 * GIB), 4)
+	testing.expect_value(t, resolve_auto_worker_count(24, 32 * GIB), 6)
+	testing.expect_value(t, resolve_auto_worker_count(24, 12 * GIB), 4)
+	testing.expect_value(t, resolve_auto_worker_count(24, 6 * GIB), 2)
+	testing.expect_value(t, resolve_auto_worker_count(0, 0), 1)
+}
+
+@(test, require)
+test_resolve_worker_count_clamps_explicit_minimum :: proc(t: ^testing.T) {
+	workers := Config_Workers {
+		kind  = .Explicit,
+		count = 0,
+	}
+	testing.expect_value(t, resolve_worker_count(workers), 1)
+}
+
 make_temp_runtime_root :: proc(t: ^testing.T) -> string {
 	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-runtime-*", context.allocator)
 	if !testing.expect_value(t, temp_err, nil) {

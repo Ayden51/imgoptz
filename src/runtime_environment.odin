@@ -3,6 +3,7 @@ package main
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import win "core:sys/windows"
 
 Runtime_GPU_Status :: enum {
 	Disabled_By_Config,
@@ -22,6 +23,7 @@ Runtime_Environment :: struct {
 	recursive:      bool,
 	output_mode:    Config_Output_Mode,
 	output_root:    string,
+	worker_count:   int,
 	mozjpeg_path:   string,
 	oxipng_path:    string,
 	pngquant_path:  string,
@@ -79,10 +81,11 @@ load_runtime_environment_with_probe :: proc(
 	probe: Runtime_GPU_Probe,
 ) -> Runtime_Environment {
 	env := Runtime_Environment {
-		ok          = true,
-		recursive   = config.recursive,
-		output_mode = config.output_mode,
-		gpu_status  = .Disabled_By_Config,
+		ok           = true,
+		recursive    = config.recursive,
+		output_mode  = config.output_mode,
+		worker_count = resolve_worker_count(config.workers),
+		gpu_status   = .Disabled_By_Config,
 	}
 
 	validate_required_runtime_files(&env, app_root)
@@ -116,6 +119,56 @@ load_runtime_environment_with_probe :: proc(
 
 	env.ok = len(env.errors) == 0
 	return env
+}
+
+resolve_worker_count :: proc(workers: Config_Workers) -> int {
+	switch workers.kind {
+	case .Explicit:
+		return max(workers.count, 1)
+	case .Auto:
+		return resolve_auto_worker_count(
+			os.get_processor_core_count(),
+			available_physical_memory(),
+		)
+	}
+	return 1
+}
+
+resolve_auto_worker_count :: proc(logical_cores: int, available_memory_bytes: u64) -> int {
+	worker_count := 1
+	switch {
+	case logical_cores <= 4:
+		worker_count = 1
+	case logical_cores <= 8:
+		worker_count = 2
+	case logical_cores <= 16:
+		worker_count = 4
+	case logical_cores >= 24:
+		worker_count = 6
+	case:
+		worker_count = 4
+	}
+
+	GIB :: u64(1024 * 1024 * 1024)
+	if available_memory_bytes > 0 {
+		if available_memory_bytes < 8 * GIB {
+			worker_count = min(worker_count, 2)
+		} else if available_memory_bytes < 16 * GIB {
+			worker_count = min(worker_count, 4)
+		}
+	}
+	return max(worker_count, 1)
+}
+
+available_physical_memory :: proc() -> u64 {
+	when ODIN_OS == .Windows {
+		status: win.MEMORYSTATUSEX
+		status.dwLength = size_of(win.MEMORYSTATUSEX)
+		if win.GlobalMemoryStatusEx(&status) != win.FALSE {
+			return u64(status.ullAvailPhys)
+		}
+	}
+	return 0
 }
 
 destroy_runtime_environment :: proc(env: ^Runtime_Environment) {
