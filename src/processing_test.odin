@@ -370,6 +370,9 @@ test_finalize_in_place_replaces_smaller_output_and_slugifies_name :: proc(t: ^te
 
 	testing.expect_value(t, result.err, Image_Process_Error.None)
 	testing.expect_value(t, result.output_path, final_path)
+	testing.expect_value(t, result.original_size, 14)
+	testing.expect_value(t, result.optimized_size, 4)
+	testing.expect_value(t, result.reduction_percent, -71)
 	testing.expect(t, !os.exists(source_path))
 	testing.expect(t, !os.exists(temp_output_path))
 	testing.expect(t, os.exists(final_path))

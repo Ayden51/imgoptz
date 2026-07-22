@@ -1,6 +1,15 @@
 package main
 
+import "core:fmt"
 import "core:log"
+import win "core:sys/windows"
+
+foreign import shlwapi "system:shlwapi.lib"
+
+@(default_calling_convention = "system")
+foreign shlwapi {
+	StrFormatByteSizeW :: proc(file_size: i64, buffer: win.PWSTR, buffer_size: win.UINT) -> win.PWSTR ---
+}
 
 print_ui_line :: proc(line: string) {
 	log.info(line)
@@ -102,8 +111,62 @@ print_progress_header :: proc() {
 	print_ui_blank()
 }
 
-print_progress_ok :: proc(index, total: int, relative_path: string) {
-	print_ui_linef("[%d/%d] ✅ OK     %s", index, total, relative_path)
+print_progress_ok :: proc(
+	index, total: int,
+	relative_path: string,
+	original_size, optimized_size, reduction_percent: i64,
+) {
+	print_ui_line(
+		progress_ok_line(
+			index,
+			total,
+			relative_path,
+			original_size,
+			optimized_size,
+			reduction_percent,
+		),
+	)
+}
+
+progress_ok_line :: proc(
+	index, total: int,
+	relative_path: string,
+	original_size, optimized_size, reduction_percent: i64,
+) -> string {
+	return fmt.tprintf(
+		"[%d/%d] ✅ OK     %s  %s -> %s (%d%%)",
+		index,
+		total,
+		relative_path,
+		format_progress_size(original_size),
+		format_progress_size(optimized_size),
+		reduction_percent,
+	)
+}
+
+format_progress_size :: proc(size: i64) -> string {
+	when ODIN_OS == .Windows {
+		buffer: [64]u16
+		if StrFormatByteSizeW(size, win.PWSTR(&buffer[0]), win.UINT(len(buffer))) != nil {
+			formatted, err := win.wstring_to_utf8(
+				win.wstring(&buffer[0]),
+				-1,
+				context.temp_allocator,
+			)
+			if err == nil && len(formatted) > 0 {
+				return formatted
+			}
+		}
+	}
+	return fmt.tprintf("%d bytes", size)
+}
+
+progress_reduction_percent :: proc(original_size, optimized_size: i64) -> i64 {
+	if original_size <= 0 || optimized_size >= original_size {
+		return 0
+	}
+	saved_size := original_size - optimized_size
+	return -((saved_size * 100) / original_size)
 }
 
 print_progress_error :: proc(
