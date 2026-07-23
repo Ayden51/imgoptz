@@ -17,6 +17,47 @@ UI_INFO :: "?"
 UI_SKIP :: "-"
 UI_WARN :: "!"
 
+CONSOLE_PROGRESS_ROW_DELAY :: 90 * time.Millisecond
+CONSOLE_SUMMARY_READ_DELAY :: 1500 * time.Millisecond
+
+Console_Pacer :: struct {
+	delay:           time.Duration,
+	has_printed:     bool,
+	last_printed_at: time.Time,
+	slept:           time.Duration,
+}
+
+console_pacer_init :: proc(delay: time.Duration) -> Console_Pacer {
+	return Console_Pacer{delay = delay}
+}
+
+pace_console_row :: proc(pacer: ^Console_Pacer) {
+	if pacer.delay <= 0 {
+		return
+	}
+
+	if pacer.has_printed {
+		elapsed := time.since(pacer.last_printed_at)
+		if elapsed < pacer.delay {
+			sleep_for := pacer.delay - elapsed
+			slept_at := time.now()
+			time.sleep(sleep_for)
+			pacer.slept += time.since(slept_at)
+		}
+	}
+
+	pacer.has_printed = true
+	pacer.last_printed_at = time.now()
+}
+
+console_pacer_slept :: proc(pacer: ^Console_Pacer) -> time.Duration {
+	return pacer.slept
+}
+
+pause_after_processing_summary :: proc() {
+	time.sleep(CONSOLE_SUMMARY_READ_DELAY)
+}
+
 print_ui_line :: proc(line: string) {
 	fmt.println(line)
 }

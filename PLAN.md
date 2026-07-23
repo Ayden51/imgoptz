@@ -117,7 +117,8 @@ Use ICC's official `sRGB2014.icc`, not a copied Windows system `sRGB Color Space
 13. App discovers supported files in that one directory, recursively only when configured.
 14. App processes files with a balanced worker count.
 15. App prints per-file results and final summary.
-16. App returns to the prompt.
+16. App waits briefly so the summary remains readable.
+17. App returns to the prompt.
 
 Only accept one input directory at a time. If users want to process multiple directories, they should organize those directories under one parent folder and enable `recursive`.
 
@@ -682,6 +683,8 @@ Kept original unchanged; no optimized output was written.
 
 Per-file success output should include the original size, optimized size, and percentage size reduction in the success row. Do not print the final or slugified output path as an indented progress detail row. Normal progress output should not print separate start, active, and done rows.
 
+Pace progress rows so bursts of worker completions remain readable in the console. When multiple files finish at nearly the same time, print completed rows one at a time with a short delay between rows, without adding an artificial delay before naturally spaced rows. Keep this pacing in the normal console UI path, not in debug logging.
+
 Summary block example:
 
 ```text
@@ -691,6 +694,8 @@ Saved:  4.24 MB -> 1.73 MB (-59.2%) - Completed in 2.4s
 ```
 
 Do not emit a separate warning block when the summary already communicates the final warning or failure state.
+
+After printing the summary block, wait briefly before returning to the next input prompt so users can read the result before the console advances to `>_ INPUT` again. This read pause is a UI delay and should not be included in the reported processing duration.
 
 ## Debug Logging
 

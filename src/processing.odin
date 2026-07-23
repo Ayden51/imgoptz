@@ -49,6 +49,7 @@ Image_Process_Worker_State :: struct {
 	runtime_env:    ^Runtime_Environment,
 	next_index:     int,
 	progress_mutex: sync.Mutex,
+	progress_pacer: ^Console_Pacer,
 	summary:        ^Processing_Summary,
 }
 
@@ -83,15 +84,24 @@ process_discovered_images :: proc(
 	if len(discovery.items) == 0 {
 		print_progress_empty()
 		print_processing_summary(summary, time.since(started_at))
+		pause_after_processing_summary()
 		return
 	}
 
 	worker_config := config
 	worker_runtime_env := runtime_env
-	process_images_parallel(discovery.items[:], &worker_config, &worker_runtime_env, &summary)
+	progress_pacer := console_pacer_init(CONSOLE_PROGRESS_ROW_DELAY)
+	process_images_parallel(
+		discovery.items[:],
+		&worker_config,
+		&worker_runtime_env,
+		&summary,
+		&progress_pacer,
+	)
 
-	elapsed := time.since(started_at)
+	elapsed := elapsed_excluding_ui_delay(started_at, console_pacer_slept(&progress_pacer))
 	print_processing_summary(summary, elapsed)
+	pause_after_processing_summary()
 }
 
 process_images_parallel :: proc(
@@ -99,12 +109,13 @@ process_images_parallel :: proc(
 	config: ^App_Config,
 	runtime_env: ^Runtime_Environment,
 	summary: ^Processing_Summary,
+	progress_pacer: ^Console_Pacer,
 ) {
 	worker_count := min(max(runtime_env.worker_count, 1), len(items))
 	if worker_count <= 1 {
 		for item in items {
 			finalize := process_image_item_to_final(item, config^, runtime_env^)
-			record_finalized_image(summary, item.relative_path, finalize)
+			record_finalized_image(summary, item.relative_path, finalize, progress_pacer)
 			destroy_finalize_output_result(&finalize)
 		}
 		return
@@ -116,10 +127,11 @@ process_images_parallel :: proc(
 	worker_context.allocator = mem.mutex_allocator(&worker_allocator)
 
 	state := Image_Process_Worker_State {
-		items       = items,
-		config      = config,
-		runtime_env = runtime_env,
-		summary     = summary,
+		items          = items,
+		config         = config,
+		runtime_env    = runtime_env,
+		progress_pacer = progress_pacer,
+		summary        = summary,
 	}
 	threads := make([]^thread.Thread, worker_count)
 	defer delete(threads)
@@ -150,10 +162,26 @@ process_image_worker :: proc(worker: ^thread.Thread) {
 			state.runtime_env^,
 		)
 		if sync.mutex_guard(&state.progress_mutex) {
-			record_finalized_image(state.summary, state.items[index].relative_path, result)
+			record_finalized_image(
+				state.summary,
+				state.items[index].relative_path,
+				result,
+				state.progress_pacer,
+			)
 		}
 		destroy_finalize_output_result(&result)
 	}
+}
+
+elapsed_excluding_ui_delay :: proc(
+	started_at: time.Time,
+	ui_delay: time.Duration,
+) -> time.Duration {
+	elapsed := time.since(started_at)
+	if ui_delay >= elapsed {
+		return 0 * time.Millisecond
+	}
+	return elapsed - ui_delay
 }
 
 process_image_item_to_final :: proc(
@@ -174,7 +202,10 @@ record_finalized_image :: proc(
 	summary: ^Processing_Summary,
 	relative_path: string,
 	finalize: Finalize_Output_Result,
+	progress_pacer: ^Console_Pacer,
 ) {
+	pace_console_row(progress_pacer)
+
 	if finalize.err == .None {
 		summary.succeeded += 1
 		summary.original_total += finalize.original_size
