@@ -1,7 +1,6 @@
 package main
 
 @(require) import "core:fmt"
-import "core:log"
 @(require) import "core:mem"
 
 main :: proc() {
@@ -21,25 +20,10 @@ main :: proc() {
 		}
 	}
 
-	logger := log.create_console_logger(.Info, {})
-	logger.procedure = app_console_logger_proc
-	context.logger = logger
-	defer log.destroy_console_logger(logger)
-
 	when ODIN_OS != .Windows {
 		print_ui_error("This build targets Windows 10/11 only.")
 		return
 	}
 
 	run_imgoptz()
-}
-
-app_console_logger_proc :: proc(
-	logger_data: rawptr,
-	level: log.Level,
-	text: string,
-	options: log.Options,
-	location := #caller_location,
-) {
-	log.console_logger_proc(logger_data, level, text, options, location)
 }

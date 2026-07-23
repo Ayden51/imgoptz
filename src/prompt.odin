@@ -132,7 +132,7 @@ process_input_directory :: proc(
 	absolute_path, input_dir_err := accept_input_directory(input_path)
 	switch input_dir_err {
 	case .None:
-		print_input_accepted(absolute_path)
+		print_input_accepted()
 		result := discover_image_work(absolute_path, runtime_env)
 		defer destroy_discovery_result(&result)
 		if result.err != .None {

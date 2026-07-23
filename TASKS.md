@@ -176,6 +176,22 @@ Goal: process folders efficiently without oversubscribing tools.
 - [x] Notice for deterministic output task: discovery order follows OS directory enumeration; verify whether sorting discovered work items by relative path is needed before/while adding parallel reporting.
 - [x] Verify worker counts on low/high CPU machines where practical.
 
+## Phase 7A: TUI Refresh And Logging Split Contract
+
+Goal: simplify the normal console UI and establish that future debug logging must not change console output.
+
+- [x] Remove the right-side box from the ASCII startup banner.
+- [x] Add blank-line padding above the banner.
+- [x] Keep normal console output independent from debug logging.
+- [x] Remove the normal-flow `>_ APP SETTINGS` section.
+- [x] Remove the standalone `>_ DISCOVERY` section.
+- [x] Merge valid path feedback with discovery counts.
+- [x] Replace emoji status glyphs with legacy-console-friendly markers: `√`, `X`, `?`, `-`, and `!`.
+- [x] Rework normal progress output to one success, skip, or failure row per image.
+- [x] Print per-image result rows in the order files finish.
+- [x] Rework summary output to compact `Files:` and `Saved:` rows with elapsed time.
+- [x] Add tests for compact progress rows and summary reduction.
+
 ## Phase 8: Debug Logging
 
 Goal: finish operator diagnostics without changing the normal console UI.
@@ -234,6 +250,6 @@ Goal: run the broad manual and build matrix before release.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/parallel-processing-reporting`.
-- Scope: Phase 7 only.
-- Reason: debug logging, dry-run approval, and target-relative output defaults remain separated for later phases.
+- Current feature branch: `feat/tui-phase-7a`.
+- Scope: Phase 7A only.
+- Reason: Phase 7A only establishes the TUI/logging split contract; debug logging, dry-run approval, and target-relative output defaults remain separated for later phases.

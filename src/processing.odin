@@ -6,6 +6,7 @@ import "core:os"
 import "core:strings"
 import "core:sync"
 import "core:thread"
+import "core:time"
 
 IMAGE_PROCESS_MAGICK_THREAD_LIMIT_SINGLE_WORKER :: "2"
 IMAGE_PROCESS_MAGICK_THREAD_LIMIT_MULTI_WORKER :: "1"
@@ -46,9 +47,17 @@ Image_Process_Worker_State :: struct {
 	items:          []Image_Work_Item,
 	config:         ^App_Config,
 	runtime_env:    ^Runtime_Environment,
-	results:        []Process_Image_Result,
 	next_index:     int,
 	progress_mutex: sync.Mutex,
+	summary:        ^Processing_Summary,
+}
+
+Processing_Summary :: struct {
+	succeeded:       int,
+	skipped:         int,
+	failed:          int,
+	original_total:  i64,
+	optimized_total: i64,
 }
 
 Finalize_Output_Result :: struct {
@@ -68,93 +77,37 @@ process_discovered_images :: proc(
 	runtime_env: Runtime_Environment,
 ) {
 	print_progress_header()
+	started_at := time.now()
+	summary: Processing_Summary
 
 	if len(discovery.items) == 0 {
 		print_progress_empty()
-		print_processing_summary(0, 0, 0)
+		print_processing_summary(summary, time.since(started_at))
 		return
 	}
 
 	worker_config := config
 	worker_runtime_env := runtime_env
-	results := process_images_to_temp_parallel(
-		discovery.items[:],
-		&worker_config,
-		&worker_runtime_env,
-	)
-	defer delete(results)
+	process_images_parallel(discovery.items[:], &worker_config, &worker_runtime_env, &summary)
 
-	succeeded := 0
-	skipped := 0
-	failed := 0
-	for item, index in discovery.items {
-		result := &results[index]
-		if result.err != .None {
-			failed += 1
-			print_progress_error(
-				index + 1,
-				len(discovery.items),
-				item.relative_path,
-				result.err,
-				result.detail,
-			)
-			continue
-		}
-
-		finalize := finalize_optimized_output(item, result.output_path, runtime_env.output_mode)
-		if finalize.err == .None {
-			succeeded += 1
-			print_progress_ok(
-				index + 1,
-				len(discovery.items),
-				item.relative_path,
-				finalize.original_size,
-				finalize.optimized_size,
-				finalize.reduction_percent,
-			)
-		} else if finalize.err == .Optimized_Not_Smaller {
-			skipped += 1
-			print_progress_skip(
-				index + 1,
-				len(discovery.items),
-				item.relative_path,
-				finalize.detail,
-			)
-		} else {
-			failed += 1
-			print_progress_error(
-				index + 1,
-				len(discovery.items),
-				item.relative_path,
-				finalize.err,
-				finalize.detail,
-			)
-		}
-		destroy_finalize_output_result(&finalize)
-	}
-	for index in 0 ..< len(results) {
-		cleanup_process_image_result(&results[index])
-	}
-
-	print_processing_summary(succeeded, skipped, failed)
+	elapsed := time.since(started_at)
+	print_processing_summary(summary, elapsed)
 }
 
-process_images_to_temp_parallel :: proc(
+process_images_parallel :: proc(
 	items: []Image_Work_Item,
 	config: ^App_Config,
 	runtime_env: ^Runtime_Environment,
-) -> []Process_Image_Result {
-	results := make([]Process_Image_Result, len(items))
+	summary: ^Processing_Summary,
+) {
 	worker_count := min(max(runtime_env.worker_count, 1), len(items))
-	print_progress_started(len(items), worker_count)
 	if worker_count <= 1 {
-		for item, index in items {
-			print_progress_active(index + 1, len(items), item.relative_path)
-			result := process_image_to_temp(item, config^, runtime_env^)
-			print_progress_done(index + 1, len(items), item.relative_path, result.err)
-			results[index] = result
+		for item in items {
+			finalize := process_image_item_to_final(item, config^, runtime_env^)
+			record_finalized_image(summary, item.relative_path, finalize)
+			destroy_finalize_output_result(&finalize)
 		}
-		return results
+		return
 	}
 
 	worker_allocator: mem.Mutex_Allocator
@@ -166,7 +119,7 @@ process_images_to_temp_parallel :: proc(
 		items       = items,
 		config      = config,
 		runtime_env = runtime_env,
-		results     = results,
+		summary     = summary,
 	}
 	threads := make([]^thread.Thread, worker_count)
 	defer delete(threads)
@@ -182,7 +135,6 @@ process_images_to_temp_parallel :: proc(
 		thread.join(worker)
 		thread.destroy(worker)
 	}
-	return results
 }
 
 process_image_worker :: proc(worker: ^thread.Thread) {
@@ -192,19 +144,53 @@ process_image_worker :: proc(worker: ^thread.Thread) {
 		if index >= len(state.items) {
 			break
 		}
+		result := process_image_item_to_final(
+			state.items[index],
+			state.config^,
+			state.runtime_env^,
+		)
 		if sync.mutex_guard(&state.progress_mutex) {
-			print_progress_active(index + 1, len(state.items), state.items[index].relative_path)
+			record_finalized_image(state.summary, state.items[index].relative_path, result)
 		}
-		result := process_image_to_temp(state.items[index], state.config^, state.runtime_env^)
-		if sync.mutex_guard(&state.progress_mutex) {
-			print_progress_done(
-				index + 1,
-				len(state.items),
-				state.items[index].relative_path,
-				result.err,
-			)
-		}
-		state.results[index] = result
+		destroy_finalize_output_result(&result)
+	}
+}
+
+process_image_item_to_final :: proc(
+	item: Image_Work_Item,
+	config: App_Config,
+	runtime_env: Runtime_Environment,
+) -> Finalize_Output_Result {
+	result := process_image_to_temp(item, config, runtime_env)
+	defer cleanup_process_image_result(&result)
+
+	if result.err != .None {
+		return Finalize_Output_Result{err = result.err, detail = strings.clone(result.detail)}
+	}
+	return finalize_optimized_output(item, result.output_path, runtime_env.output_mode)
+}
+
+record_finalized_image :: proc(
+	summary: ^Processing_Summary,
+	relative_path: string,
+	finalize: Finalize_Output_Result,
+) {
+	if finalize.err == .None {
+		summary.succeeded += 1
+		summary.original_total += finalize.original_size
+		summary.optimized_total += finalize.optimized_size
+		print_progress_ok(
+			relative_path,
+			finalize.original_size,
+			finalize.optimized_size,
+			finalize.reduction_percent,
+		)
+	} else if finalize.err == .Optimized_Not_Smaller {
+		summary.skipped += 1
+		print_progress_skip(relative_path)
+	} else {
+		summary.failed += 1
+		print_progress_error(relative_path, finalize.err)
 	}
 }
 

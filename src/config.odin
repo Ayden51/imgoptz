@@ -596,13 +596,3 @@ print_config_warnings :: proc(result: Config_Load_Result) {
 		print_ui_warning(warning)
 	}
 }
-
-config_output_mode_summary :: proc(mode: Config_Output_Mode) -> string {
-	switch mode {
-	case .In_Place:
-		return "in-place"
-	case .Dir:
-		return "dir"
-	}
-	return "in-place"
-}
