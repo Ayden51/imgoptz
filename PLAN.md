@@ -616,88 +616,57 @@ Normal console output should read like a structured console UI, not a raw log st
 
 Keep the stdin prompt loop and console-subsystem double-click flow. Do not replace it with a GUI, fullscreen TUI, command-line batch mode, watcher, or multi-directory interface.
 
-Use this startup banner:
+The normal console UI is independent from debug logging and must stay the same whether `debug_log` is enabled or disabled in a later phase.
+
+Use this startup banner, preceded by one blank lines:
 
 ```text
-  ██╗███╗   ███╗ ██████╗  ██████╗ ██████╗ ████████╗███████╗   ┌──────────────────────────────┐
-  ██║████╗ ████║██╔════╝ ██╔═══██╗██╔══██╗╚══██╔══╝╚══███╔╝   │ >_ Imgoptz                   │
-  ██║██╔████╔██║██║  ███╗██║   ██║██████╔╝   ██║     ███╔╝    │                              │
-  ██║██║╚██╔╝██║██║   ██║██║   ██║██╔═══╝    ██║    ███╔╝     │ Folder image optimizer       │
-  ██║██║ ╚═╝ ██║╚██████╔╝╚██████╔╝██║        ██║   ███████╗   │ JPEG + PNG optimizer         │
-  ╚═╝╚═╝     ╚═╝ ╚═════╝  ╚═════╝ ╚═╝        ╚═╝   ╚══════╝   └──────────────────────────────┘
+  ██╗███╗   ███╗ ██████╗  ██████╗ ██████╗ ████████╗███████╗
+  ██║████╗ ████║██╔════╝ ██╔═══██╗██╔══██╗╚══██╔══╝╚══███╔╝
+  ██║██╔████╔██║██║  ███╗██║   ██║██████╔╝   ██║     ███╔╝
+  ██║██║╚██╔╝██║██║   ██║██║   ██║██╔═══╝    ██║    ███╔╝
+  ██║██║ ╚═╝ ██║╚██████╔╝╚██████╔╝██║        ██║   ███████╗
+  ╚═╝╚═╝     ╚═╝ ╚═════╝  ╚═════╝ ╚═╝        ╚═╝   ╚══════╝
 ```
 
 Use section headers for major UI areas:
 
 ```text
->_ APP SETTINGS
 >_ INPUT
->_ DISCOVERY
->_ PROGRESS
 >_ SUMMARY
-```
-
-Use simple boxed blocks for summary-style information:
-
-```text
->_ APP SETTINGS
-┌
-│ App root   "C:\Users\huydc\CongHuy\Programming\tools\imgoptz\dist"
-│ Config     ✅ imgoptz.json loaded
-│ GPU        ✅ ImageMagick OpenCL
-│ Workers    4
-│ Output     in-place
-└
 ```
 
 Input block example:
 
 ```text
 >_ INPUT
-
 Paste one image directory path, or type 'exit':
 C:\Users\tools\imgoptz\dist\demo\in-place\png
 
-✅ Accepted: C:\Users\tools\imgoptz\dist\demo\in-place\png
+√ Valid path
+? Found 5 images (0 JPG, 5 PNG) - non-recursive
 ```
 
 Do not print an artificial prompt marker before the pasted input unless the app is responsible for rendering that text. Windows console input echo is enough.
 
-Discovery block example:
-
-```text
->_ DISCOVERY
-┌
-│ Found      5 images
-│ JPEG       0
-│ PNG        5
-│ Recursive  false
-└
-```
-
 Progress block example:
 
 ```text
->_ PROGRESS
-
-[1/5] ✅ OK     Demo 1.png  1 MB -> 220 KB (-78%)
-[2/5] ✅ OK     Demo 2.png  840 KB -> 410 KB (-51%)
-[3/5] ❌ ERROR  Demo 3.png
-      ❌ ERROR  pngquant compression failed
-      ℹ️ INFO   Kept original unchanged; no optimized output was written.
-[4/5] ✅ OK     Demo 4.png  2.4 MB -> 1.1 MB (-54%)
-[5/5] ❌ ERROR  Demo 5.png
-      ❌ ERROR  pngquant compression failed
-      ℹ️ INFO   Kept original unchanged; no optimized output was written.
+√ Demo 1.png  1 MB -> 220 KB (-78%)
+√ Demo 2.png  840 KB -> 410 KB (-51%)
+X Demo 3.png  pngquant compression failed
+√ Demo 4.png  2.4 MB -> 1.1 MB (-54%)
+X Demo 5.png  pngquant compression failed
 ```
 
-Use these status labels in progress rows and indented detail rows:
+Use these status markers in user-facing rows:
 
 ```text
-✅ OK
-⚠️ SKIP
-❌ ERROR
-ℹ️ INFO
+√ success
+X error
+? info
+- skip
+! warning
 ```
 
 Use concise user-facing error copy rather than raw internal enum names where practical:
@@ -711,20 +680,14 @@ Optimized output was not smaller
 Kept original unchanged; no optimized output was written.
 ```
 
-Every error detail should be indented under the file row it belongs to. Per-file success output should include the original size, optimized size, and percentage size reduction in the success row. Do not print the final or slugified output path as an indented progress detail row.
-
-During parallel processing, print concise live `ℹ️ INFO` activity rows as work starts and live completion rows as each worker finishes temp optimization, so the console visibly updates while long-running optimization is still in progress. Keep final `OK`, `SKIP`, and `ERROR` result rows readable and preserve the established success size output.
+Per-file success output should include the original size, optimized size, and percentage size reduction in the success row. Do not print the final or slugified output path as an indented progress detail row. Normal progress output should not print separate start, active, and done rows.
 
 Summary block example:
 
 ```text
 >_ SUMMARY
-┌
-│ Succeeded  3
-│ Skipped    0
-│ Failed     2
-│ Result     Completed with failures
-└
+Files:  3 Succeeded - 0 Skipped - 2 Failed
+Saved:  4.24 MB -> 1.73 MB (-59.2%) - Completed in 2.4s
 ```
 
 Do not emit a separate warning block when the summary already communicates the final warning or failure state.
@@ -737,7 +700,7 @@ If `debug_log = true`, append detailed logs to `debug_log_file`.
 
 Relative `debug_log_file` resolves against `<app-root>/`.
 
-Implement debug file logging with Odin `core:log` facilities so existing user-facing logging calls can remain mostly untouched. Normal console output must keep the existing structured UI style and must not gain log-level or timestamp prefixes.
+Implement debug file logging with a separate logging flow from console UI output. Normal console output must keep the same structured UI style whether debug logging is enabled or disabled, and must not gain log-level or timestamp prefixes.
 
 Debug log file entries must include log level and date/time. The file should be easy to read: organize detailed logs with block structure matching the existing app settings, input, discovery, progress, and summary sections where practical. Add extra debug-only entries sparingly at high-value decision points such as config fallback, output-root resolution, tool command construction, child process failures, temp cleanup, size comparison, and final write decisions.
 
