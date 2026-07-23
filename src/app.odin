@@ -23,7 +23,6 @@ run_imgoptz :: proc() {
 	runtime_env := load_runtime_environment(app_root.path, config_result.config)
 	defer destroy_runtime_environment(&runtime_env)
 	print_runtime_warnings(runtime_env)
-	print_app_settings(app_root.path, config_result, runtime_env)
 	if !runtime_env.ok {
 		print_runtime_errors(runtime_env)
 		return

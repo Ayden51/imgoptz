@@ -1,8 +1,8 @@
 package main
 
 import "core:fmt"
-import "core:log"
 import win "core:sys/windows"
+import "core:time"
 
 foreign import shlwapi "system:shlwapi.lib"
 
@@ -11,16 +11,63 @@ foreign shlwapi {
 	StrFormatByteSizeW :: proc(file_size: i64, buffer: win.PWSTR, buffer_size: win.UINT) -> win.PWSTR ---
 }
 
+UI_OK :: "√"
+UI_ERROR :: "X"
+UI_INFO :: "?"
+UI_SKIP :: "-"
+UI_WARN :: "!"
+
+CONSOLE_PROGRESS_ROW_DELAY :: 90 * time.Millisecond
+CONSOLE_SUMMARY_READ_DELAY :: 1500 * time.Millisecond
+
+Console_Pacer :: struct {
+	delay:           time.Duration,
+	has_printed:     bool,
+	last_printed_at: time.Time,
+	slept:           time.Duration,
+}
+
+console_pacer_init :: proc(delay: time.Duration) -> Console_Pacer {
+	return Console_Pacer{delay = delay}
+}
+
+pace_console_row :: proc(pacer: ^Console_Pacer) {
+	if pacer.delay <= 0 {
+		return
+	}
+
+	if pacer.has_printed {
+		elapsed := time.since(pacer.last_printed_at)
+		if elapsed < pacer.delay {
+			sleep_for := pacer.delay - elapsed
+			slept_at := time.now()
+			time.sleep(sleep_for)
+			pacer.slept += time.since(slept_at)
+		}
+	}
+
+	pacer.has_printed = true
+	pacer.last_printed_at = time.now()
+}
+
+console_pacer_slept :: proc(pacer: ^Console_Pacer) -> time.Duration {
+	return pacer.slept
+}
+
+pause_after_processing_summary :: proc() {
+	time.sleep(CONSOLE_SUMMARY_READ_DELAY)
+}
+
 print_ui_line :: proc(line: string) {
-	log.info(line)
+	fmt.println(line)
 }
 
 print_ui_linef :: proc($format: string, args: ..any) {
-	log.infof(format, ..args)
+	fmt.printfln(format, ..args)
 }
 
 print_ui_blank :: proc() {
-	log.info("")
+	fmt.println()
 }
 
 print_ui_section :: proc(title: string) {
@@ -29,159 +76,88 @@ print_ui_section :: proc(title: string) {
 }
 
 print_ui_warning :: proc(message: string) {
-	print_ui_linef("⚠️  %s", message)
+	print_ui_linef("%s %s", UI_WARN, message)
 }
 
 print_ui_error :: proc(message: string) {
-	print_ui_linef("❌ ERROR  %s", message)
+	print_ui_linef("%s %s", UI_ERROR, message)
 }
 
 print_ui_errorf :: proc($format: string, args: ..any) {
-	log.infof("❌ ERROR  " + format, ..args)
+	fmt.printfln(UI_ERROR + " " + format, ..args)
 }
 
 print_startup_banner :: proc() {
+	print_ui_blank()
 	print_ui_line(
-		"  ██╗███╗   ███╗ ██████╗  ██████╗ ██████╗ ████████╗███████╗   ┌──────────────────────────────┐",
+		"  ██╗███╗   ███╗ ██████╗  ██████╗ ██████╗ ████████╗███████╗ ",
 	)
 	print_ui_line(
-		"  ██║████╗ ████║██╔════╝ ██╔═══██╗██╔══██╗╚══██╔══╝╚══███╔╝   │ >_ Imgoptz                   │",
+		"  ██║████╗ ████║██╔════╝ ██╔═══██╗██╔══██╗╚══██╔══╝╚══███╔╝ ",
 	)
 	print_ui_line(
-		"  ██║██╔████╔██║██║  ███╗██║   ██║██████╔╝   ██║     ███╔╝    │                              │",
+		"  ██║██╔████╔██║██║  ███╗██║   ██║██████╔╝   ██║     ███╔╝  ",
 	)
 	print_ui_line(
-		"  ██║██║╚██╔╝██║██║   ██║██║   ██║██╔═══╝    ██║    ███╔╝     │ Folder image optimizer       │",
+		"  ██║██║╚██╔╝██║██║   ██║██║   ██║██╔═══╝    ██║    ███╔╝   ",
 	)
 	print_ui_line(
-		"  ██║██║ ╚═╝ ██║╚██████╔╝╚██████╔╝██║        ██║   ███████╗   │ JPEG + PNG optimizer         │",
+		"  ██║██║ ╚═╝ ██║╚██████╔╝╚██████╔╝██║        ██║   ███████╗ ",
 	)
 	print_ui_line(
-		"  ╚═╝╚═╝     ╚═╝ ╚═════╝  ╚═════╝ ╚═╝        ╚═╝   ╚══════╝   └──────────────────────────────┘",
+		"  ╚═╝╚═╝     ╚═╝ ╚═════╝  ╚═════╝ ╚═╝        ╚═╝   ╚══════╝ ",
 	)
-}
-
-print_app_settings :: proc(
-	app_root_path: string,
-	config_result: Config_Load_Result,
-	runtime_env: Runtime_Environment,
-) {
-	print_ui_section("APP SETTINGS")
-	print_ui_line("┌")
-	print_ui_linef("│ App root   \"%s\"", app_root_path)
-	print_ui_linef("│ Config     %s", config_status_ui_summary(config_result.status))
-	print_ui_linef("│ GPU        %s", runtime_gpu_status_ui_summary(runtime_env.gpu_status))
-	print_ui_linef("│ Workers    %d", runtime_env.worker_count)
-	if runtime_env.output_mode == .Dir {
-		print_ui_linef("│ Output     dir -> \"%s\"", runtime_env.output_root)
-	} else {
-		print_ui_linef("│ Output     %s", config_output_mode_summary(runtime_env.output_mode))
-	}
-	print_ui_line("└")
 }
 
 print_input_header :: proc() {
 	print_ui_section("INPUT")
-	print_ui_blank()
 	print_ui_line("Paste one image directory path, or type 'exit':")
 }
 
-print_input_accepted :: proc(path: string) {
+print_input_accepted :: proc() {
 	print_ui_blank()
-	print_ui_linef("✅ Accepted: %s", path)
+	print_ui_linef("%s Valid path", UI_OK)
 }
 
 print_discovery_summary :: proc(result: Discovery_Result, recursive: bool) {
-	print_ui_section("DISCOVERY")
-	print_ui_line("┌")
-	print_ui_linef("│ Found      %d images", len(result.items))
-	print_ui_linef("│ JPEG       %d", result.jpeg_count)
-	print_ui_linef("│ PNG        %d", result.png_count)
-	print_ui_linef("│ Recursive  %v", recursive)
-	print_ui_line("└")
+	mode := "non-recursive"
+	if recursive {
+		mode = "recursive"
+	}
+	print_ui_linef(
+		"%s Found %d images (%d JPG, %d PNG) - %s",
+		UI_INFO,
+		len(result.items),
+		result.jpeg_count,
+		result.png_count,
+		mode,
+	)
 }
 
 print_discovery_error :: proc(result: Discovery_Result) {
-	print_ui_section("DISCOVERY")
 	print_ui_errorf("%s %s", discovery_error_summary(result.err), result.err_path)
 }
 
 print_progress_header :: proc() {
-	print_ui_section("PROGRESS")
 	print_ui_blank()
 }
 
-print_progress_started :: proc(total, workers: int) {
-	print_ui_line(progress_started_line(total, workers))
-}
-
-progress_started_line :: proc(total, workers: int) -> string {
-	image_label := "images"
-	if total == 1 {
-		image_label = "image"
-	}
-	worker_label := "workers"
-	if workers == 1 {
-		worker_label = "worker"
-	}
-	return fmt.tprintf(
-		"ℹ️ INFO   Optimizing %d %s with %d %s...",
-		total,
-		image_label,
-		workers,
-		worker_label,
-	)
-}
-
-print_progress_active :: proc(index, total: int, relative_path: string) {
-	print_ui_line(progress_active_line(index, total, relative_path))
-}
-
-progress_active_line :: proc(index, total: int, relative_path: string) -> string {
-	return fmt.tprintf("[%d/%d] ℹ️ INFO   Optimizing %s", index, total, relative_path)
-}
-
-print_progress_done :: proc(index, total: int, relative_path: string, err: Image_Process_Error) {
-	print_ui_line(progress_done_line(index, total, relative_path, err))
-}
-
-progress_done_line :: proc(
-	index, total: int,
-	relative_path: string,
-	err: Image_Process_Error,
-) -> string {
-	if err == .None {
-		return fmt.tprintf("[%d/%d] ✅ DONE   %s optimized", index, total, relative_path)
-	}
-	return fmt.tprintf("[%d/%d] ❌ ERROR  %s optimization failed", index, total, relative_path)
-}
-
 print_progress_ok :: proc(
-	index, total: int,
 	relative_path: string,
 	original_size, optimized_size, reduction_percent: i64,
 ) {
 	print_ui_line(
-		progress_ok_line(
-			index,
-			total,
-			relative_path,
-			original_size,
-			optimized_size,
-			reduction_percent,
-		),
+		progress_ok_line(relative_path, original_size, optimized_size, reduction_percent),
 	)
 }
 
 progress_ok_line :: proc(
-	index, total: int,
 	relative_path: string,
 	original_size, optimized_size, reduction_percent: i64,
 ) -> string {
 	return fmt.tprintf(
-		"[%d/%d] ✅ OK     %s  %s -> %s (%d%%)",
-		index,
-		total,
+		"%s %s  %s -> %s (%d%%)",
+		UI_OK,
 		relative_path,
 		format_progress_size(original_size),
 		format_progress_size(optimized_size),
@@ -214,77 +190,47 @@ progress_reduction_percent :: proc(original_size, optimized_size: i64) -> i64 {
 	return -((saved_size * 100) / original_size)
 }
 
-print_progress_error :: proc(
-	index, total: int,
-	relative_path: string,
-	err: Image_Process_Error,
-	detail: string,
-) {
-	print_ui_linef("[%d/%d] ❌ ERROR  %s", index, total, relative_path)
-	print_ui_linef("      ❌ ERROR  %s", image_process_error_summary(err))
-	if len(detail) > 0 {
-		print_ui_linef("      ❌ ERROR  %s", detail)
-	}
-	print_ui_line("      ℹ️ INFO   Kept original unchanged; no optimized output was written.")
+print_progress_error :: proc(relative_path: string, err: Image_Process_Error) {
+	print_ui_line(progress_error_line(relative_path, err))
 }
 
-print_progress_skip :: proc(index, total: int, relative_path, detail: string) {
-	print_ui_linef("[%d/%d] ⚠️ SKIP   %s", index, total, relative_path)
-	print_ui_line("      ⚠️ SKIP   Optimized output was not smaller")
-	if len(detail) > 0 {
-		print_ui_linef("      ℹ️ INFO   %s", detail)
-	}
-	print_ui_line("      ℹ️ INFO   Kept original unchanged; no optimized output was written.")
+progress_error_line :: proc(relative_path: string, err: Image_Process_Error) -> string {
+	return fmt.tprintf("%s %s  %s", UI_ERROR, relative_path, image_process_error_summary(err))
+}
+
+print_progress_skip :: proc(relative_path: string) {
+	print_ui_line(progress_skip_line(relative_path))
+}
+
+progress_skip_line :: proc(relative_path: string) -> string {
+	return fmt.tprintf("%s %s  Optimized output was not smaller", UI_SKIP, relative_path)
 }
 
 print_progress_empty :: proc() {
-	print_ui_line("ℹ️ INFO   No supported images to process.")
+	print_ui_linef("%s No supported images to process.", UI_INFO)
 }
 
-print_processing_summary :: proc(succeeded, skipped, failed: int) {
+print_processing_summary :: proc(summary: Processing_Summary, elapsed: time.Duration) {
 	print_ui_section("SUMMARY")
-	print_ui_line("┌")
-	print_ui_linef("│ Succeeded  %d", succeeded)
-	print_ui_linef("│ Skipped    %d", skipped)
-	print_ui_linef("│ Failed     %d", failed)
-	print_ui_linef("│ Result     %s", processing_result_summary(succeeded, skipped, failed))
-	print_ui_line("└")
+	print_ui_linef(
+		"Files:  %d Succeeded - %d Skipped - %d Failed",
+		summary.succeeded,
+		summary.skipped,
+		summary.failed,
+	)
+	print_ui_linef(
+		"Saved:  %s -> %s (%.1f%%) - Completed in %.1fs",
+		format_progress_size(summary.original_total),
+		format_progress_size(summary.optimized_total),
+		summary_reduction_percent(summary.original_total, summary.optimized_total),
+		time.duration_seconds(elapsed),
+	)
 }
 
-processing_result_summary :: proc(succeeded, skipped, failed: int) -> string {
-	if failed > 0 {
-		return "Completed with failures"
+summary_reduction_percent :: proc(original_size, optimized_size: i64) -> f64 {
+	if original_size <= 0 || optimized_size >= original_size {
+		return 0
 	}
-	if succeeded == 0 && skipped == 0 {
-		return "No images found"
-	}
-	return "Completed"
-}
-
-config_status_ui_summary :: proc(status: Config_Load_Status) -> string {
-	switch status {
-	case .Missing:
-		return "✅ built-in defaults"
-	case .Loaded:
-		return "✅ imgoptz.json loaded"
-	case .Invalid_JSON:
-		return "⚠️ defaults (invalid imgoptz.json)"
-	case .Read_Failed:
-		return "⚠️ defaults (failed to read imgoptz.json)"
-	case .Invalid_Root:
-		return "⚠️ defaults (invalid imgoptz.json root)"
-	}
-	return "✅ built-in defaults"
-}
-
-runtime_gpu_status_ui_summary :: proc(status: Runtime_GPU_Status) -> string {
-	switch status {
-	case .Disabled_By_Config:
-		return "off by config"
-	case .Enabled:
-		return "✅ ImageMagick OpenCL"
-	case .Probe_Failed:
-		return "⚠️ CPU fallback (OpenCL probe failed)"
-	}
-	return "off"
+	saved_size := original_size - optimized_size
+	return -(f64(saved_size) * 100.0 / f64(original_size))
 }
