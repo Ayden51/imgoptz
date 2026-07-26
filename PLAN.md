@@ -707,7 +707,9 @@ Relative `debug_log_file` resolves against `<app-root>/`.
 
 Implement debug file logging with a separate logging flow from console UI output. Normal console output must keep the same structured UI style whether debug logging is enabled or disabled, and must not gain log-level or timestamp prefixes.
 
-Debug log file entries must include log level and date/time. The file should be easy to read: organize detailed logs with block structure matching the existing app settings, input, discovery, progress, and summary sections where practical. Add extra debug-only entries sparingly at high-value decision points such as config fallback, output-root resolution, tool command construction, child process failures, temp cleanup, size comparison, and final write decisions.
+Debug mode must use Odin `core:log` file logging and must not route normal TUI console rows through the debug logger. The TUI console logging and debug file logging are separate outputs.
+
+Debug log file entries must include log level and date/time. The file should be easy to read: organize detailed logs with block structure matching the existing app settings, input, discovery, progress, and summary sections where practical. Log app state transitions verbosely, including config loading, runtime validation, input parsing, discovery traversal, worker processing, temp cleanup, size comparison, final write decisions, and summary totals. For each external child process, log the process label, argument array, relevant environment overrides, exit state, exit code, stdout, stderr, and execution errors when present.
 
 Do not require logging for normal operation.
 
