@@ -196,15 +196,15 @@ Goal: simplify the normal console UI and establish that future debug logging mus
 
 Goal: finish operator diagnostics without changing the normal console UI.
 
-- [ ] Add optional debug logging controlled by config.
-- [ ] Resolve relative `debug_log_file` against app root.
-- [ ] Use Odin `core:log` file logging so existing user-facing logging calls can remain largely untouched.
-- [ ] Keep console output in the existing structured UI format without log-level prefixes.
-- [ ] Write log level and date/time on every debug log file entry.
-- [ ] Append detailed child process and decision logs when enabled.
-- [ ] Organize debug file output with readable block structure matching the existing app/input/discovery/progress/summary sections where practical.
-- [ ] Place additional debug-only entries sparsely at high-value decision points instead of logging noisy step-by-step internals.
-- [ ] Keep normal operation console-only.
+- [x] Add optional debug logging controlled by config.
+- [x] Resolve relative `debug_log_file` against app root.
+- [x] Use Odin `core:log` file logging so existing user-facing logging calls can remain largely untouched.
+- [x] Keep console output in the existing structured UI format without log-level prefixes.
+- [x] Write log level and date/time on every debug log file entry.
+- [x] Append detailed child process and decision logs when enabled.
+- [x] Organize debug file output with readable block structure matching the existing app/input/discovery/progress/summary sections where practical.
+- [x] Log app state transitions, parsed inputs, child process argument arrays, relevant environment overrides, exit state, stdout, and stderr when debug logging is enabled.
+- [x] Keep normal operation console-only.
 
 ## Phase 9: Dry-Run Approval Mode
 
@@ -250,6 +250,6 @@ Goal: run the broad manual and build matrix before release.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/tui-phase-7a`.
-- Scope: Phase 7A only.
-- Reason: Phase 7A only establishes the TUI/logging split contract; debug logging, dry-run approval, and target-relative output defaults remain separated for later phases.
+- Current feature branch: `feat/debug-logging`.
+- Scope: Phase 8 only.
+- Reason: Phase 8 adds optional debug file logging while preserving the existing TUI console output; dry-run approval and target-relative output defaults remain separated for later phases.

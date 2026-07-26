@@ -34,6 +34,14 @@ discover_image_work :: proc(
 	input_root: string,
 	runtime_env: Runtime_Environment,
 ) -> Discovery_Result {
+	debug_log_section("DISCOVERY")
+	debug_log_infof(
+		"start: input_root=\"%s\" recursive=%v output_mode=%s output_root=\"%s\"",
+		input_root,
+		runtime_env.recursive,
+		debug_log_output_mode(runtime_env.output_mode),
+		runtime_env.output_root,
+	)
 	result: Discovery_Result
 	discover_directory(
 		&result,
@@ -44,6 +52,13 @@ discover_image_work :: proc(
 		runtime_env.output_root,
 	)
 	sort_discovered_work_items(&result)
+	debug_log_infof(
+		"finish: total=%d jpeg=%d png=%d err=%v",
+		len(result.items),
+		result.jpeg_count,
+		result.png_count,
+		result.err,
+	)
 	return result
 }
 
@@ -107,8 +122,10 @@ discover_directory :: proc(
 	output_mode: Config_Output_Mode,
 	output_root: string,
 ) {
+	debug_log_debugf("read directory: \"%s\"", current_dir)
 	entries, entries_err := os.read_directory_by_path(current_dir, 0, context.allocator)
 	if entries_err != nil {
+		debug_log_errorf("read directory failed: path=\"%s\" err=%v", current_dir, entries_err)
 		set_discovery_error(result, .Read_Failed, current_dir)
 		return
 	}
@@ -133,6 +150,7 @@ discover_directory :: proc(
 		#partial switch entry.type {
 		case .Directory:
 			if recursive {
+				debug_log_debugf("descend directory: \"%s\"", entry_path)
 				discover_directory(
 					result,
 					input_root,
@@ -143,6 +161,7 @@ discover_directory :: proc(
 				)
 			}
 		case .Regular:
+			debug_log_debugf("inspect file: \"%s\"", entry_path)
 			add_image_work_item(
 				result,
 				input_root,
@@ -165,11 +184,13 @@ add_image_work_item :: proc(
 ) {
 	kind, ok := image_file_kind(source_path)
 	if !ok {
+		debug_log_debugf("ignore unsupported file: \"%s\"", source_path)
 		return
 	}
 
 	relative_path, relative_ok := image_relative_path(input_root, source_path, recursive)
 	if !relative_ok {
+		debug_log_errorf("relative path planning failed: \"%s\"", source_path)
 		set_discovery_error(result, .Relative_Path_Failed, source_path)
 		return
 	}
@@ -182,9 +203,18 @@ add_image_work_item :: proc(
 	)
 	if !destination_ok {
 		delete(relative_path)
+		debug_log_errorf("destination path planning failed: \"%s\"", source_path)
 		set_discovery_error(result, .Destination_Path_Failed, source_path)
 		return
 	}
+
+	debug_log_debugf(
+		"add work item: source=\"%s\" relative=\"%s\" destination=\"%s\" kind=%v",
+		source_path,
+		relative_path,
+		destination_path,
+		kind,
+	)
 
 	append(
 		&result.items,

@@ -16,12 +16,18 @@ run_imgoptz :: proc() {
 
 	config_result := load_app_config()
 	defer destroy_config_load_result(&config_result)
+	debug_log_result := init_debug_logging(app_root.path, config_result.config)
+	defer destroy_debug_log_init_result(&debug_log_result)
+	defer destroy_debug_logging()
+	debug_log_infof("app root: \"%s\"", app_root.path)
+	debug_log_config_result(config_result)
 
 	print_startup_banner()
 	print_config_warnings(config_result)
 
 	runtime_env := load_runtime_environment(app_root.path, config_result.config)
 	defer destroy_runtime_environment(&runtime_env)
+	debug_log_runtime_environment(runtime_env)
 	print_runtime_warnings(runtime_env)
 	if !runtime_env.ok {
 		print_runtime_errors(runtime_env)
