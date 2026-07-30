@@ -207,6 +207,20 @@ Goal: finish operator diagnostics without changing the normal console UI.
 - [x] Log app state transitions, parsed inputs, child process argument arrays, relevant environment overrides, exit state, stdout, and stderr when debug logging is enabled.
 - [x] Keep normal operation console-only.
 
+## Phase 8A: JPEG Unicode Temp Workspace
+
+Goal: keep JPEG optimization working for Unicode input paths even when MozJPEG cannot open non-ASCII Windows paths.
+
+- [ ] Create one per-run temp workspace for JPEG-only processing artifacts.
+- [ ] Use generated ASCII filenames in the workspace for MozJPEG-visible artifacts, including `source.icc`, copied `sRGB2014.icc`, and optimized JPEG temp outputs.
+- [ ] Copy the bundled `profiles\sRGB2014.icc` into the JPEG temp workspace before passing it to MozJPEG.
+- [ ] Extract retained source JPEG ICC profiles into the JPEG temp workspace instead of beside the source image.
+- [ ] Change the JPEG resize/compress handoff to `ppm:-`, piping ImageMagick stdout directly into MozJPEG stdin instead of writing a resized PPM temp file.
+- [ ] Avoid failing the whole JPEG pipeline solely because MozJPEG cannot open a temp ICC path; log the ICC failure, omit `-icc`, and continue compression without the embedded final ICC profile.
+- [ ] Stage/copy accepted optimized JPEGs back beside the original before final replacement so `in-place` replacement keeps the existing preserve-original safety behavior.
+- [ ] Keep PNG processing temp behavior unchanged in this phase.
+- [ ] Verify JPEG Unicode source paths, retained ICC paths, sRGB conversion paths, ICC omission fallback, temp cleanup, and final in-place replacement.
+
 ## Phase 9: Dry-Run Approval Mode
 
 Goal: make optimization preview-first and require explicit approval before final writes by default.
@@ -245,12 +259,12 @@ Goal: make default `dir` output non-destructive and relative to the user's accep
 
 Goal: run the broad manual and build matrix before release.
 
-- [ ] Run full manual matrix from `PLAN.md` implementation phases 23-35.
+- [ ] Run full manual matrix from `PLAN.md` implementation phases 24-36.
 - [ ] Re-run `./scripts/build.ps1` with warnings as errors.
 - [ ] Document any remaining operational constraints.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/debug-logging`.
-- Scope: Phase 8 only.
-- Reason: Phase 8 adds optional debug file logging while preserving the existing TUI console output; dry-run approval and target-relative output defaults remain separated for later phases.
+- Current feature branch: `fix/jpeg-unicode-temp-plan`.
+- Scope: Phase 8A planning only.
+- Reason: Phase 8A documents the JPEG Unicode-path hardening plan before implementation; dry-run approval and target-relative output defaults remain separated for later phases.
