@@ -194,7 +194,7 @@ test_corrupt_png_failure_cleans_intermediate_temps :: proc(t: ^testing.T) {
 		kind          = .Png,
 	}
 	result := process_image_to_temp(item, config, runtime_env)
-	defer destroy_process_image_result(&result)
+	defer cleanup_process_image_result(&result)
 
 	testing.expect(t, result.err != .None)
 	testing.expect(t, !processing_temp_artifacts_exist(source_path))
