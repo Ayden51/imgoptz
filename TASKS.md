@@ -211,15 +211,15 @@ Goal: finish operator diagnostics without changing the normal console UI.
 
 Goal: keep JPEG optimization working for Unicode input paths even when MozJPEG cannot open non-ASCII Windows paths.
 
-- [ ] Create one per-run temp workspace for JPEG-only processing artifacts.
-- [ ] Use generated ASCII filenames in the workspace for MozJPEG-visible artifacts, including `source.icc`, copied `sRGB2014.icc`, and optimized JPEG temp outputs.
-- [ ] Copy the bundled `profiles\sRGB2014.icc` into the JPEG temp workspace before passing it to MozJPEG.
-- [ ] Extract retained source JPEG ICC profiles into the JPEG temp workspace instead of beside the source image.
-- [ ] Change the JPEG resize/compress handoff to `ppm:-`, piping ImageMagick stdout directly into MozJPEG stdin instead of writing a resized PPM temp file.
-- [ ] Avoid failing the whole JPEG pipeline solely because MozJPEG cannot open a temp ICC path; log the ICC failure, omit `-icc`, and continue compression without the embedded final ICC profile.
-- [ ] Stage/copy accepted optimized JPEGs back beside the original before final replacement so `in-place` replacement keeps the existing preserve-original safety behavior.
-- [ ] Keep PNG processing temp behavior unchanged in this phase.
-- [ ] Verify JPEG Unicode source paths, retained ICC paths, sRGB conversion paths, ICC omission fallback, temp cleanup, and final in-place replacement.
+- [x] Create one per-run temp workspace for JPEG-only processing artifacts.
+- [x] Use generated ASCII filenames in the workspace for MozJPEG-visible artifacts, including `source.icc`, copied `sRGB2014.icc`, and optimized JPEG temp outputs.
+- [x] Copy the bundled `profiles\sRGB2014.icc` into the JPEG temp workspace before passing it to MozJPEG.
+- [x] Extract retained source JPEG ICC profiles into the JPEG temp workspace instead of beside the source image.
+- [x] Change the JPEG resize/compress handoff to `ppm:-`, piping ImageMagick stdout directly into MozJPEG stdin instead of writing a resized PPM temp file.
+- [x] Avoid failing the whole JPEG pipeline solely because MozJPEG cannot open a temp ICC path; log the ICC failure, omit `-icc`, and continue compression without the embedded final ICC profile.
+- [x] Stage/copy accepted optimized JPEGs back beside the original before final replacement so `in-place` replacement keeps the existing preserve-original safety behavior.
+- [x] Keep PNG processing temp behavior unchanged in this phase.
+- [x] Verify JPEG Unicode source paths, retained ICC paths, sRGB conversion paths, ICC omission fallback, temp cleanup, and final in-place replacement.
 
 ## Phase 9: Dry-Run Approval Mode
 
@@ -265,6 +265,6 @@ Goal: run the broad manual and build matrix before release.
 
 ## Current Feature Selection
 
-- Current feature branch: `fix/jpeg-unicode-temp-plan`.
-- Scope: Phase 8A planning only.
-- Reason: Phase 8A documents the JPEG Unicode-path hardening plan before implementation; dry-run approval and target-relative output defaults remain separated for later phases.
+- Current feature branch: `fix/jpeg-unicode-temp-workspace`.
+- Scope: Phase 8A JPEG Unicode temp workspace implementation only.
+- Reason: Phase 8A hardens JPEG Unicode-path handling before dry-run approval and target-relative output defaults remain separated for later phases.
