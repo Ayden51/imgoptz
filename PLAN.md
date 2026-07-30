@@ -449,7 +449,15 @@ tools\imagemagick\magick.exe input.jpg -auto-orient -filter Lanczos -resize 1920
 tools\mozjpeg\mozjpeg.exe -quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim -icc profiles\sRGB2014.icc -outfile temp.jpg
 ```
 
-Implementation should pipe ImageMagick stdout into MozJPEG stdin when practical. If the process API makes piping impractical, write a temporary resized PPM and delete it on all success, failure, and skip-larger paths.
+Phase 8A JPEG Unicode-path hardening requirements:
+
+Implementation should pipe ImageMagick stdout into MozJPEG stdin when practical. Avoid writing JPEG pixel intermediates to source-derived file paths, because MozJPEG's command-line tool may not open non-ASCII Windows paths reliably.
+
+JPEG processing should create one per-run temp workspace for JPEG-only artifacts. Use generated ASCII filenames inside that workspace for MozJPEG-visible files such as `source.icc`, `sRGB2014.icc`, and `optimized.jpg`. Copy the bundled `profiles\sRGB2014.icc` into that workspace before passing it to MozJPEG, and extract retained source ICC profiles into that workspace instead of beside the source image.
+
+The JPEG resize/compress handoff must use `ppm:-`: ImageMagick writes resized/oriented PPM bytes to stdout, and MozJPEG reads those bytes from stdin. MozJPEG should not receive a PPM input filename. MozJPEG may write its JPEG output to an ASCII temp workspace file or to stdout captured by the app; in either case, the final output rules still operate on a temp `.jpg` first.
+
+If the JPEG temp workspace path itself contains non-ASCII characters and MozJPEG cannot open the ICC profile path, do not fail the whole JPEG pipeline solely because ICC embedding is unavailable. Log the ICC preservation/embedding failure in debug logs, omit the `-icc` argument for that image, and continue compression so the image can still produce an optimized final file. ImageMagick pixel conversion should still run when a conversion profile is available through ImageMagick; the degraded behavior is only that the final JPEG may miss its intended embedded ICC profile.
 
 JPEG config maps to MozJPEG flags:
 
@@ -462,7 +470,7 @@ jpeg.quant_table  -> -quant-table N
 jpeg.tune         -> -tune-ms-ssim when set to "ms-ssim"
 ```
 
-Write MozJPEG output to a temp `.jpg` first, then apply output mode rules. Delete any temporary `*.source.icc` sidecar after a successful output is accepted. Also delete `*.source.icc` when processing fails, and when the generated JPEG is equal/larger than the original and is skipped.
+Write MozJPEG output to a temp `.jpg` first, then apply output mode rules. Delete any temporary JPEG workspace artifacts after a successful output is accepted. Also delete JPEG workspace artifacts when processing fails, and when the generated JPEG is equal/larger than the original and is skipped.
 
 ## PNG Pipeline
 
@@ -591,7 +599,7 @@ If workers is explicitly configured as an integer, respect it after clamping to 
 
 Never overwrite original files directly during processing.
 
-Use temp files beside the original for `in-place` mode, because same-volume replacement is safer and usually atomic enough for this use case.
+Use temp files beside the original for `in-place` mode when the external tool can safely handle the source path. JPEG processing is an exception: MozJPEG-visible intermediates should use the JPEG per-run temp workspace described in the JPEG pipeline section, then finalization should stage/copy the accepted optimized JPEG back beside the original before replacing the original.
 
 For `dir` mode, temp files can be created in the destination output folder or in a temporary work location, but final output should only appear after successful optimization and size comparison.
 
@@ -609,7 +617,7 @@ Failure handling:
 4. If final output is not smaller, delete temp files and mark file skipped.
 5. If replacement/copy fails, preserve original and mark file failed.
 
-JPEG ICC sidecars are temp files. Delete `*.source.icc` on every path: successful accepted output, tool failure, empty output, skip-larger, and replacement/copy failure.
+JPEG ICC sidecars are temp files. Delete JPEG workspace ICC files on every path: successful accepted output, tool failure, empty output, skip-larger, and replacement/copy failure.
 
 ## Console Output
 
@@ -754,16 +762,17 @@ odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o
 20. Add worker pool and auto worker heuristic.
 21. Add progress output and final summary, including original size, optimized size, and percentage size reduction in success rows, without final/slugified output path detail rows.
 22. Add optional debug logging.
-23. Test with spaces, special characters, Unicode paths, and quoted paths.
-24. Test relative and absolute input directories.
-25. Test relative and absolute `out_dir`.
-26. Test missing configured `out_dir` fallback to default output.
-27. Test missing default output folder error.
-28. Test recursive input with preserved output paths.
-29. Test slugify collisions.
-30. Test uppercase extensions.
-31. Test corrupt images.
-32. Test missing tools.
-33. Test PNG ICC retention through ImageMagick, pngquant, and Oxipng.
-34. Test progress success rows include before/after sizes and percentage reduction, and do not print final/slugified output path detail rows.
-35. Test repeated prompt loop and `exit`.
+23. Phase 8A: Harden JPEG Unicode-path handling with a per-run temp workspace, `ppm:-` ImageMagick-to-MozJPEG piping, and graceful ICC omission when MozJPEG cannot open temp ICC paths.
+24. Test with spaces, special characters, Unicode paths, and quoted paths.
+25. Test relative and absolute input directories.
+26. Test relative and absolute `out_dir`.
+27. Test missing configured `out_dir` fallback to default output.
+28. Test missing default output folder error.
+29. Test recursive input with preserved output paths.
+30. Test slugify collisions.
+31. Test uppercase extensions.
+32. Test corrupt images.
+33. Test missing tools.
+34. Test PNG ICC retention through ImageMagick, pngquant, and Oxipng.
+35. Test progress success rows include before/after sizes and percentage reduction, and do not print final/slugified output path detail rows.
+36. Test repeated prompt loop and `exit`.
