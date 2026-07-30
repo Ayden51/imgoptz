@@ -38,9 +38,10 @@ Icc_Profile_Mode :: enum {
 }
 
 Process_Image_Result :: struct {
-	output_path: string,
-	err:         Image_Process_Error,
-	detail:      string,
+	output_path:  string,
+	cleanup_path: string,
+	err:          Image_Process_Error,
+	detail:       string,
 }
 
 Image_Process_Worker_State :: struct {
@@ -312,6 +313,7 @@ process_image_to_temp :: proc(
 
 destroy_process_image_result :: proc(result: ^Process_Image_Result) {
 	delete(result.output_path)
+	delete(result.cleanup_path)
 	delete(result.detail)
 	result^ = {}
 }
@@ -320,6 +322,10 @@ cleanup_process_image_result :: proc(result: ^Process_Image_Result) {
 	if len(result.output_path) > 0 {
 		debug_log_debugf("cleanup optimized temp output: \"%s\"", result.output_path)
 		remove_if_exists(result.output_path)
+	}
+	if len(result.cleanup_path) > 0 {
+		debug_log_debugf("cleanup temp workspace: \"%s\"", result.cleanup_path)
+		_ = os.remove_all(result.cleanup_path)
 	}
 	destroy_process_image_result(result)
 }
@@ -452,34 +458,39 @@ replace_in_place_with_slugged_output :: proc(
 		backup_path,
 	)
 
-	replaced := false
 	replace_err := os.rename(temp_output_path, item.source_path)
-	if replace_err == nil {
-		replaced = true
-	}
 	if replace_err != nil {
-		_ = os.rename(backup_path, item.source_path)
-		debug_log_errorf(
-			"replace failed moving temp into source: temp=\"%s\" source=\"%s\" err=%v",
+		copy_err := os.copy_file(item.source_path, temp_output_path)
+		if copy_err != nil {
+			_ = os.rename(backup_path, item.source_path)
+			debug_log_errorf(
+				"replace failed moving or copying temp into source: temp=\"%s\" source=\"%s\" rename_err=%v copy_err=%v",
+				temp_output_path,
+				item.source_path,
+				replace_err,
+				copy_err,
+			)
+			return fmt.aprintf("Failed to replace original with optimized output: %v", copy_err),
+				false
+		}
+		remove_if_exists(temp_output_path)
+		debug_log_debugf(
+			"optimized temp copied into source path: temp=\"%s\" source=\"%s\"",
 			temp_output_path,
 			item.source_path,
-			replace_err,
 		)
-		return fmt.aprintf("Failed to replace original with optimized output: %v", replace_err),
-			false
+	} else {
+		debug_log_debugf(
+			"optimized temp moved into source path: temp=\"%s\" source=\"%s\"",
+			temp_output_path,
+			item.source_path,
+		)
 	}
-	debug_log_debugf(
-		"optimized temp moved into source path: temp=\"%s\" source=\"%s\"",
-		temp_output_path,
-		item.source_path,
-	)
 
 	if item.source_path != final_path {
 		rename_err := os.rename(item.source_path, final_path)
 		if rename_err != nil {
-			if replaced {
-				remove_if_exists(item.source_path)
-			}
+			remove_if_exists(item.source_path)
 			_ = os.rename(backup_path, item.source_path)
 			debug_log_errorf(
 				"slug rename failed: source=\"%s\" final=\"%s\" err=%v",
@@ -628,18 +639,26 @@ process_jpeg_to_temp :: proc(
 	}
 	debug_log_infof("jpeg pipeline start: source=\"%s\"", item.source_path)
 
-	ppm_path, ppm_ok := make_process_temp_path(item.source_path, "resized.ppm")
-	if !ppm_ok {
-		debug_log_errorf("jpeg temp path failed: resized ppm source=\"%s\"", item.source_path)
+	workspace_path, workspace_err := os.make_directory_temp(
+		"",
+		"imgoptz-jpeg-*",
+		context.allocator,
+	)
+	if workspace_err != nil {
+		debug_log_errorf(
+			"jpeg temp workspace failed: source=\"%s\" err=%v",
+			item.source_path,
+			workspace_err,
+		)
 		return Process_Image_Result{err = .Temp_Path_Failed}
 	}
-	debug_log_debugf("jpeg temp resized ppm: \"%s\"", ppm_path)
-	defer delete(ppm_path)
-	defer remove_if_exists(ppm_path)
+	debug_log_debugf("jpeg temp workspace: \"%s\"", workspace_path)
 
-	output_path, output_ok := make_process_temp_path(item.source_path, "optimized.jpg")
+	output_path, output_ok := jpeg_workspace_path(workspace_path, "optimized.jpg")
 	if !output_ok {
-		debug_log_errorf("jpeg temp path failed: optimized output source=\"%s\"", item.source_path)
+		debug_log_errorf("jpeg output workspace path failed: workspace=\"%s\"", workspace_path)
+		_ = os.remove_all(workspace_path)
+		delete(workspace_path)
 		return Process_Image_Result{err = .Temp_Path_Failed}
 	}
 	debug_log_debugf("jpeg temp optimized output: \"%s\"", output_path)
@@ -648,7 +667,7 @@ process_jpeg_to_temp :: proc(
 	embed_icc_path := ""
 	convert_icc_path := ""
 	source_icc_path := ""
-	defer cleanup_temp_path_slot(&source_icc_path)
+	owned_icc_path := ""
 	if config.jpeg.preserve_profiles {
 		icc_result := determine_icc_profile_mode(item.source_path, runtime_env)
 		defer destroy_icc_profile_result(&icc_result)
@@ -660,7 +679,9 @@ process_jpeg_to_temp :: proc(
 			icc_result.detail,
 		)
 		if icc_result.err != .None {
+			_ = os.remove_all(workspace_path)
 			delete(output_path)
+			delete(workspace_path)
 			return Process_Image_Result {
 				err = icc_result.err,
 				detail = strings.clone(icc_result.detail),
@@ -671,13 +692,15 @@ process_jpeg_to_temp :: proc(
 		switch icc_mode {
 		case .Embed_Source:
 			source_icc_ok: bool
-			source_icc_path, source_icc_ok = make_process_temp_path(item.source_path, "source.icc")
+			source_icc_path, source_icc_ok = jpeg_workspace_path(workspace_path, "source.icc")
 			if !source_icc_ok {
 				debug_log_errorf(
-					"jpeg ICC source temp path failed: source=\"%s\"",
-					item.source_path,
+					"jpeg ICC source workspace path failed: workspace=\"%s\"",
+					workspace_path,
 				)
+				_ = os.remove_all(workspace_path)
 				delete(output_path)
+				delete(workspace_path)
 				return Process_Image_Result{err = .Temp_Path_Failed}
 			}
 			debug_log_debugf("jpeg source ICC temp: \"%s\"", source_icc_path)
@@ -692,12 +715,42 @@ process_jpeg_to_temp :: proc(
 				imagemagick_process_environment(runtime_env),
 				"ImageMagick ICC extract",
 			); !ok {
+				_ = os.remove_all(workspace_path)
 				delete(output_path)
+				delete(source_icc_path)
+				delete(workspace_path)
 				return Process_Image_Result{err = .Icc_Extract_Failed, detail = detail}
 			}
 			embed_icc_path = source_icc_path
+			owned_icc_path = source_icc_path
 		case .Convert_To_Srgb:
-			embed_icc_path = runtime_env.srgb_profile
+			srgb_workspace_path, srgb_workspace_ok := jpeg_workspace_path(
+				workspace_path,
+				"sRGB2014.icc",
+			)
+			if !srgb_workspace_ok {
+				debug_log_errorf(
+					"jpeg sRGB workspace path failed: workspace=\"%s\"",
+					workspace_path,
+				)
+				_ = os.remove_all(workspace_path)
+				delete(output_path)
+				delete(workspace_path)
+				return Process_Image_Result{err = .Temp_Path_Failed}
+			}
+			copy_err := os.copy_file(srgb_workspace_path, runtime_env.srgb_profile)
+			if copy_err != nil {
+				debug_log_warnf(
+					"jpeg sRGB profile copy failed; continuing without final ICC embed: source=\"%s\" workspace_profile=\"%s\" err=%v",
+					item.source_path,
+					srgb_workspace_path,
+					copy_err,
+				)
+				delete(srgb_workspace_path)
+			} else {
+				embed_icc_path = srgb_workspace_path
+				owned_icc_path = srgb_workspace_path
+			}
 			convert_icc_path = runtime_env.srgb_profile
 		case .None:
 		}
@@ -708,41 +761,30 @@ process_jpeg_to_temp :: proc(
 		item.source_path,
 		config.max_dimension,
 		convert_icc_path,
-		ppm_path,
+		"-",
 	)
-	if detail, ok := run_tool(
+	if pipe_err, detail, ok := run_jpeg_pipe_to_mozjpeg(
 		resize_command,
-		imagemagick_process_environment(runtime_env),
-		"ImageMagick JPEG resize",
-	); !ok {
-		delete(output_path)
-		return Process_Image_Result{err = .Magick_Failed, detail = detail}
-	}
-	if !file_is_non_empty(ppm_path) {
-		debug_log_errorf("jpeg resized PPM missing or empty: \"%s\"", ppm_path)
-		delete(output_path)
-		return Process_Image_Result {
-			err = .Empty_Output,
-			detail = strings.clone("ImageMagick did not produce a resized PPM."),
-		}
-	}
-
-	mozjpeg_command := build_mozjpeg_command(
 		runtime_env.mozjpeg_path,
 		config.jpeg,
 		output_path,
-		ppm_path,
 		embed_icc_path,
-	)
-	if detail, ok := run_tool(mozjpeg_command, nil, "MozJPEG"); !ok {
-		remove_if_exists(output_path)
+		workspace_path,
+		imagemagick_process_environment(runtime_env),
+	); !ok {
+		_ = os.remove_all(workspace_path)
 		delete(output_path)
-		return Process_Image_Result{err = .Mozjpeg_Failed, detail = detail}
+		delete(owned_icc_path)
+		delete(workspace_path)
+		return Process_Image_Result{err = pipe_err, detail = detail}
 	}
 	if !file_is_non_empty(output_path) {
 		remove_if_exists(output_path)
 		debug_log_errorf("jpeg optimized output missing or empty: \"%s\"", output_path)
+		_ = os.remove_all(workspace_path)
 		delete(output_path)
+		delete(owned_icc_path)
+		delete(workspace_path)
 		return Process_Image_Result {
 			err = .Empty_Output,
 			detail = strings.clone("MozJPEG did not produce an optimized JPEG."),
@@ -750,7 +792,309 @@ process_jpeg_to_temp :: proc(
 	}
 
 	debug_log_infof("jpeg pipeline produced temp output: \"%s\"", output_path)
-	return Process_Image_Result{output_path = output_path}
+	delete(owned_icc_path)
+	return Process_Image_Result{output_path = output_path, cleanup_path = workspace_path}
+}
+
+jpeg_workspace_path :: proc(workspace_path, filename: string) -> (string, bool) {
+	parts := [?]string{workspace_path, filename}
+	path, err := os.join_path(parts[:], context.allocator)
+	if err != nil {
+		return "", false
+	}
+	return path, true
+}
+
+run_jpeg_pipe_to_mozjpeg :: proc(
+	resize_command: []string,
+	mozjpeg_path: string,
+	jpeg: Jpeg_Config,
+	output_path, icc_path, workspace_path: string,
+	magick_environment: []string,
+) -> (
+	Image_Process_Error,
+	string,
+	bool,
+) {
+	mozjpeg_command := build_mozjpeg_command(mozjpeg_path, jpeg, "", "", icc_path)
+	err, detail, ok := run_jpeg_pipe_once(
+		resize_command,
+		mozjpeg_command,
+		output_path,
+		workspace_path,
+		magick_environment,
+	)
+	if ok || err != .Mozjpeg_Failed || len(icc_path) == 0 {
+		return err, detail, ok
+	}
+
+	debug_log_warnf(
+		"jpeg ICC embed failed through MozJPEG; retrying compression without -icc: output=\"%s\" detail=\"%s\"",
+		output_path,
+		detail,
+	)
+	delete(detail)
+	remove_if_exists(output_path)
+
+	mozjpeg_no_icc_command := build_mozjpeg_command(mozjpeg_path, jpeg, "", "", "")
+	return run_jpeg_pipe_once(
+		resize_command,
+		mozjpeg_no_icc_command,
+		output_path,
+		workspace_path,
+		magick_environment,
+	)
+}
+
+run_jpeg_pipe_once :: proc(
+	resize_command, mozjpeg_command: []string,
+	output_path, workspace_path: string,
+	magick_environment: []string,
+) -> (
+	Image_Process_Error,
+	string,
+	bool,
+) {
+	pipe_r, pipe_w, pipe_err := os.pipe()
+	if pipe_err != nil {
+		return .Magick_Failed,
+			fmt.aprintf("Failed to create JPEG pipeline pipe: %v", pipe_err),
+			false
+	}
+	pipe_r_open := true
+	pipe_w_open := true
+
+	magick_stderr_path, magick_stderr_ok := jpeg_workspace_path(
+		workspace_path,
+		"magick.stderr.txt",
+	)
+	if !magick_stderr_ok {
+		_ = os.close(pipe_r)
+		_ = os.close(pipe_w)
+		return .Temp_Path_Failed, strings.clone("Failed to create ImageMagick stderr path."), false
+	}
+	defer delete(magick_stderr_path)
+	magick_stderr_file, magick_stderr_err := os.open(
+		magick_stderr_path,
+		{.Read, .Write, .Create, .Trunc, .Inheritable},
+		os.Permissions_Default_File,
+	)
+	if magick_stderr_err != nil {
+		_ = os.close(pipe_r)
+		_ = os.close(pipe_w)
+		return .Temp_Path_Failed,
+			fmt.aprintf("Failed to open ImageMagick stderr file: %v", magick_stderr_err),
+			false
+	}
+
+	debug_log_process_start("ImageMagick JPEG resize", resize_command, magick_environment)
+	magick_process, magick_start_err := os.process_start(
+		os.Process_Desc {
+			command = resize_command,
+			env = magick_environment,
+			stdout = pipe_w,
+			stderr = magick_stderr_file,
+		},
+	)
+	_ = os.close(pipe_w)
+	pipe_w_open = false
+	if magick_start_err != nil {
+		_ = os.close(pipe_r)
+		pipe_r_open = false
+		_ = os.close(magick_stderr_file)
+		magick_stderr := read_optional_process_file(magick_stderr_path)
+		defer delete(magick_stderr)
+		debug_log_process_finish(
+			"ImageMagick JPEG resize",
+			{},
+			nil,
+			magick_stderr,
+			magick_start_err,
+		)
+		return .Magick_Failed,
+			tool_failure_detail("ImageMagick JPEG resize", {}, magick_stderr, magick_start_err),
+			false
+	}
+
+	output_file, output_err := os.open(
+		output_path,
+		{.Write, .Create, .Trunc, .Inheritable},
+		os.Permissions_Default_File,
+	)
+	if output_err != nil {
+		_ = os.close(pipe_r)
+		pipe_r_open = false
+		magick_state, magick_wait_err := wait_process_or_kill(magick_process)
+		_ = os.close(magick_stderr_file)
+		magick_stderr := read_optional_process_file(magick_stderr_path)
+		defer delete(magick_stderr)
+		debug_log_process_finish(
+			"ImageMagick JPEG resize",
+			magick_state,
+			nil,
+			magick_stderr,
+			magick_wait_err,
+		)
+		return .Temp_Path_Failed,
+			fmt.aprintf("Failed to open JPEG output file: %v", output_err),
+			false
+	}
+
+	mozjpeg_stderr_path, mozjpeg_stderr_ok := jpeg_workspace_path(
+		workspace_path,
+		"mozjpeg.stderr.txt",
+	)
+	if !mozjpeg_stderr_ok {
+		_ = os.close(pipe_r)
+		pipe_r_open = false
+		_ = os.close(output_file)
+		magick_state, magick_wait_err := wait_process_or_kill(magick_process)
+		_ = os.close(magick_stderr_file)
+		magick_stderr := read_optional_process_file(magick_stderr_path)
+		defer delete(magick_stderr)
+		debug_log_process_finish(
+			"ImageMagick JPEG resize",
+			magick_state,
+			nil,
+			magick_stderr,
+			magick_wait_err,
+		)
+		return .Temp_Path_Failed, strings.clone("Failed to create MozJPEG stderr path."), false
+	}
+	defer delete(mozjpeg_stderr_path)
+	mozjpeg_stderr_file, mozjpeg_stderr_err := os.open(
+		mozjpeg_stderr_path,
+		{.Read, .Write, .Create, .Trunc, .Inheritable},
+		os.Permissions_Default_File,
+	)
+	if mozjpeg_stderr_err != nil {
+		_ = os.close(pipe_r)
+		pipe_r_open = false
+		_ = os.close(output_file)
+		magick_state, magick_wait_err := wait_process_or_kill(magick_process)
+		_ = os.close(magick_stderr_file)
+		magick_stderr := read_optional_process_file(magick_stderr_path)
+		defer delete(magick_stderr)
+		debug_log_process_finish(
+			"ImageMagick JPEG resize",
+			magick_state,
+			nil,
+			magick_stderr,
+			magick_wait_err,
+		)
+		return .Temp_Path_Failed,
+			fmt.aprintf("Failed to open MozJPEG stderr file: %v", mozjpeg_stderr_err),
+			false
+	}
+
+	debug_log_process_start("MozJPEG", mozjpeg_command, nil)
+	mozjpeg_process, mozjpeg_start_err := os.process_start(
+		os.Process_Desc {
+			command = mozjpeg_command,
+			stdin = pipe_r,
+			stdout = output_file,
+			stderr = mozjpeg_stderr_file,
+		},
+	)
+	_ = os.close(pipe_r)
+	pipe_r_open = false
+	if mozjpeg_start_err != nil {
+		magick_state, magick_wait_err := wait_process_or_kill(magick_process)
+		_ = os.close(output_file)
+		_ = os.close(magick_stderr_file)
+		_ = os.close(mozjpeg_stderr_file)
+		magick_stderr := read_optional_process_file(magick_stderr_path)
+		mozjpeg_stderr := read_optional_process_file(mozjpeg_stderr_path)
+		defer delete(magick_stderr)
+		defer delete(mozjpeg_stderr)
+		debug_log_process_finish(
+			"ImageMagick JPEG resize",
+			magick_state,
+			nil,
+			magick_stderr,
+			magick_wait_err,
+		)
+		debug_log_process_finish("MozJPEG", {}, nil, mozjpeg_stderr, mozjpeg_start_err)
+		return .Mozjpeg_Failed,
+			tool_failure_detail("MozJPEG", {}, mozjpeg_stderr, mozjpeg_start_err),
+			false
+	}
+
+	mozjpeg_state, mozjpeg_wait_err := os.process_wait(mozjpeg_process)
+	magick_state: os.Process_State
+	magick_wait_err: os.Error
+	if mozjpeg_wait_err != nil || !mozjpeg_state.exited || mozjpeg_state.exit_code != 0 {
+		magick_state, magick_wait_err = wait_process_or_kill(magick_process)
+	} else {
+		magick_state, magick_wait_err = os.process_wait(magick_process)
+	}
+	_ = os.close(output_file)
+	_ = os.close(magick_stderr_file)
+	_ = os.close(mozjpeg_stderr_file)
+
+	magick_stderr := read_optional_process_file(magick_stderr_path)
+	mozjpeg_stderr := read_optional_process_file(mozjpeg_stderr_path)
+	defer delete(magick_stderr)
+	defer delete(mozjpeg_stderr)
+	debug_log_process_finish(
+		"ImageMagick JPEG resize",
+		magick_state,
+		nil,
+		magick_stderr,
+		magick_wait_err,
+	)
+	debug_log_process_finish("MozJPEG", mozjpeg_state, nil, mozjpeg_stderr, mozjpeg_wait_err)
+
+	magick_failed := magick_wait_err != nil || !magick_state.exited || magick_state.exit_code != 0
+	mozjpeg_failed :=
+		mozjpeg_wait_err != nil || !mozjpeg_state.exited || mozjpeg_state.exit_code != 0
+	if magick_failed && !(mozjpeg_failed && magick_state.exited && magick_state.exit_code == 9) {
+		return .Magick_Failed,
+			tool_failure_detail(
+				"ImageMagick JPEG resize",
+				magick_state,
+				magick_stderr,
+				magick_wait_err,
+			),
+			false
+	}
+	if mozjpeg_failed {
+		return .Mozjpeg_Failed,
+			tool_failure_detail("MozJPEG", mozjpeg_state, mozjpeg_stderr, mozjpeg_wait_err),
+			false
+	}
+
+	if pipe_r_open {
+		_ = os.close(pipe_r)
+	}
+	if pipe_w_open {
+		_ = os.close(pipe_w)
+	}
+	return .None, "", true
+}
+
+read_optional_process_file :: proc(path: string) -> []byte {
+	if len(path) == 0 || !os.exists(path) {
+		return nil
+	}
+	data, err := os.read_entire_file(path, context.allocator)
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
+wait_process_or_kill :: proc(process: os.Process) -> (os.Process_State, os.Error) {
+	state, err := os.process_wait(process, 2 * time.Second)
+	if err != .Timeout {
+		return state, err
+	}
+	debug_log_warnf(
+		"child process timed out while pipeline consumer was unavailable; killing pid=%d",
+		process.pid,
+	)
+	_ = os.process_kill(process)
+	return os.process_wait(process)
 }
 
 process_png_to_temp :: proc(
@@ -1080,7 +1424,11 @@ build_jpeg_magick_resize_command :: proc(
 		append(&command, "-profile")
 		append(&command, convert_profile_path)
 	}
-	append(&command, fmt.tprintf("ppm:%s", output_path))
+	if output_path == "-" {
+		append(&command, "ppm:-")
+	} else {
+		append(&command, fmt.tprintf("ppm:%s", output_path))
+	}
 	return command[:]
 }
 
@@ -1138,9 +1486,13 @@ build_mozjpeg_command :: proc(
 		append(&command, "-icc")
 		append(&command, icc_path)
 	}
-	append(&command, "-outfile")
-	append(&command, output_path)
-	append(&command, input_path)
+	if len(output_path) > 0 {
+		append(&command, "-outfile")
+		append(&command, output_path)
+	}
+	if len(input_path) > 0 {
+		append(&command, input_path)
+	}
 	return command[:]
 }
 

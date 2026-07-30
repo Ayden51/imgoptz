@@ -68,6 +68,27 @@ test_mozjpeg_command_maps_config_flags :: proc(t: ^testing.T) {
 }
 
 @(test, require)
+test_jpeg_pipe_commands_use_stdout_and_stdin :: proc(t: ^testing.T) {
+	config := default_config()
+	defer destroy_config(&config)
+
+	resize_command := build_jpeg_magick_resize_command(
+		"magick.exe",
+		"source.jpg",
+		1920,
+		"srgb.icc",
+		"-",
+	)
+	mozjpeg_command := build_mozjpeg_command("mozjpeg.exe", config.jpeg, "", "", "profile.icc")
+
+	testing.expect(t, command_has_sequence(resize_command, []string{"-profile", "srgb.icc"}))
+	testing.expect_value(t, resize_command[len(resize_command) - 1], "ppm:-")
+	testing.expect(t, command_has_sequence(mozjpeg_command, []string{"-icc", "profile.icc"}))
+	testing.expect(t, !command_contains(mozjpeg_command, "-outfile"))
+	testing.expect(t, !command_contains(mozjpeg_command, "in.ppm"))
+}
+
+@(test, require)
 test_png_commands_map_config_flags :: proc(t: ^testing.T) {
 	config := default_config()
 	defer destroy_config(&config)
@@ -306,6 +327,149 @@ test_process_png_converts_missing_icc_profile_to_srgb :: proc(t: ^testing.T) {
 	)
 	defer delete(verify_detail)
 	testing.expect_value(t, verify_ok, true)
+}
+
+@(test, require)
+test_process_jpeg_unicode_source_uses_workspace_and_cleans_artifacts :: proc(t: ^testing.T) {
+	runtime_env := processing_test_runtime_environment(t)
+	if !processing_runtime_tools_exist(runtime_env) {
+		return
+	}
+
+	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-jpeg-unicode-*", context.allocator)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	input_dir := processing_join(t, temp_dir, "Ảnh Unicode & (test)")
+	if len(input_dir) == 0 || !testing.expect_value(t, os.make_directory_all(input_dir), nil) {
+		return
+	}
+	source_path := processing_join(t, input_dir, "Ảnh Đẹp.jpg")
+	if len(source_path) == 0 {
+		return
+	}
+	create_detail, create_ok := run_tool(
+		[]string {
+			runtime_env.magick_path,
+			"-size",
+			"128x128",
+			"gradient:red-blue",
+			"-profile",
+			runtime_env.srgb_profile,
+			source_path,
+		},
+		imagemagick_process_environment(runtime_env),
+		"ImageMagick test JPEG create",
+	)
+	defer delete(create_detail)
+	if !testing.expect_value(t, create_ok, true) {
+		return
+	}
+
+	config := default_config()
+	defer destroy_config(&config)
+	item := Image_Work_Item {
+		source_path   = source_path,
+		relative_path = "Ảnh Đẹp.jpg",
+		kind          = .Jpeg,
+	}
+	result := process_image_to_temp(item, config, runtime_env)
+	if !testing.expectf(
+		t,
+		result.err == .None,
+		"expected no JPEG processing error, got %v: %s",
+		result.err,
+		result.detail,
+	) {
+		cleanup_process_image_result(&result)
+		return
+	}
+
+	workspace_path := strings.clone(result.cleanup_path)
+	output_path := strings.clone(result.output_path)
+	defer delete(workspace_path)
+	defer delete(output_path)
+	_, output_name := os.split_path(result.output_path)
+	testing.expect_value(t, output_name, "optimized.jpg")
+	testing.expect(t, !strings.has_prefix(result.output_path, source_path))
+	testing.expect(t, os.exists(result.output_path))
+	testing.expect(t, os.exists(result.cleanup_path))
+
+	cleanup_process_image_result(&result)
+	testing.expect(t, !os.exists(output_path))
+	testing.expect(t, !os.exists(workspace_path))
+	testing.expect(t, !processing_temp_artifacts_exist(source_path))
+}
+
+@(test, require)
+test_jpeg_pipe_retries_without_icc_when_mozjpeg_rejects_profile_path :: proc(t: ^testing.T) {
+	runtime_env := processing_test_runtime_environment(t)
+	if !processing_runtime_tools_exist(runtime_env) {
+		return
+	}
+
+	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-jpeg-icc-retry-*", context.allocator)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	source_path := processing_join(t, temp_dir, "source.jpg")
+	if len(source_path) == 0 {
+		return
+	}
+	create_detail, create_ok := run_tool(
+		[]string{runtime_env.magick_path, "-size", "96x96", "gradient:red-blue", source_path},
+		imagemagick_process_environment(runtime_env),
+		"ImageMagick test JPEG create",
+	)
+	defer delete(create_detail)
+	if !testing.expect_value(t, create_ok, true) {
+		return
+	}
+
+	workspace_path, workspace_err := os.make_directory_temp(
+		"",
+		"imgoptz-jpeg-retry-workspace-*",
+		context.allocator,
+	)
+	if !testing.expect_value(t, workspace_err, nil) {
+		return
+	}
+	defer delete(workspace_path)
+	defer os.remove_all(workspace_path)
+	output_path, output_ok := jpeg_workspace_path(workspace_path, "optimized.jpg")
+	bad_icc_path, bad_icc_ok := jpeg_workspace_path(workspace_path, "missing.icc")
+	if !testing.expect_value(t, output_ok, true) || !testing.expect_value(t, bad_icc_ok, true) {
+		return
+	}
+	defer delete(output_path)
+	defer delete(bad_icc_path)
+
+	config := default_config()
+	defer destroy_config(&config)
+	resize_command := build_jpeg_magick_resize_command(
+		runtime_env.magick_path,
+		source_path,
+		config.max_dimension,
+		"",
+		"-",
+	)
+	pipe_err, detail, ok := run_jpeg_pipe_to_mozjpeg(
+		resize_command,
+		runtime_env.mozjpeg_path,
+		config.jpeg,
+		output_path,
+		bad_icc_path,
+		workspace_path,
+		imagemagick_process_environment(runtime_env),
+	)
+	defer delete(detail)
+
+	testing.expectf(t, ok, "expected ICC-less retry to succeed, got %v: %s", pipe_err, detail)
+	testing.expect(t, file_is_non_empty(output_path))
 }
 
 @(test, require)
@@ -629,6 +793,7 @@ processing_join :: proc(t: ^testing.T, first, second: string) -> string {
 processing_test_runtime_environment :: proc(t: ^testing.T) -> Runtime_Environment {
 	return Runtime_Environment {
 		magick_path = processing_join(t, "dist/tools/imagemagick", "magick.exe"),
+		mozjpeg_path = processing_join(t, "dist/tools/mozjpeg", "mozjpeg.exe"),
 		pngquant_path = processing_join(t, "dist/tools/pngquant", "pngquant.exe"),
 		oxipng_path = processing_join(t, "dist/tools/oxipng", "oxipng.exe"),
 		srgb_profile = processing_join(t, "dist/profiles", "sRGB2014.icc"),
@@ -638,10 +803,12 @@ processing_test_runtime_environment :: proc(t: ^testing.T) -> Runtime_Environmen
 processing_runtime_tools_exist :: proc(runtime_env: Runtime_Environment) -> bool {
 	return(
 		len(runtime_env.magick_path) > 0 &&
+		len(runtime_env.mozjpeg_path) > 0 &&
 		len(runtime_env.pngquant_path) > 0 &&
 		len(runtime_env.oxipng_path) > 0 &&
 		len(runtime_env.srgb_profile) > 0 &&
 		os.exists(runtime_env.magick_path) &&
+		os.exists(runtime_env.mozjpeg_path) &&
 		os.exists(runtime_env.pngquant_path) &&
 		os.exists(runtime_env.oxipng_path) &&
 		os.exists(runtime_env.srgb_profile) \
