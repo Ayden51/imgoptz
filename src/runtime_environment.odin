@@ -80,6 +80,8 @@ load_runtime_environment_with_probe :: proc(
 	config: App_Config,
 	probe: Runtime_GPU_Probe,
 ) -> Runtime_Environment {
+	debug_log_section("RUNTIME")
+	debug_log_infof("load runtime environment: app_root=\"%s\"", app_root)
 	env := Runtime_Environment {
 		ok           = true,
 		recursive    = config.recursive,
@@ -103,18 +105,25 @@ load_runtime_environment_with_probe :: proc(
 	}
 
 	if config.gpu {
+		debug_log_info("gpu requested: probing ImageMagick OpenCL")
 		if os.is_file(env.magick_path) {
 			if probe(env.magick_path) {
 				env.gpu_status = .Enabled
 				env.magick_use_gpu = true
+				debug_log_info(
+					"gpu probe succeeded: MAGICK_OCL_DEVICE=GPU enabled for ImageMagick",
+				)
 			} else {
 				env.gpu_status = .Probe_Failed
+				debug_log_warnf("gpu probe failed for magick_path=\"%s\"", env.magick_path)
 				add_runtime_warning(
 					&env,
 					"ImageMagick OpenCL GPU probe failed; falling back to CPU.",
 				)
 			}
 		}
+	} else {
+		debug_log_info("gpu disabled by config: skipping ImageMagick OpenCL probe")
 	}
 
 	env.ok = len(env.errors) == 0
@@ -124,12 +133,20 @@ load_runtime_environment_with_probe :: proc(
 resolve_worker_count :: proc(workers: Config_Workers) -> int {
 	switch workers.kind {
 	case .Explicit:
-		return max(workers.count, 1)
+		resolved := max(workers.count, 1)
+		debug_log_debugf("resolve workers: explicit=%d resolved=%d", workers.count, resolved)
+		return resolved
 	case .Auto:
-		return resolve_auto_worker_count(
-			os.get_processor_core_count(),
-			available_physical_memory(),
+		logical_cores := os.get_processor_core_count()
+		memory := available_physical_memory()
+		resolved := resolve_auto_worker_count(logical_cores, memory)
+		debug_log_debugf(
+			"resolve workers: auto logical_cores=%d available_memory=%d resolved=%d",
+			logical_cores,
+			memory,
+			resolved,
 		)
+		return resolved
 	}
 	return 1
 }
@@ -195,16 +212,24 @@ resolve_runtime_tool_paths :: proc(env: ^Runtime_Environment, app_root: string) 
 	env.pngquant_path = resolve_app_relative_path(app_root, RUNTIME_PNGQUANT_PATH)
 	env.magick_path = resolve_app_relative_path(app_root, RUNTIME_MAGICK_PATH)
 	env.srgb_profile = resolve_app_relative_path(app_root, RUNTIME_SRGB_PROFILE_PATH)
+	debug_log_debugf("resolved MozJPEG path: \"%s\"", env.mozjpeg_path)
+	debug_log_debugf("resolved Oxipng path: \"%s\"", env.oxipng_path)
+	debug_log_debugf("resolved pngquant path: \"%s\"", env.pngquant_path)
+	debug_log_debugf("resolved ImageMagick path: \"%s\"", env.magick_path)
+	debug_log_debugf("resolved sRGB profile path: \"%s\"", env.srgb_profile)
 }
 
 validate_required_runtime_files :: proc(env: ^Runtime_Environment, app_root: string) {
 	for required in RUNTIME_REQUIRED_FILES {
 		path := resolve_app_relative_path(app_root, required.relative_path, context.temp_allocator)
 		if !os.is_file(path) {
+			debug_log_errorf("missing runtime file: label=%s path=\"%s\"", required.label, path)
 			add_runtime_error(
 				env,
 				fmt.tprintf("Missing %s: %s", required.label, required.relative_path),
 			)
+		} else {
+			debug_log_debugf("runtime file ok: label=%s path=\"%s\"", required.label, path)
 		}
 	}
 }
@@ -212,22 +237,30 @@ validate_required_runtime_files :: proc(env: ^Runtime_Environment, app_root: str
 resolve_output_root :: proc(app_root: string, config: App_Config) -> Output_Root_Result {
 	result: Output_Root_Result
 	if config.output_mode != .Dir {
+		debug_log_debugf("output root resolution skipped for in-place mode")
 		return result
 	}
 
 	configured_path := resolve_app_relative_path(app_root, config.out_dir, context.allocator)
 	if len(configured_path) == 0 {
+		debug_log_errorf("configured output root resolve failed: out_dir=\"%s\"", config.out_dir)
 		result.err = .Resolve_Failed
 		return result
 	}
 	defer delete(configured_path)
 
 	if os.is_directory(configured_path) {
+		debug_log_infof("configured output root accepted: \"%s\"", configured_path)
 		result.path = strings.clone(configured_path)
 		return result
 	}
 
 	if config.out_dir != RUNTIME_DEFAULT_OUTPUT_DIR {
+		debug_log_warnf(
+			"configured output root missing: \"%s\"; falling back to %s",
+			configured_path,
+			RUNTIME_DEFAULT_OUTPUT_DIR,
+		)
 		append(
 			&result.warnings,
 			fmt.aprintf(
@@ -243,16 +276,19 @@ resolve_output_root :: proc(app_root: string, config: App_Config) -> Output_Root
 		context.allocator,
 	)
 	if len(default_path) == 0 {
+		debug_log_errorf("default output root resolve failed")
 		result.err = .Resolve_Failed
 		return result
 	}
 	defer delete(default_path)
 
 	if !os.is_directory(default_path) {
+		debug_log_errorf("default output root missing: \"%s\"", default_path)
 		result.err = .Default_Root_Missing
 		return result
 	}
 
+	debug_log_infof("default output root accepted: \"%s\"", default_path)
 	result.path = strings.clone(default_path)
 	return result
 }
@@ -288,9 +324,10 @@ resolve_app_relative_path :: proc(
 
 probe_imagemagick_opencl :: proc(magick_path: string) -> bool {
 	command := [?]string{magick_path, "-version"}
-	state, stdout, stderr, err := os.process_exec(
-		os.Process_Desc{command = command[:]},
-		context.allocator,
+	state, stdout, stderr, err := process_exec_logged(
+		command[:],
+		nil,
+		"ImageMagick OpenCL version probe",
 	)
 	defer delete(stdout)
 	defer delete(stderr)
@@ -323,9 +360,10 @@ probe_imagemagick_gpu_resize :: proc(magick_path: string) -> bool {
 		return false
 	}
 
-	state, stdout, stderr, err := os.process_exec(
-		os.Process_Desc{command = command[:], env = environment},
-		context.allocator,
+	state, stdout, stderr, err := process_exec_logged(
+		command[:],
+		environment,
+		"ImageMagick OpenCL resize probe",
 	)
 	defer delete(stdout)
 	defer delete(stderr)

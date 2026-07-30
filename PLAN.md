@@ -701,13 +701,17 @@ After printing the summary block, wait briefly before returning to the next inpu
 
 Default is console-only.
 
-If `debug_log = true`, append detailed logs to `debug_log_file`.
+If `debug_log = true`, write detailed logs to a new file for each app run. Do not append multiple runs into one log file.
+
+Prefix the configured `debug_log_file` basename with a filesystem-safe datetime for the actual run log path, preserving the configured directory. Example: `debug_log_file = "logs/imgoptz.log"` writes to `logs/YYYYMMDD-HHMMSS-nnnnnnnnn-imgoptz.log`.
 
 Relative `debug_log_file` resolves against `<app-root>/`.
 
 Implement debug file logging with a separate logging flow from console UI output. Normal console output must keep the same structured UI style whether debug logging is enabled or disabled, and must not gain log-level or timestamp prefixes.
 
-Debug log file entries must include log level and date/time. The file should be easy to read: organize detailed logs with block structure matching the existing app settings, input, discovery, progress, and summary sections where practical. Add extra debug-only entries sparingly at high-value decision points such as config fallback, output-root resolution, tool command construction, child process failures, temp cleanup, size comparison, and final write decisions.
+Debug mode must use Odin `core:log` file logging and must not route normal TUI console rows through the debug logger. The TUI console logging and debug file logging are separate outputs.
+
+Debug log file entries must include log level and date/time. The file should be easy to read: organize detailed logs with block structure matching the existing app settings, input, discovery, progress, and summary sections where practical. Log app state transitions verbosely, including config loading, runtime validation, input parsing, discovery traversal, worker processing, temp cleanup, size comparison, final write decisions, and summary totals. For each external child process, log the process label, argument array, relevant environment overrides, exit state, exit code, stdout, stderr, and execution errors when present.
 
 Do not require logging for normal operation.
 

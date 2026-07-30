@@ -80,8 +80,19 @@ process_discovered_images :: proc(
 	print_progress_header()
 	started_at := time.now()
 	summary: Processing_Summary
+	debug_log_section("PROGRESS")
+	debug_log_infof(
+		"processing start: items=%d worker_count=%d",
+		len(discovery.items),
+		runtime_env.worker_count,
+	)
 
 	if len(discovery.items) == 0 {
+		debug_log_info("processing skipped: no supported images")
+		debug_log_section("SUMMARY")
+		debug_log_info(
+			"processing finish: succeeded=0 skipped=0 failed=0 original_total=0 optimized_total=0",
+		)
 		print_progress_empty()
 		print_processing_summary(summary, time.since(started_at))
 		pause_after_processing_summary()
@@ -100,6 +111,16 @@ process_discovered_images :: proc(
 	)
 
 	elapsed := elapsed_excluding_ui_delay(started_at, console_pacer_slept(&progress_pacer))
+	debug_log_section("SUMMARY")
+	debug_log_infof(
+		"processing finish: succeeded=%d skipped=%d failed=%d original_total=%d optimized_total=%d elapsed_seconds=%.3f",
+		summary.succeeded,
+		summary.skipped,
+		summary.failed,
+		summary.original_total,
+		summary.optimized_total,
+		time.duration_seconds(elapsed),
+	)
 	print_processing_summary(summary, elapsed)
 	pause_after_processing_summary()
 }
@@ -112,6 +133,7 @@ process_images_parallel :: proc(
 	progress_pacer: ^Console_Pacer,
 ) {
 	worker_count := min(max(runtime_env.worker_count, 1), len(items))
+	debug_log_infof("worker pool: items=%d active_workers=%d", len(items), worker_count)
 	if worker_count <= 1 {
 		for item in items {
 			finalize := process_image_item_to_final(item, config^, runtime_env^)
@@ -141,6 +163,7 @@ process_images_parallel :: proc(
 		worker.init_context = worker_context
 		worker.data = &state
 		threads[index] = worker
+		debug_log_debugf("worker start requested: index=%d", index)
 		thread.start(worker)
 	}
 	for worker in threads {
@@ -154,8 +177,14 @@ process_image_worker :: proc(worker: ^thread.Thread) {
 	for {
 		index := sync.atomic_add(&state.next_index, 1)
 		if index >= len(state.items) {
+			debug_log_debugf("worker idle: no more items")
 			break
 		}
+		debug_log_debugf(
+			"worker picked item: index=%d relative=\"%s\"",
+			index,
+			state.items[index].relative_path,
+		)
 		result := process_image_item_to_final(
 			state.items[index],
 			state.config^,
@@ -189,13 +218,36 @@ process_image_item_to_final :: proc(
 	config: App_Config,
 	runtime_env: Runtime_Environment,
 ) -> Finalize_Output_Result {
+	debug_log_infof(
+		"image start: relative=\"%s\" source=\"%s\" destination=\"%s\" kind=%v",
+		item.relative_path,
+		item.source_path,
+		item.destination_path,
+		item.kind,
+	)
 	result := process_image_to_temp(item, config, runtime_env)
 	defer cleanup_process_image_result(&result)
 
 	if result.err != .None {
+		debug_log_errorf(
+			"image temp failed: relative=\"%s\" err=%v detail=\"%s\"",
+			item.relative_path,
+			result.err,
+			result.detail,
+		)
 		return Finalize_Output_Result{err = result.err, detail = strings.clone(result.detail)}
 	}
-	return finalize_optimized_output(item, result.output_path, runtime_env.output_mode)
+	finalize := finalize_optimized_output(item, result.output_path, runtime_env.output_mode)
+	debug_log_infof(
+		"image finish: relative=\"%s\" err=%v output=\"%s\" original_size=%d optimized_size=%d detail=\"%s\"",
+		item.relative_path,
+		finalize.err,
+		finalize.output_path,
+		finalize.original_size,
+		finalize.optimized_size,
+		finalize.detail,
+	)
+	return finalize
 }
 
 record_finalized_image :: proc(
@@ -210,6 +262,14 @@ record_finalized_image :: proc(
 		summary.succeeded += 1
 		summary.original_total += finalize.original_size
 		summary.optimized_total += finalize.optimized_size
+		debug_log_infof(
+			"progress success: relative=\"%s\" original_size=%d optimized_size=%d reduction_percent=%d output=\"%s\"",
+			relative_path,
+			finalize.original_size,
+			finalize.optimized_size,
+			finalize.reduction_percent,
+			finalize.output_path,
+		)
 		print_progress_ok(
 			relative_path,
 			finalize.original_size,
@@ -218,9 +278,20 @@ record_finalized_image :: proc(
 		)
 	} else if finalize.err == .Optimized_Not_Smaller {
 		summary.skipped += 1
+		debug_log_warnf(
+			"progress skipped: relative=\"%s\" detail=\"%s\"",
+			relative_path,
+			finalize.detail,
+		)
 		print_progress_skip(relative_path)
 	} else {
 		summary.failed += 1
+		debug_log_errorf(
+			"progress failed: relative=\"%s\" err=%v detail=\"%s\"",
+			relative_path,
+			finalize.err,
+			finalize.detail,
+		)
 		print_progress_error(relative_path, finalize.err)
 	}
 }
@@ -247,6 +318,7 @@ destroy_process_image_result :: proc(result: ^Process_Image_Result) {
 
 cleanup_process_image_result :: proc(result: ^Process_Image_Result) {
 	if len(result.output_path) > 0 {
+		debug_log_debugf("cleanup optimized temp output: \"%s\"", result.output_path)
 		remove_if_exists(result.output_path)
 	}
 	destroy_process_image_result(result)
@@ -254,6 +326,7 @@ cleanup_process_image_result :: proc(result: ^Process_Image_Result) {
 
 cleanup_temp_path_slot :: proc(path: ^string) {
 	if len(path^) > 0 {
+		debug_log_debugf("cleanup temp path: \"%s\"", path^)
 		remove_if_exists(path^)
 		delete(path^)
 		path^ = ""
@@ -271,9 +344,22 @@ finalize_optimized_output :: proc(
 	temp_output_path: string,
 	output_mode: Config_Output_Mode,
 ) -> Finalize_Output_Result {
+	debug_log_infof(
+		"finalize start: relative=\"%s\" temp_output=\"%s\" output_mode=%s",
+		item.relative_path,
+		temp_output_path,
+		debug_log_output_mode(output_mode),
+	)
 	original_size, original_size_ok := file_size_by_path(item.source_path)
 	optimized_size, optimized_size_ok := file_size_by_path(temp_output_path)
 	if !original_size_ok || !optimized_size_ok {
+		debug_log_errorf(
+			"size comparison failed: source=\"%s\" temp_output=\"%s\" original_ok=%v optimized_ok=%v",
+			item.source_path,
+			temp_output_path,
+			original_size_ok,
+			optimized_size_ok,
+		)
 		return Finalize_Output_Result{err = .Size_Read_Failed}
 	}
 	result := Finalize_Output_Result {
@@ -283,6 +369,12 @@ finalize_optimized_output :: proc(
 	}
 
 	if optimized_size >= original_size {
+		debug_log_warnf(
+			"size comparison rejected: relative=\"%s\" original_size=%d optimized_size=%d",
+			item.relative_path,
+			original_size,
+			optimized_size,
+		)
 		result.err = .Optimized_Not_Smaller
 		result.detail = fmt.aprintf(
 			"Optimized output was not smaller (%d bytes >= %d bytes).",
@@ -294,9 +386,11 @@ finalize_optimized_output :: proc(
 
 	final_path, final_path_ok := final_output_path_for_item(item, output_mode)
 	if !final_path_ok {
+		debug_log_errorf("final output path failed: relative=\"%s\"", item.relative_path)
 		result.err = .Final_Path_Failed
 		return result
 	}
+	debug_log_infof("final output path accepted: \"%s\"", final_path)
 
 	switch output_mode {
 	case .In_Place:
@@ -317,6 +411,13 @@ finalize_optimized_output :: proc(
 	}
 
 	result.output_path = final_path
+	debug_log_infof(
+		"finalize succeeded: relative=\"%s\" output=\"%s\" original_size=%d optimized_size=%d",
+		item.relative_path,
+		result.output_path,
+		result.original_size,
+		result.optimized_size,
+	)
 	return result
 }
 
@@ -329,14 +430,27 @@ replace_in_place_with_slugged_output :: proc(
 ) {
 	backup_path, backup_ok := make_process_temp_path(item.source_path, "original.bak")
 	if !backup_ok {
+		debug_log_errorf("replace failed: backup temp path failed for \"%s\"", item.source_path)
 		return "", false
 	}
 	defer delete(backup_path)
+	debug_log_debugf("replace backup path: \"%s\"", backup_path)
 
 	backup_err := os.rename(item.source_path, backup_path)
 	if backup_err != nil {
+		debug_log_errorf(
+			"replace failed moving original: source=\"%s\" backup=\"%s\" err=%v",
+			item.source_path,
+			backup_path,
+			backup_err,
+		)
 		return fmt.aprintf("Failed to move original aside: %v", backup_err), false
 	}
+	debug_log_debugf(
+		"original moved aside: source=\"%s\" backup=\"%s\"",
+		item.source_path,
+		backup_path,
+	)
 
 	replaced := false
 	replace_err := os.rename(temp_output_path, item.source_path)
@@ -345,9 +459,20 @@ replace_in_place_with_slugged_output :: proc(
 	}
 	if replace_err != nil {
 		_ = os.rename(backup_path, item.source_path)
+		debug_log_errorf(
+			"replace failed moving temp into source: temp=\"%s\" source=\"%s\" err=%v",
+			temp_output_path,
+			item.source_path,
+			replace_err,
+		)
 		return fmt.aprintf("Failed to replace original with optimized output: %v", replace_err),
 			false
 	}
+	debug_log_debugf(
+		"optimized temp moved into source path: temp=\"%s\" source=\"%s\"",
+		temp_output_path,
+		item.source_path,
+	)
 
 	if item.source_path != final_path {
 		rename_err := os.rename(item.source_path, final_path)
@@ -356,11 +481,23 @@ replace_in_place_with_slugged_output :: proc(
 				remove_if_exists(item.source_path)
 			}
 			_ = os.rename(backup_path, item.source_path)
+			debug_log_errorf(
+				"slug rename failed: source=\"%s\" final=\"%s\" err=%v",
+				item.source_path,
+				final_path,
+				rename_err,
+			)
 			return fmt.aprintf("Failed to rename optimized output: %v", rename_err), false
 		}
+		debug_log_debugf(
+			"slug rename succeeded: source=\"%s\" final=\"%s\"",
+			item.source_path,
+			final_path,
+		)
 	}
 
 	remove_if_exists(backup_path)
+	debug_log_debugf("backup removed: \"%s\"", backup_path)
 	return "", true
 }
 
@@ -369,15 +506,28 @@ copy_to_slugged_output :: proc(temp_output_path, final_path: string) -> (string,
 	if len(dir) > 0 {
 		mkdir_err := os.make_directory_all(dir)
 		if mkdir_err != nil {
+			debug_log_errorf(
+				"copy failed creating output directory: dir=\"%s\" err=%v",
+				dir,
+				mkdir_err,
+			)
 			return fmt.aprintf("Failed to create output directory: %v", mkdir_err), false
 		}
+		debug_log_debugf("output directory ready: \"%s\"", dir)
 	}
 
 	copy_err := os.copy_file(final_path, temp_output_path)
 	if copy_err != nil {
 		remove_if_exists(final_path)
+		debug_log_errorf(
+			"copy failed: temp=\"%s\" final=\"%s\" err=%v",
+			temp_output_path,
+			final_path,
+			copy_err,
+		)
 		return fmt.aprintf("Failed to copy optimized output: %v", copy_err), false
 	}
+	debug_log_debugf("copy succeeded: temp=\"%s\" final=\"%s\"", temp_output_path, final_path)
 	return "", true
 }
 
@@ -397,6 +547,14 @@ final_output_path_for_item :: proc(
 	if len(slug_stem) == 0 {
 		effective_stem = "image"
 	}
+	debug_log_debugf(
+		"slugify final name: filename=\"%s\" stem=\"%s\" slug=\"%s\" effective=\"%s\" ext=\"%s\"",
+		filename,
+		stem,
+		slug_stem,
+		effective_stem,
+		ext,
+	)
 
 	lower_ext := ascii_lower_clone(ext)
 	defer delete(lower_ext)
@@ -405,6 +563,13 @@ final_output_path_for_item :: proc(
 	if output_mode == .In_Place {
 		ignored_existing_path = item.source_path
 	}
+	debug_log_debugf(
+		"unique output search: dir=\"%s\" stem=\"%s\" ext=\"%s\" ignored=\"%s\"",
+		dir,
+		effective_stem,
+		lower_ext,
+		ignored_existing_path,
+	)
 	return unique_output_path(dir, effective_stem, lower_ext, ignored_existing_path)
 }
 
@@ -425,10 +590,18 @@ unique_output_path :: proc(dir, stem, ext, ignored_existing_path: string) -> (st
 		}
 
 		if !os.exists(candidate) || output_paths_match(candidate, ignored_existing_path) {
+			debug_log_debugf("unique output candidate accepted: \"%s\"", candidate)
 			return candidate, true
 		}
+		debug_log_debugf("unique output candidate exists: \"%s\"", candidate)
 		delete(candidate)
 	}
+	debug_log_errorf(
+		"unique output search exhausted: dir=\"%s\" stem=\"%s\" ext=\"%s\"",
+		dir,
+		stem,
+		ext,
+	)
 	return "", false
 }
 
@@ -450,20 +623,26 @@ process_jpeg_to_temp :: proc(
 	runtime_env: Runtime_Environment,
 ) -> Process_Image_Result {
 	if !config.jpeg.enabled {
+		debug_log_warnf("jpeg skipped: disabled by config source=\"%s\"", item.source_path)
 		return Process_Image_Result{err = .Disabled_File_Type}
 	}
+	debug_log_infof("jpeg pipeline start: source=\"%s\"", item.source_path)
 
 	ppm_path, ppm_ok := make_process_temp_path(item.source_path, "resized.ppm")
 	if !ppm_ok {
+		debug_log_errorf("jpeg temp path failed: resized ppm source=\"%s\"", item.source_path)
 		return Process_Image_Result{err = .Temp_Path_Failed}
 	}
+	debug_log_debugf("jpeg temp resized ppm: \"%s\"", ppm_path)
 	defer delete(ppm_path)
 	defer remove_if_exists(ppm_path)
 
 	output_path, output_ok := make_process_temp_path(item.source_path, "optimized.jpg")
 	if !output_ok {
+		debug_log_errorf("jpeg temp path failed: optimized output source=\"%s\"", item.source_path)
 		return Process_Image_Result{err = .Temp_Path_Failed}
 	}
+	debug_log_debugf("jpeg temp optimized output: \"%s\"", output_path)
 
 	icc_mode := Icc_Profile_Mode.None
 	embed_icc_path := ""
@@ -473,6 +652,13 @@ process_jpeg_to_temp :: proc(
 	if config.jpeg.preserve_profiles {
 		icc_result := determine_icc_profile_mode(item.source_path, runtime_env)
 		defer destroy_icc_profile_result(&icc_result)
+		debug_log_infof(
+			"jpeg ICC decision: source=\"%s\" mode=%v err=%v detail=\"%s\"",
+			item.source_path,
+			icc_result.mode,
+			icc_result.err,
+			icc_result.detail,
+		)
 		if icc_result.err != .None {
 			delete(output_path)
 			return Process_Image_Result {
@@ -487,9 +673,14 @@ process_jpeg_to_temp :: proc(
 			source_icc_ok: bool
 			source_icc_path, source_icc_ok = make_process_temp_path(item.source_path, "source.icc")
 			if !source_icc_ok {
+				debug_log_errorf(
+					"jpeg ICC source temp path failed: source=\"%s\"",
+					item.source_path,
+				)
 				delete(output_path)
 				return Process_Image_Result{err = .Temp_Path_Failed}
 			}
+			debug_log_debugf("jpeg source ICC temp: \"%s\"", source_icc_path)
 
 			command := build_icc_extract_command(
 				runtime_env.magick_path,
@@ -528,6 +719,7 @@ process_jpeg_to_temp :: proc(
 		return Process_Image_Result{err = .Magick_Failed, detail = detail}
 	}
 	if !file_is_non_empty(ppm_path) {
+		debug_log_errorf("jpeg resized PPM missing or empty: \"%s\"", ppm_path)
 		delete(output_path)
 		return Process_Image_Result {
 			err = .Empty_Output,
@@ -549,6 +741,7 @@ process_jpeg_to_temp :: proc(
 	}
 	if !file_is_non_empty(output_path) {
 		remove_if_exists(output_path)
+		debug_log_errorf("jpeg optimized output missing or empty: \"%s\"", output_path)
 		delete(output_path)
 		return Process_Image_Result {
 			err = .Empty_Output,
@@ -556,6 +749,7 @@ process_jpeg_to_temp :: proc(
 		}
 	}
 
+	debug_log_infof("jpeg pipeline produced temp output: \"%s\"", output_path)
 	return Process_Image_Result{output_path = output_path}
 }
 
@@ -565,27 +759,35 @@ process_png_to_temp :: proc(
 	runtime_env: Runtime_Environment,
 ) -> Process_Image_Result {
 	if !config.png.enabled {
+		debug_log_warnf("png skipped: disabled by config source=\"%s\"", item.source_path)
 		return Process_Image_Result{err = .Disabled_File_Type}
 	}
+	debug_log_infof("png pipeline start: source=\"%s\"", item.source_path)
 
 	resized_path, resized_ok := make_process_temp_path(item.source_path, "resized.png")
 	if !resized_ok {
+		debug_log_errorf("png temp path failed: resized source=\"%s\"", item.source_path)
 		return Process_Image_Result{err = .Temp_Path_Failed}
 	}
+	debug_log_debugf("png temp resized: \"%s\"", resized_path)
 	defer delete(resized_path)
 	defer remove_if_exists(resized_path)
 
 	quant_path, quant_ok := make_process_temp_path(item.source_path, "quant.png")
 	if !quant_ok {
+		debug_log_errorf("png temp path failed: quant source=\"%s\"", item.source_path)
 		return Process_Image_Result{err = .Temp_Path_Failed}
 	}
+	debug_log_debugf("png temp quant: \"%s\"", quant_path)
 	defer delete(quant_path)
 	defer remove_if_exists(quant_path)
 
 	output_path, output_ok := make_process_temp_path(item.source_path, "optimized.png")
 	if !output_ok {
+		debug_log_errorf("png temp path failed: optimized output source=\"%s\"", item.source_path)
 		return Process_Image_Result{err = .Temp_Path_Failed}
 	}
+	debug_log_debugf("png temp optimized output: \"%s\"", output_path)
 
 	convert_icc_path := ""
 	embed_icc_path := ""
@@ -598,6 +800,13 @@ process_png_to_temp :: proc(
 	if config.png.preserve_profiles {
 		icc_result := determine_icc_profile_mode(item.source_path, runtime_env)
 		defer destroy_icc_profile_result(&icc_result)
+		debug_log_infof(
+			"png ICC decision: source=\"%s\" mode=%v err=%v detail=\"%s\"",
+			item.source_path,
+			icc_result.mode,
+			icc_result.err,
+			icc_result.detail,
+		)
 		if icc_result.err != .None {
 			delete(output_path)
 			return Process_Image_Result {
@@ -611,9 +820,14 @@ process_png_to_temp :: proc(
 			source_icc_ok: bool
 			source_icc_path, source_icc_ok = make_process_temp_path(item.source_path, "source.icc")
 			if !source_icc_ok {
+				debug_log_errorf(
+					"png ICC source temp path failed: source=\"%s\"",
+					item.source_path,
+				)
 				delete(output_path)
 				return Process_Image_Result{err = .Temp_Path_Failed}
 			}
+			debug_log_debugf("png source ICC temp: \"%s\"", source_icc_path)
 
 			command := build_icc_extract_command(
 				runtime_env.magick_path,
@@ -655,6 +869,7 @@ process_png_to_temp :: proc(
 		return Process_Image_Result{err = .Magick_Failed, detail = detail}
 	}
 	if !file_is_non_empty(resized_path) {
+		debug_log_errorf("png resized output missing or empty: \"%s\"", resized_path)
 		delete(output_path)
 		return Process_Image_Result {
 			err = .Empty_Output,
@@ -674,6 +889,7 @@ process_png_to_temp :: proc(
 		return Process_Image_Result{err = .Pngquant_Failed, detail = detail}
 	}
 	if !file_is_non_empty(quant_path) {
+		debug_log_errorf("png quant output missing or empty: \"%s\"", quant_path)
 		delete(output_path)
 		return Process_Image_Result {
 			err = .Empty_Output,
@@ -689,9 +905,14 @@ process_png_to_temp :: proc(
 			"profiled.png",
 		)
 		if !profiled_quant_ok {
+			debug_log_errorf(
+				"png profiled quant temp path failed: source=\"%s\"",
+				item.source_path,
+			)
 			delete(output_path)
 			return Process_Image_Result{err = .Temp_Path_Failed}
 		}
+		debug_log_debugf("png profiled quant temp: \"%s\"", profiled_quant_path)
 
 		profile_command := build_png_profile_command(
 			runtime_env.magick_path,
@@ -708,6 +929,7 @@ process_png_to_temp :: proc(
 			return Process_Image_Result{err = .Icc_Embed_Failed, detail = detail}
 		}
 		if !file_is_non_empty(profiled_quant_path) {
+			debug_log_errorf("png profiled output missing or empty: \"%s\"", profiled_quant_path)
 			delete(output_path)
 			return Process_Image_Result {
 				err = .Empty_Output,
@@ -731,6 +953,7 @@ process_png_to_temp :: proc(
 	}
 	if !file_is_non_empty(output_path) {
 		remove_if_exists(output_path)
+		debug_log_errorf("png optimized output missing or empty: \"%s\"", output_path)
 		delete(output_path)
 		return Process_Image_Result {
 			err = .Empty_Output,
@@ -747,11 +970,17 @@ process_png_to_temp :: proc(
 			runtime_env,
 		); !ok {
 			remove_if_exists(output_path)
+			debug_log_errorf(
+				"png ICC verification failed: output=\"%s\" detail=\"%s\"",
+				output_path,
+				detail,
+			)
 			delete(output_path)
 			return Process_Image_Result{err = .Icc_Verify_Failed, detail = detail}
 		}
 	}
 
+	debug_log_infof("png pipeline produced temp output: \"%s\"", output_path)
 	return Process_Image_Result{output_path = output_path}
 }
 
@@ -771,9 +1000,10 @@ determine_icc_profile_mode :: proc(
 	runtime_env: Runtime_Environment,
 ) -> Icc_Profile_Result {
 	command := build_icc_identify_command(runtime_env.magick_path, source_path)
-	state, stdout, stderr, err := os.process_exec(
-		os.Process_Desc{command = command, env = imagemagick_process_environment(runtime_env)},
-		context.allocator,
+	state, stdout, stderr, err := process_exec_logged(
+		command,
+		imagemagick_process_environment(runtime_env),
+		"ImageMagick ICC identify",
 	)
 	defer delete(stdout)
 	defer delete(stderr)
@@ -786,8 +1016,10 @@ determine_icc_profile_mode :: proc(
 	}
 
 	if len(stdout) > 0 && icc_profile_family_is_retained(string(stdout)) {
+		debug_log_infof("ICC profile retained: source=\"%s\"", source_path)
 		return Icc_Profile_Result{mode = .Embed_Source}
 	}
+	debug_log_infof("ICC profile requires sRGB conversion: source=\"%s\"", source_path)
 	return Icc_Profile_Result{mode = .Convert_To_Srgb}
 }
 
@@ -797,11 +1029,19 @@ make_process_temp_path :: proc(source_path, suffix: string) -> (string, bool) {
 		counter := sync.atomic_add(&process_temp_counter, 1) + 1
 		candidate := fmt.aprintf("%s.imgoptz.%d.%d.%s", source_path, pid, counter, suffix)
 		if !os.exists(candidate) {
+			debug_log_debugf(
+				"temp path created: source=\"%s\" suffix=%s path=\"%s\"",
+				source_path,
+				suffix,
+				candidate,
+			)
 			return candidate, true
 		}
+		debug_log_debugf("temp path collision: \"%s\"", candidate)
 		delete(candidate)
 		_ = attempt
 	}
+	debug_log_errorf("temp path creation exhausted: source=\"%s\" suffix=%s", source_path, suffix)
 	return "", false
 }
 
@@ -949,9 +1189,10 @@ verify_png_icc_profile :: proc(
 	bool,
 ) {
 	command := build_icc_identify_command(magick_path, output_path)
-	state, stdout, stderr, err := os.process_exec(
-		os.Process_Desc{command = command, env = imagemagick_process_environment(runtime_env)},
-		context.allocator,
+	state, stdout, stderr, err := process_exec_logged(
+		command,
+		imagemagick_process_environment(runtime_env),
+		"ImageMagick PNG ICC verify",
 	)
 	defer delete(stdout)
 	defer delete(stderr)
@@ -976,12 +1217,10 @@ verify_png_icc_profile :: proc(
 		defer cleanup_temp_path_slot(&actual_profile_path)
 
 		extract_command := build_icc_extract_command(magick_path, output_path, actual_profile_path)
-		extract_state, extract_stdout, extract_stderr, extract_err := os.process_exec(
-			os.Process_Desc {
-				command = extract_command,
-				env = imagemagick_process_environment(runtime_env),
-			},
-			context.allocator,
+		extract_state, extract_stdout, extract_stderr, extract_err := process_exec_logged(
+			extract_command,
+			imagemagick_process_environment(runtime_env),
+			"ImageMagick PNG ICC extract",
 		)
 		defer delete(extract_stdout)
 		defer delete(extract_stderr)
@@ -1092,10 +1331,7 @@ environment_entry_name_equals :: proc(entry, name: string) -> bool {
 }
 
 run_tool :: proc(command: []string, environment: []string, label: string) -> (string, bool) {
-	state, stdout, stderr, err := os.process_exec(
-		os.Process_Desc{command = command, env = environment},
-		context.allocator,
-	)
+	state, stdout, stderr, err := process_exec_logged(command, environment, label)
 	defer delete(stdout)
 	defer delete(stderr)
 
