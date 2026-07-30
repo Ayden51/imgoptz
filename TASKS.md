@@ -201,7 +201,8 @@ Goal: finish operator diagnostics without changing the normal console UI.
 - [x] Use Odin `core:log` file logging so existing user-facing logging calls can remain largely untouched.
 - [x] Keep console output in the existing structured UI format without log-level prefixes.
 - [x] Write log level and date/time on every debug log file entry.
-- [x] Append detailed child process and decision logs when enabled.
+- [x] Write each app run to a new datetime-prefixed debug log file instead of appending multiple runs into one file.
+- [x] Write detailed child process and decision logs when enabled.
 - [x] Organize debug file output with readable block structure matching the existing app/input/discovery/progress/summary sections where practical.
 - [x] Log app state transitions, parsed inputs, child process argument arrays, relevant environment overrides, exit state, stdout, and stderr when debug logging is enabled.
 - [x] Keep normal operation console-only.

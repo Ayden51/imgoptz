@@ -5,6 +5,7 @@ import "core:log"
 import "core:os"
 import "core:strings"
 import "core:sync"
+import "core:time"
 
 Debug_Log_Init_Result :: struct {
 	enabled: bool,
@@ -27,7 +28,7 @@ init_debug_logging :: proc(app_root: string, config: App_Config) -> Debug_Log_In
 		return Debug_Log_Init_Result{}
 	}
 
-	file, open_err := os.open(path, {.Write, .Append, .Create}, os.Permissions_Default_File)
+	file, open_err := os.open(path, {.Write, .Create, .Excl}, os.Permissions_Default_File)
 	if open_err != nil {
 		delete(path)
 		return Debug_Log_Init_Result{err = open_err}
@@ -75,7 +76,46 @@ resolve_debug_log_path :: proc(
 	app_root, debug_log_file: string,
 	allocator := context.allocator,
 ) -> string {
-	return resolve_app_relative_path(app_root, debug_log_file, allocator)
+	return resolve_debug_log_path_at(app_root, debug_log_file, time.now(), allocator)
+}
+
+resolve_debug_log_path_at :: proc(
+	app_root, debug_log_file: string,
+	timestamp: time.Time,
+	allocator := context.allocator,
+) -> string {
+	base_path := resolve_app_relative_path(app_root, debug_log_file, context.temp_allocator)
+	if len(base_path) == 0 {
+		return ""
+	}
+
+	dir, filename := os.split_path(base_path)
+	timestamp_prefix := debug_log_timestamp_prefix(timestamp)
+	log_filename := fmt.tprintf("%s-%s", timestamp_prefix, filename)
+	parts := [?]string{dir, log_filename}
+	path, join_err := os.join_path(parts[:], allocator)
+	if join_err != nil {
+		return ""
+	}
+	return path
+}
+
+debug_log_timestamp_prefix :: proc(timestamp: time.Time) -> string {
+	datetime, ok := time.time_to_datetime(timestamp)
+	if !ok {
+		return fmt.tprintf("%d", time.time_to_unix_nano(timestamp))
+	}
+
+	return fmt.tprintf(
+		"%04d%02d%02d-%02d%02d%02d-%09d",
+		datetime.year,
+		datetime.month,
+		datetime.day,
+		datetime.hour,
+		datetime.minute,
+		datetime.second,
+		datetime.nano,
+	)
 }
 
 debug_log_section :: proc(title: string) {

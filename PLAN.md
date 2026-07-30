@@ -701,7 +701,9 @@ After printing the summary block, wait briefly before returning to the next inpu
 
 Default is console-only.
 
-If `debug_log = true`, append detailed logs to `debug_log_file`.
+If `debug_log = true`, write detailed logs to a new file for each app run. Do not append multiple runs into one log file.
+
+Prefix the configured `debug_log_file` basename with a filesystem-safe datetime for the actual run log path, preserving the configured directory. Example: `debug_log_file = "logs/imgoptz.log"` writes to `logs/YYYYMMDD-HHMMSS-nnnnnnnnn-imgoptz.log`.
 
 Relative `debug_log_file` resolves against `<app-root>/`.
 
