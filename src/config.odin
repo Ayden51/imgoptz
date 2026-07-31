@@ -53,6 +53,7 @@ App_Config :: struct {
 	gpu:            bool,
 	debug_log:      bool,
 	debug_log_file: string,
+	dry_run:        bool,
 	output_mode:    Config_Output_Mode,
 	out_dir:        string,
 	jpeg:           Jpeg_Config,
@@ -81,6 +82,7 @@ default_config :: proc() -> App_Config {
 		gpu = true,
 		debug_log = false,
 		debug_log_file = strings.clone("imgoptz.log"),
+		dry_run = true,
 		output_mode = .In_Place,
 		out_dir = strings.clone("output"),
 		jpeg = Jpeg_Config {
@@ -245,6 +247,12 @@ apply_config_object :: proc(result: ^Config_Load_Result, object: json.Object) {
 				replace_config_string(&result.config.debug_log_file, value)
 			} else {
 				warn_invalid_config_value(result, "debug_log_file")
+			}
+		case "dry_run":
+			if value, ok := config_json_bool(value); ok {
+				result.config.dry_run = value
+			} else {
+				warn_invalid_config_value(result, "dry_run")
 			}
 		case "output_mode":
 			apply_output_mode_config(result, value)

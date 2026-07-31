@@ -187,6 +187,7 @@ Default config:
   "gpu": true,
   "debug_log": false,
   "debug_log_file": "imgoptz.log",
+  "dry_run": true,
   "output_mode": "in-place",
   "out_dir": "output",
   "jpeg": {
