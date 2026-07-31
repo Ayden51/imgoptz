@@ -50,7 +50,7 @@ prompt_once :: proc(
 	case .Exit:
 		return false
 	case .Directory_Path:
-		process_input_directory(input.path, runtime_env, config)
+		process_input_directory(input.path, runtime_env, config, sc)
 		return true
 	}
 
@@ -85,7 +85,7 @@ prompt_once_windows_console :: proc(runtime_env: Runtime_Environment, config: Ap
 	case .Exit:
 		return false
 	case .Directory_Path:
-		process_input_directory(input.path, runtime_env, config)
+		process_input_directory(input.path, runtime_env, config, nil)
 		return true
 	}
 
@@ -130,6 +130,7 @@ process_input_directory :: proc(
 	input_path: string,
 	runtime_env: Runtime_Environment,
 	config: App_Config,
+	approval_sc: ^bufio.Scanner,
 ) {
 	debug_log_infof("accept directory input: \"%s\"", input_path)
 	absolute_path, input_dir_err := accept_input_directory(input_path)
@@ -152,7 +153,14 @@ process_input_directory :: proc(
 			runtime_env.recursive,
 		)
 		print_discovery_summary(result, runtime_env.recursive)
-		process_discovered_images(result, config, runtime_env)
+		if config.dry_run {
+			dry_run_result := process_discovered_images_dry_run(result, config, runtime_env)
+			defer destroy_dry_run_process_result(&dry_run_result)
+			handle_dry_run_approval(&dry_run_result, runtime_env, approval_sc)
+			pause_after_processing_summary()
+		} else {
+			process_discovered_images(result, config, runtime_env)
+		}
 	case .Not_Directory:
 		debug_log_warnf("directory rejected: not a directory path=\"%s\"", input_path)
 		print_ui_errorf("Not a directory: %s", input_path)
@@ -160,4 +168,81 @@ process_input_directory :: proc(
 		debug_log_errorf("directory rejected: resolve failed path=\"%s\"", input_path)
 		print_ui_error("Failed to resolve directory path.")
 	}
+}
+
+handle_dry_run_approval :: proc(
+	result: ^Dry_Run_Process_Result,
+	runtime_env: Runtime_Environment,
+	approval_sc: ^bufio.Scanner,
+) {
+	if result.summary.succeeded == 0 {
+		print_dry_run_nothing_to_save()
+		debug_log_info("dry-run approval skipped: no successful temp outputs")
+		return
+	}
+
+	approval := prompt_for_dry_run_approval(approval_sc)
+	switch approval {
+	case .Approve:
+		debug_log_info("dry-run approved by user")
+		final_summary := finalize_dry_run_outputs(result, runtime_env.output_mode)
+		print_dry_run_saved(final_summary)
+	case .Decline:
+		debug_log_info("dry-run declined by user")
+		print_dry_run_declined()
+	case .Invalid:
+		debug_log_warnf("dry-run approval unavailable; treating as declined")
+		print_dry_run_declined()
+	}
+}
+
+prompt_for_dry_run_approval :: proc(approval_sc: ^bufio.Scanner) -> Approval_Input_Kind {
+	for {
+		print_dry_run_approval_prompt()
+		raw, ok := read_approval_line(approval_sc)
+		if !ok {
+			return .Invalid
+		}
+
+		approval := parse_approval_input(raw)
+		delete(raw)
+		if approval != .Invalid {
+			return approval
+		}
+		print_dry_run_approval_invalid()
+	}
+}
+
+read_approval_line :: proc(approval_sc: ^bufio.Scanner) -> (string, bool) {
+	if approval_sc != nil {
+		if !bufio.scan(approval_sc) {
+			return "", false
+		}
+		line := bufio.scanner_text(approval_sc)
+		cloned, clone_err := strings.clone(line)
+		if clone_err != nil {
+			return "", false
+		}
+		return cloned, true
+	}
+
+	when ODIN_OS == .Windows {
+		if stdin_is_windows_console() {
+			return read_windows_console_line_utf8()
+		}
+	}
+
+	sc: bufio.Scanner
+	bufio.scanner_init(&sc, os.to_stream(os.stdin))
+	defer bufio.scanner_destroy(&sc)
+	sc.split = bufio.scan_lines
+	if !bufio.scan(&sc) {
+		return "", false
+	}
+	line := bufio.scanner_text(&sc)
+	cloned, clone_err := strings.clone(line)
+	if clone_err != nil {
+		return "", false
+	}
+	return cloned, true
 }

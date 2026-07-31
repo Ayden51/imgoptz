@@ -549,6 +549,100 @@ test_finalize_in_place_replaces_smaller_output_and_slugifies_name :: proc(t: ^te
 }
 
 @(test, require)
+test_dry_run_decline_cleanup_removes_retained_temp_without_writing :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp(
+		"",
+		"imgoptz-dry-run-decline-*",
+		context.allocator,
+	)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	source_path := processing_join(t, temp_dir, "Photo.JPG")
+	temp_output_path := processing_join(t, temp_dir, "optimized.tmp")
+	if len(source_path) == 0 ||
+	   len(temp_output_path) == 0 ||
+	   !testing.expect_value(t, os.write_entire_file(source_path, "original-large"), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(temp_output_path, "tiny"), nil) {
+		return
+	}
+
+	item := Image_Work_Item {
+		source_path      = source_path,
+		relative_path    = "Photo.JPG",
+		destination_path = source_path,
+		kind             = .Jpeg,
+	}
+	preview := evaluate_optimized_output(item, temp_output_path)
+	dry_run: Dry_Run_Process_Result
+	append(
+		&dry_run.previews,
+		Preview_Image_Result {
+			item = item,
+			temp = Process_Image_Result{output_path = strings.clone(temp_output_path)},
+			preview = preview,
+		},
+	)
+
+	destroy_dry_run_process_result(&dry_run)
+
+	testing.expect(t, processing_file_has_contents(t, source_path, "original-large"))
+	testing.expect(t, !os.exists(temp_output_path))
+}
+
+@(test, require)
+test_dry_run_approval_finalizes_retained_temp_without_rerunning :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp(
+		"",
+		"imgoptz-dry-run-approve-*",
+		context.allocator,
+	)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	source_path := processing_join(t, temp_dir, "Ảnh Đẹp.JPG")
+	temp_output_path := processing_join(t, temp_dir, "optimized.tmp")
+	final_path := processing_join(t, temp_dir, "anh-dep.jpg")
+	if len(source_path) == 0 ||
+	   len(temp_output_path) == 0 ||
+	   len(final_path) == 0 ||
+	   !testing.expect_value(t, os.write_entire_file(source_path, "original-large"), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(temp_output_path, "tiny"), nil) {
+		return
+	}
+
+	item := Image_Work_Item {
+		source_path      = source_path,
+		relative_path    = "Ảnh Đẹp.JPG",
+		destination_path = source_path,
+		kind             = .Jpeg,
+	}
+	preview := evaluate_optimized_output(item, temp_output_path)
+	dry_run: Dry_Run_Process_Result
+	append(
+		&dry_run.previews,
+		Preview_Image_Result {
+			item = item,
+			temp = Process_Image_Result{output_path = strings.clone(temp_output_path)},
+			preview = preview,
+		},
+	)
+	defer destroy_dry_run_process_result(&dry_run)
+
+	summary := finalize_dry_run_outputs(&dry_run, .In_Place)
+
+	testing.expect_value(t, summary.succeeded, 1)
+	testing.expect_value(t, summary.failed, 0)
+	testing.expect(t, !os.exists(source_path))
+	testing.expect(t, !os.exists(temp_output_path))
+	testing.expect(t, processing_file_has_contents(t, final_path, "tiny"))
+}
+
+@(test, require)
 test_finalize_in_place_applies_case_only_slugified_name :: proc(t: ^testing.T) {
 	temp_dir, temp_err := os.make_directory_temp(
 		"",
