@@ -38,3 +38,21 @@ test_parse_prompt_input_rejects_empty_path :: proc(t: ^testing.T) {
 	testing.expect_value(t, input.kind, Prompt_Input_Kind.Invalid)
 	testing.expect_value(t, input.path, "")
 }
+
+@(test, require)
+test_parse_approval_input_accepts_specified_values :: proc(t: ^testing.T) {
+	testing.expect_value(t, parse_approval_input("y"), Approval_Input_Kind.Approve)
+	testing.expect_value(t, parse_approval_input("yes"), Approval_Input_Kind.Approve)
+	testing.expect_value(t, parse_approval_input("YES"), Approval_Input_Kind.Approve)
+	testing.expect_value(t, parse_approval_input("N"), Approval_Input_Kind.Decline)
+	testing.expect_value(t, parse_approval_input("no"), Approval_Input_Kind.Decline)
+	testing.expect_value(t, parse_approval_input("NO"), Approval_Input_Kind.Decline)
+}
+
+@(test, require)
+test_parse_approval_input_rejects_empty_and_unlisted_values :: proc(t: ^testing.T) {
+	testing.expect_value(t, parse_approval_input(""), Approval_Input_Kind.Invalid)
+	testing.expect_value(t, parse_approval_input("Y"), Approval_Input_Kind.Invalid)
+	testing.expect_value(t, parse_approval_input("n"), Approval_Input_Kind.Invalid)
+	testing.expect_value(t, parse_approval_input(" y"), Approval_Input_Kind.Invalid)
+}
