@@ -189,6 +189,7 @@ debug_log_config :: proc(config: App_Config) {
 	debug_log_debugf("gpu=%v", config.gpu)
 	debug_log_debugf("debug_log=%v", config.debug_log)
 	debug_log_debugf("debug_log_file=\"%s\"", config.debug_log_file)
+	debug_log_debugf("dry_run=%v", config.dry_run)
 	debug_log_debugf("output_mode=%s", debug_log_output_mode(config.output_mode))
 	debug_log_debugf("out_dir=\"%s\"", config.out_dir)
 	debug_log_debugf(
