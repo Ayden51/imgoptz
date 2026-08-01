@@ -156,8 +156,9 @@ process_input_directory :: proc(
 		if config.dry_run {
 			dry_run_result := process_discovered_images_dry_run(result, config, runtime_env)
 			defer destroy_dry_run_process_result(&dry_run_result)
-			handle_dry_run_approval(&dry_run_result, runtime_env, approval_sc)
-			pause_after_processing_summary()
+			if !handle_dry_run_approval(&dry_run_result, runtime_env, approval_sc) {
+				pause_after_processing_summary()
+			}
 		} else {
 			process_discovered_images(result, config, runtime_env)
 		}
@@ -174,11 +175,11 @@ handle_dry_run_approval :: proc(
 	result: ^Dry_Run_Process_Result,
 	runtime_env: Runtime_Environment,
 	approval_sc: ^bufio.Scanner,
-) {
+) -> bool {
 	if result.summary.succeeded == 0 {
 		print_dry_run_nothing_to_save()
 		debug_log_info("dry-run approval skipped: no successful temp outputs")
-		return
+		return false
 	}
 
 	approval := prompt_for_dry_run_approval(approval_sc)
@@ -194,6 +195,7 @@ handle_dry_run_approval :: proc(
 		debug_log_warnf("dry-run approval unavailable; treating as declined")
 		print_dry_run_declined()
 	}
+	return true
 }
 
 prompt_for_dry_run_approval :: proc(approval_sc: ^bufio.Scanner) -> Approval_Input_Kind {
