@@ -106,13 +106,13 @@ discovery_error_summary :: proc(err: Discovery_Error) -> string {
 	case .None:
 		return ""
 	case .Read_Failed:
-		return "Failed to read image directory."
+		return "Could not read this folder. Please check permissions and try again."
 	case .Relative_Path_Failed:
-		return "Failed to plan relative output path."
+		return "Could not prepare an output path for this file."
 	case .Destination_Path_Failed:
-		return "Failed to plan destination output path."
+		return "Could not prepare the destination folder for this file."
 	}
-	return "Failed to discover images."
+	return "Could not find images in this folder."
 }
 
 discover_directory :: proc(
