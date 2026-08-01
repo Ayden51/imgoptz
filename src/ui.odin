@@ -1,6 +1,7 @@
 package main
 
 import "core:fmt"
+import "core:strings"
 import win "core:sys/windows"
 import "core:time"
 import "core:unicode/utf8"
@@ -29,6 +30,16 @@ Console_Pacer :: struct {
 	has_printed:     bool,
 	last_printed_at: time.Time,
 	slept:           time.Duration,
+}
+
+Progress_Display_Item :: struct {
+	path:  string,
+	width: int,
+}
+
+Progress_Display_Layout :: struct {
+	items:     []Progress_Display_Item,
+	max_width: int,
 }
 
 console_pacer_init :: proc(delay: time.Duration) -> Console_Pacer {
@@ -162,12 +173,12 @@ print_progress_header :: proc() {
 	print_ui_blank()
 }
 
-print_progress_ok :: proc(
-	relative_path: string,
+print_progress_ok_display :: proc(
+	display_path: string,
 	original_size, optimized_size, reduction_percent: i64,
 ) {
 	print_ui_line(
-		progress_ok_line(relative_path, original_size, optimized_size, reduction_percent),
+		progress_ok_line_display(display_path, original_size, optimized_size, reduction_percent),
 	)
 }
 
@@ -175,10 +186,22 @@ progress_ok_line :: proc(
 	relative_path: string,
 	original_size, optimized_size, reduction_percent: i64,
 ) -> string {
+	return progress_ok_line_display(
+		display_progress_path(relative_path),
+		original_size,
+		optimized_size,
+		reduction_percent,
+	)
+}
+
+progress_ok_line_display :: proc(
+	display_path: string,
+	original_size, optimized_size, reduction_percent: i64,
+) -> string {
 	return fmt.tprintf(
 		"%s %s  |  %s -> %s (%s)",
 		UI_OK,
-		display_progress_path(relative_path),
+		display_path,
 		format_progress_size(original_size),
 		format_progress_size(optimized_size),
 		format_progress_reduction(original_size, optimized_size, reduction_percent),
@@ -223,25 +246,28 @@ print_progress_error :: proc(relative_path: string, err: Image_Process_Error) {
 	print_ui_line(progress_error_line(relative_path, err))
 }
 
-progress_error_line :: proc(relative_path: string, err: Image_Process_Error) -> string {
-	return fmt.tprintf(
-		"%s %s  |  %s",
-		UI_ERROR,
-		display_progress_path(relative_path),
-		image_process_error_summary(err),
-	)
+print_progress_error_display :: proc(display_path: string, err: Image_Process_Error) {
+	print_ui_line(progress_error_line_display(display_path, err))
 }
 
-print_progress_skip :: proc(relative_path: string) {
-	print_ui_line(progress_skip_line(relative_path))
+progress_error_line :: proc(relative_path: string, err: Image_Process_Error) -> string {
+	return progress_error_line_display(display_progress_path(relative_path), err)
+}
+
+progress_error_line_display :: proc(display_path: string, err: Image_Process_Error) -> string {
+	return fmt.tprintf("%s %s  |  %s", UI_ERROR, display_path, image_process_error_summary(err))
+}
+
+print_progress_skip_display :: proc(display_path: string) {
+	print_ui_line(progress_skip_line_display(display_path))
 }
 
 progress_skip_line :: proc(relative_path: string) -> string {
-	return fmt.tprintf(
-		"%s %s  |  Skipped: optimized file was not smaller.",
-		UI_SKIP,
-		display_progress_path(relative_path),
-	)
+	return progress_skip_line_display(display_progress_path(relative_path))
+}
+
+progress_skip_line_display :: proc(display_path: string) -> string {
+	return fmt.tprintf("%s %s  |  Skipped: optimized file was not smaller.", UI_SKIP, display_path)
 }
 
 print_progress_empty :: proc() {
@@ -337,6 +363,59 @@ file_word :: proc(count: int) -> string {
 		return "file"
 	}
 	return "files"
+}
+
+build_progress_display_layout :: proc(items: []Image_Work_Item) -> Progress_Display_Layout {
+	layout := Progress_Display_Layout {
+		items = make([]Progress_Display_Item, len(items)),
+	}
+	for item, index in items {
+		display_path := display_progress_path(item.relative_path)
+		width := progress_display_width(display_path)
+		layout.items[index] = Progress_Display_Item {
+			path  = strings.clone(display_path),
+			width = width,
+		}
+		layout.max_width = max(layout.max_width, width)
+	}
+
+	for &item in layout.items {
+		if item.width >= layout.max_width {
+			continue
+		}
+		padded := right_pad_progress_display_path(item.path, item.width, layout.max_width)
+		delete(item.path)
+		item.path = padded
+		item.width = layout.max_width
+	}
+	return layout
+}
+
+destroy_progress_display_layout :: proc(layout: ^Progress_Display_Layout) {
+	for item in layout.items {
+		delete(item.path)
+	}
+	delete(layout.items)
+	layout^ = {}
+}
+
+right_pad_progress_display_path :: proc(path: string, width, target_width: int) -> string {
+	pad_count := target_width - width
+	if pad_count <= 0 {
+		return strings.clone(path)
+	}
+
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	strings.write_string(&builder, path)
+	for _ in 0 ..< pad_count {
+		strings.write_byte(&builder, ' ')
+	}
+	return strings.clone(strings.to_string(builder))
+}
+
+progress_display_width :: proc(path: string) -> int {
+	return utf8_rune_count(path)
 }
 
 display_progress_path :: proc(relative_path: string) -> string {

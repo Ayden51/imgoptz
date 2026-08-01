@@ -37,6 +37,28 @@ test_progress_path_truncates_long_unicode_stem_to_last_word :: proc(t: ^testing.
 }
 
 @(test, require)
+test_progress_display_layout_aligns_names_before_separator :: proc(t: ^testing.T) {
+	items := [?]Image_Work_Item {
+		{
+			relative_path = "Hai trường THCS tại TP.HCM công bố điểm chuẩn lớp 6 và hướng dẫn xác nhận nhập học năm 2026.png",
+		},
+		{relative_path = "Bách phân vị.png"},
+	}
+	layout := build_progress_display_layout(items[:])
+	defer destroy_progress_display_layout(&layout)
+
+	first := progress_ok_line_display(layout.items[0].path, 702_464, 307_200, -56)
+	second := progress_ok_line_display(layout.items[1].path, 155_648, 55_706, -64)
+
+	testing.expect_value(t, first, "√ Hai trường THCS...2026.png  |  686 KB -> 300 KB (-56%)")
+	testing.expect_value(
+		t,
+		second,
+		"√ Bách phân vị.png            |  152 KB -> 54.4 KB (-64%)",
+	)
+}
+
+@(test, require)
 test_progress_ok_line_omits_output_path_detail :: proc(t: ^testing.T) {
 	line := progress_ok_line("Ảnh Đẹp.JPG", 2_048, 1_024, -50)
 
