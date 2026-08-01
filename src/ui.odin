@@ -3,6 +3,7 @@ package main
 import "core:fmt"
 import win "core:sys/windows"
 import "core:time"
+import "core:unicode/utf8"
 
 foreign import shlwapi "system:shlwapi.lib"
 
@@ -19,6 +20,9 @@ UI_WARN :: "!"
 
 CONSOLE_PROGRESS_ROW_DELAY :: 90 * time.Millisecond
 CONSOLE_SUMMARY_READ_DELAY :: 1500 * time.Millisecond
+DISPLAY_STEM_TRUNCATE_THRESHOLD :: 25
+DISPLAY_STEM_PREFIX_RUNES :: 15
+DISPLAY_STEM_FALLBACK_SUFFIX_RUNES :: 7
 
 Console_Pacer :: struct {
 	delay:           time.Duration,
@@ -174,7 +178,7 @@ progress_ok_line :: proc(
 	return fmt.tprintf(
 		"%s %s  |  %s -> %s (%s)",
 		UI_OK,
-		relative_path,
+		display_progress_path(relative_path),
 		format_progress_size(original_size),
 		format_progress_size(optimized_size),
 		format_progress_reduction(original_size, optimized_size, reduction_percent),
@@ -220,7 +224,12 @@ print_progress_error :: proc(relative_path: string, err: Image_Process_Error) {
 }
 
 progress_error_line :: proc(relative_path: string, err: Image_Process_Error) -> string {
-	return fmt.tprintf("%s %s  |  %s", UI_ERROR, relative_path, image_process_error_summary(err))
+	return fmt.tprintf(
+		"%s %s  |  %s",
+		UI_ERROR,
+		display_progress_path(relative_path),
+		image_process_error_summary(err),
+	)
 }
 
 print_progress_skip :: proc(relative_path: string) {
@@ -231,7 +240,7 @@ progress_skip_line :: proc(relative_path: string) -> string {
 	return fmt.tprintf(
 		"%s %s  |  Skipped: optimized file was not smaller.",
 		UI_SKIP,
-		relative_path,
+		display_progress_path(relative_path),
 	)
 }
 
@@ -328,6 +337,97 @@ file_word :: proc(count: int) -> string {
 		return "file"
 	}
 	return "files"
+}
+
+display_progress_path :: proc(relative_path: string) -> string {
+	prefix, filename := split_display_filename(relative_path)
+	stem, extension := split_display_extension(filename)
+	if utf8_rune_count(stem) <= DISPLAY_STEM_TRUNCATE_THRESHOLD {
+		return relative_path
+	}
+	first_end := utf8_byte_offset_after_runes(stem, DISPLAY_STEM_PREFIX_RUNES)
+	suffix := display_stem_suffix(stem)
+	return fmt.tprintf("%s%s...%s%s", prefix, stem[:first_end], suffix, extension)
+}
+
+split_display_filename :: proc(path: string) -> (prefix, filename: string) {
+	last_separator := -1
+	for index in 0 ..< len(path) {
+		if path[index] == '/' || path[index] == '\\' {
+			last_separator = index
+		}
+	}
+	if last_separator < 0 {
+		return "", path
+	}
+	return path[:last_separator + 1], path[last_separator + 1:]
+}
+
+split_display_extension :: proc(filename: string) -> (stem, extension: string) {
+	last_dot := -1
+	for index in 0 ..< len(filename) {
+		if filename[index] == '.' {
+			last_dot = index
+		}
+	}
+	if last_dot <= 0 {
+		return filename, ""
+	}
+	return filename[:last_dot], filename[last_dot:]
+}
+
+display_stem_suffix :: proc(stem: string) -> string {
+	last_word_start := -1
+	for index in 0 ..< len(stem) {
+		if is_display_word_separator(stem[index]) && index + 1 < len(stem) {
+			last_word_start = index + 1
+		}
+	}
+	if last_word_start > 0 {
+		return stem[last_word_start:]
+	}
+	return utf8_last_runes(stem, DISPLAY_STEM_FALLBACK_SUFFIX_RUNES)
+}
+
+is_display_word_separator :: proc(ch: u8) -> bool {
+	return ch == ' ' || ch == '_' || ch == '-'
+}
+
+utf8_rune_count :: proc(value: string) -> int {
+	count := 0
+	byte_offset := 0
+	for byte_offset < len(value) {
+		_, width := utf8.decode_rune_in_string(value[byte_offset:])
+		if width <= 0 {
+			break
+		}
+		byte_offset += width
+		count += 1
+	}
+	return count
+}
+
+utf8_byte_offset_after_runes :: proc(value: string, rune_count: int) -> int {
+	count := 0
+	byte_offset := 0
+	for byte_offset < len(value) && count < rune_count {
+		_, width := utf8.decode_rune_in_string(value[byte_offset:])
+		if width <= 0 {
+			break
+		}
+		byte_offset += width
+		count += 1
+	}
+	return byte_offset
+}
+
+utf8_last_runes :: proc(value: string, rune_count: int) -> string {
+	total := utf8_rune_count(value)
+	if total <= rune_count {
+		return value
+	}
+	start := utf8_byte_offset_after_runes(value, total - rune_count)
+	return value[start:]
 }
 
 summary_reduction_percent :: proc(original_size, optimized_size: i64) -> f64 {

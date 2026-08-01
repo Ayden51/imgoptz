@@ -25,6 +25,18 @@ test_progress_ok_line_uses_less_than_one_percent_for_small_reductions :: proc(t:
 }
 
 @(test, require)
+test_progress_path_truncates_long_unicode_stem_to_last_word :: proc(t: ^testing.T) {
+	line := progress_ok_line(
+		"Hai trường THCS tại TP.HCM công bố điểm chuẩn lớp 6 và hướng dẫn xác nhận nhập học năm 2026.png",
+		702_464,
+		307_200,
+		-56,
+	)
+
+	testing.expect_value(t, line, "√ Hai trường THCS...2026.png  |  686 KB -> 300 KB (-56%)")
+}
+
+@(test, require)
 test_progress_ok_line_omits_output_path_detail :: proc(t: ^testing.T) {
 	line := progress_ok_line("Ảnh Đẹp.JPG", 2_048, 1_024, -50)
 
