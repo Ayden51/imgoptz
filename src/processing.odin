@@ -158,6 +158,7 @@ process_discovered_images_dry_run :: proc(
 	print_progress_header()
 	started_at := time.now()
 	result: Dry_Run_Process_Result
+	result.previews.allocator = context.allocator
 	debug_log_section("PROGRESS")
 	debug_log_infof(
 		"dry-run processing start: items=%d worker_count=%d",
