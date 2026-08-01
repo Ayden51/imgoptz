@@ -116,7 +116,7 @@ print_input_header :: proc() {
 
 print_input_accepted :: proc() {
 	print_ui_blank()
-	print_ui_linef("%s Valid path", UI_OK)
+	print_ui_linef("%s Directory accepted", UI_OK)
 }
 
 print_discovery_summary :: proc(result: Discovery_Result, recursive: bool) {
@@ -125,13 +125,29 @@ print_discovery_summary :: proc(result: Discovery_Result, recursive: bool) {
 		mode = "recursive"
 	}
 	print_ui_linef(
-		"%s Found %d images (%d JPG, %d PNG) - %s",
+		"%s Found %d images (%d JPG, %d PNG) - Scope: %s.",
 		UI_INFO,
 		len(result.items),
 		result.jpeg_count,
 		result.png_count,
-		mode,
+		discovery_scope_label(mode),
 	)
+}
+
+discovery_scope_label :: proc(mode: string) -> string {
+	if mode == "recursive" {
+		return "including subfolders"
+	}
+	return "current folder only"
+}
+
+print_dry_run_mode :: proc(output_mode: Config_Output_Mode) {
+	if output_mode == .In_Place {
+		print_ui_linef(
+			"%s Mode: preview first, then replace originals only after approval.",
+			UI_INFO,
+		)
+	}
 }
 
 print_discovery_error :: proc(result: Discovery_Result) {
@@ -156,13 +172,22 @@ progress_ok_line :: proc(
 	original_size, optimized_size, reduction_percent: i64,
 ) -> string {
 	return fmt.tprintf(
-		"%s %s  %s -> %s (%d%%)",
+		"%s %s  |  %s -> %s (%s)",
 		UI_OK,
 		relative_path,
 		format_progress_size(original_size),
 		format_progress_size(optimized_size),
-		reduction_percent,
+		format_progress_reduction(original_size, optimized_size, reduction_percent),
 	)
+}
+
+format_progress_reduction :: proc(
+	original_size, optimized_size, reduction_percent: i64,
+) -> string {
+	if optimized_size < original_size && reduction_percent == 0 {
+		return "<1%"
+	}
+	return fmt.tprintf("%d%%", reduction_percent)
 }
 
 format_progress_size :: proc(size: i64) -> string {
@@ -195,7 +220,7 @@ print_progress_error :: proc(relative_path: string, err: Image_Process_Error) {
 }
 
 progress_error_line :: proc(relative_path: string, err: Image_Process_Error) -> string {
-	return fmt.tprintf("%s %s  %s", UI_ERROR, relative_path, image_process_error_summary(err))
+	return fmt.tprintf("%s %s  |  %s", UI_ERROR, relative_path, image_process_error_summary(err))
 }
 
 print_progress_skip :: proc(relative_path: string) {
@@ -203,23 +228,45 @@ print_progress_skip :: proc(relative_path: string) {
 }
 
 progress_skip_line :: proc(relative_path: string) -> string {
-	return fmt.tprintf("%s %s  Optimized output was not smaller", UI_SKIP, relative_path)
+	return fmt.tprintf(
+		"%s %s  |  Skipped: optimized file was not smaller.",
+		UI_SKIP,
+		relative_path,
+	)
 }
 
 print_progress_empty :: proc() {
-	print_ui_linef("%s No supported images to process.", UI_INFO)
+	print_ui_linef("%s No JPG or PNG files found to process.", UI_INFO)
 }
 
-print_processing_summary :: proc(summary: Processing_Summary, elapsed: time.Duration) {
+print_processing_summary :: proc(
+	summary: Processing_Summary,
+	elapsed: time.Duration,
+	dry_run: bool,
+) {
 	print_ui_section("SUMMARY")
+	if dry_run {
+		print_ui_linef(
+			"Preview:  %d Ready - %d Skipped - %d Failed",
+			summary.succeeded,
+			summary.skipped,
+			summary.failed,
+		)
+	} else {
+		print_ui_linef(
+			"Files:  %d Succeeded - %d Skipped - %d Failed",
+			summary.succeeded,
+			summary.skipped,
+			summary.failed,
+		)
+	}
+	savings_label := "Saved"
+	if dry_run {
+		savings_label = "Potential savings"
+	}
 	print_ui_linef(
-		"Files:  %d Succeeded - %d Skipped - %d Failed",
-		summary.succeeded,
-		summary.skipped,
-		summary.failed,
-	)
-	print_ui_linef(
-		"Saved:  %s -> %s (%.1f%%) - Completed in %.1fs",
+		"%s:  %s -> %s (%.1f%%) - Completed in %.1fs",
+		savings_label,
 		format_progress_size(summary.original_total),
 		format_progress_size(summary.optimized_total),
 		summary_reduction_percent(summary.original_total, summary.optimized_total),
@@ -227,32 +274,60 @@ print_processing_summary :: proc(summary: Processing_Summary, elapsed: time.Dura
 	)
 }
 
-print_dry_run_approval_prompt :: proc() {
+print_dry_run_approval_prompt :: proc(output_mode: Config_Output_Mode) {
 	print_ui_blank()
 	print_ui_linef(
-		"%s Dry run complete. Check the results above before saving optimized files.",
+		"%s Finish processing. Optimized files are waiting to be saved to disk. Check the results above before saving optimized files.",
 		UI_INFO,
 	)
-	print_ui_line("Save optimized files? (y/N)")
+	if output_mode == .Dir {
+		print_ui_line("Write optimized files to the output folder? (y/N)")
+	} else {
+		print_ui_line("Replace originals with these optimized files? (y/N)")
+	}
 }
 
 print_dry_run_approval_invalid :: proc() {
-	print_ui_warning("Save optimized files? (y/N)")
+	print_ui_warning("Please type y to save, or press Enter for No.")
 }
 
 print_dry_run_declined :: proc() {
-	print_ui_linef("%s Declined. No optimized files were written.", UI_SKIP)
+	print_ui_linef("%s Discarded optimized files. Originals unchanged.", UI_SKIP)
 }
 
 print_dry_run_nothing_to_save :: proc() {
-	print_ui_linef("%s No smaller optimized outputs to save.", UI_INFO)
+	print_ui_linef("%s Nothing to save. No optimized file was smaller than the original.", UI_INFO)
 }
 
-print_dry_run_saved :: proc(summary: Processing_Summary) {
-	print_ui_linef("%s Saved %d optimized files.", UI_OK, summary.succeeded)
-	if summary.failed > 0 {
-		print_ui_warning("Some optimized files could not be written.")
+print_dry_run_saved :: proc(summary: Processing_Summary, runtime_env: Runtime_Environment) {
+	if runtime_env.output_mode == .Dir {
+		print_ui_linef(
+			"%s Wrote %d optimized %s to folder \"%s\".",
+			UI_OK,
+			summary.succeeded,
+			file_word(summary.succeeded),
+			runtime_env.output_root,
+		)
+	} else {
+		print_ui_linef(
+			"%s Replaced %d original %s with optimized versions.",
+			UI_OK,
+			summary.succeeded,
+			file_word(summary.succeeded),
+		)
 	}
+	if summary.failed > 0 {
+		print_ui_warning(
+			"Some optimized files could not be saved. Originals were kept for those files.",
+		)
+	}
+}
+
+file_word :: proc(count: int) -> string {
+	if count == 1 {
+		return "file"
+	}
+	return "files"
 }
 
 summary_reduction_percent :: proc(original_size, optimized_size: i64) -> f64 {

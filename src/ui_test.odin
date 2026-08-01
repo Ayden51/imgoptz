@@ -7,14 +7,21 @@ import "core:testing"
 test_progress_ok_line_includes_size_reduction :: proc(t: ^testing.T) {
 	line := progress_ok_line("Demo 1.png", 1_048_576, 225_280, -78)
 
-	testing.expect_value(t, line, "√ Demo 1.png  1.00 MB -> 220 KB (-78%)")
+	testing.expect_value(t, line, "√ Demo 1.png  |  1.00 MB -> 220 KB (-78%)")
 }
 
 @(test, require)
 test_progress_ok_line_uses_windows_shell_size_format :: proc(t: ^testing.T) {
 	line := progress_ok_line("Wide.jpg", 2_621_440, 1_153_433, -56)
 
-	testing.expect_value(t, line, "√ Wide.jpg  2.50 MB -> 1.09 MB (-56%)")
+	testing.expect_value(t, line, "√ Wide.jpg  |  2.50 MB -> 1.09 MB (-56%)")
+}
+
+@(test, require)
+test_progress_ok_line_uses_less_than_one_percent_for_small_reductions :: proc(t: ^testing.T) {
+	line := progress_ok_line("Tiny.jpg", 1_000, 999, 0)
+
+	testing.expect_value(t, line, "√ Tiny.jpg  |  1000 bytes -> 999 bytes (<1%)")
 }
 
 @(test, require)
@@ -30,14 +37,14 @@ test_progress_ok_line_omits_output_path_detail :: proc(t: ^testing.T) {
 test_progress_error_line_is_compact :: proc(t: ^testing.T) {
 	line := progress_error_line("Broken.png", .Pngquant_Failed)
 
-	testing.expect_value(t, line, "X Broken.png  pngquant compression failed")
+	testing.expect_value(t, line, "X Broken.png  |  Could not compress this PNG.")
 }
 
 @(test, require)
 test_progress_skip_line_is_compact :: proc(t: ^testing.T) {
 	line := progress_skip_line("Large.png")
 
-	testing.expect_value(t, line, "- Large.png  Optimized output was not smaller")
+	testing.expect_value(t, line, "- Large.png  |  Skipped: optimized file was not smaller.")
 }
 
 @(test, require)
