@@ -58,19 +58,21 @@ Dry_Run_Process_Result :: struct {
 }
 
 Image_Process_Worker_State :: struct {
-	items:          []Image_Work_Item,
-	config:         ^App_Config,
-	runtime_env:    ^Runtime_Environment,
-	next_index:     int,
-	progress_mutex: sync.Mutex,
-	progress_pacer: ^Console_Pacer,
-	summary:        ^Processing_Summary,
+	items:           []Image_Work_Item,
+	config:          ^App_Config,
+	runtime_env:     ^Runtime_Environment,
+	progress_layout: ^Progress_Display_Layout,
+	next_index:      int,
+	progress_mutex:  sync.Mutex,
+	progress_pacer:  ^Console_Pacer,
+	summary:         ^Processing_Summary,
 }
 
 Image_Preview_Worker_State :: struct {
 	items:             []Image_Work_Item,
 	config:            ^App_Config,
 	runtime_env:       ^Runtime_Environment,
+	progress_layout:   ^Progress_Display_Layout,
 	next_index:        int,
 	progress_mutex:    sync.Mutex,
 	progress_pacer:    ^Console_Pacer,
@@ -120,7 +122,7 @@ process_discovered_images :: proc(
 			"processing finish: succeeded=0 skipped=0 failed=0 original_total=0 optimized_total=0",
 		)
 		print_progress_empty()
-		print_processing_summary(summary, time.since(started_at))
+		print_processing_summary(summary, time.since(started_at), false)
 		pause_after_processing_summary()
 		return
 	}
@@ -128,10 +130,13 @@ process_discovered_images :: proc(
 	worker_config := config
 	worker_runtime_env := runtime_env
 	progress_pacer := console_pacer_init(CONSOLE_PROGRESS_ROW_DELAY)
+	progress_layout := build_progress_display_layout(discovery.items[:])
+	defer destroy_progress_display_layout(&progress_layout)
 	process_images_parallel(
 		discovery.items[:],
 		&worker_config,
 		&worker_runtime_env,
+		&progress_layout,
 		&summary,
 		&progress_pacer,
 	)
@@ -147,7 +152,7 @@ process_discovered_images :: proc(
 		summary.optimized_total,
 		time.duration_seconds(elapsed),
 	)
-	print_processing_summary(summary, elapsed)
+	print_processing_summary(summary, elapsed, false)
 	pause_after_processing_summary()
 }
 
@@ -174,17 +179,20 @@ process_discovered_images_dry_run :: proc(
 			"dry-run processing finish: succeeded=0 skipped=0 failed=0 original_total=0 optimized_total=0",
 		)
 		print_progress_empty()
-		print_processing_summary(result.summary, 0 * time.Millisecond)
+		print_processing_summary(result.summary, 0 * time.Millisecond, true)
 		return result
 	}
 
 	worker_config := config
 	worker_runtime_env := runtime_env
 	progress_pacer := console_pacer_init(CONSOLE_PROGRESS_ROW_DELAY)
+	progress_layout := build_progress_display_layout(discovery.items[:])
+	defer destroy_progress_display_layout(&progress_layout)
 	process_image_previews_parallel(
 		discovery.items[:],
 		&worker_config,
 		&worker_runtime_env,
+		&progress_layout,
 		&result.summary,
 		&result.previews,
 		&progress_pacer,
@@ -201,7 +209,7 @@ process_discovered_images_dry_run :: proc(
 		result.summary.optimized_total,
 		time.duration_seconds(result.elapsed),
 	)
-	print_processing_summary(result.summary, result.elapsed)
+	print_processing_summary(result.summary, result.elapsed, true)
 	return result
 }
 
@@ -217,15 +225,22 @@ process_images_parallel :: proc(
 	items: []Image_Work_Item,
 	config: ^App_Config,
 	runtime_env: ^Runtime_Environment,
+	progress_layout: ^Progress_Display_Layout,
 	summary: ^Processing_Summary,
 	progress_pacer: ^Console_Pacer,
 ) {
 	worker_count := min(max(runtime_env.worker_count, 1), len(items))
 	debug_log_infof("worker pool: items=%d active_workers=%d", len(items), worker_count)
 	if worker_count <= 1 {
-		for item in items {
+		for item, index in items {
 			finalize := process_image_item_to_final(item, config^, runtime_env^)
-			record_finalized_image(summary, item.relative_path, finalize, progress_pacer)
+			record_finalized_image(
+				summary,
+				item.relative_path,
+				progress_layout.items[index].path,
+				finalize,
+				progress_pacer,
+			)
 			destroy_finalize_output_result(&finalize)
 		}
 		return
@@ -237,11 +252,12 @@ process_images_parallel :: proc(
 	worker_context.allocator = mem.mutex_allocator(&worker_allocator)
 
 	state := Image_Process_Worker_State {
-		items          = items,
-		config         = config,
-		runtime_env    = runtime_env,
-		progress_pacer = progress_pacer,
-		summary        = summary,
+		items           = items,
+		config          = config,
+		runtime_env     = runtime_env,
+		progress_layout = progress_layout,
+		progress_pacer  = progress_pacer,
+		summary         = summary,
 	}
 	threads := make([]^thread.Thread, worker_count)
 	defer delete(threads)
@@ -282,6 +298,7 @@ process_image_worker :: proc(worker: ^thread.Thread) {
 			record_finalized_image(
 				state.summary,
 				state.items[index].relative_path,
+				state.progress_layout.items[index].path,
 				result,
 				state.progress_pacer,
 			)
@@ -294,6 +311,7 @@ process_image_previews_parallel :: proc(
 	items: []Image_Work_Item,
 	config: ^App_Config,
 	runtime_env: ^Runtime_Environment,
+	progress_layout: ^Progress_Display_Layout,
 	summary: ^Processing_Summary,
 	previews: ^[dynamic]Preview_Image_Result,
 	progress_pacer: ^Console_Pacer,
@@ -301,9 +319,15 @@ process_image_previews_parallel :: proc(
 	worker_count := min(max(runtime_env.worker_count, 1), len(items))
 	debug_log_infof("dry-run worker pool: items=%d active_workers=%d", len(items), worker_count)
 	if worker_count <= 1 {
-		for item in items {
+		for item, index in items {
 			preview := process_image_item_to_preview(item, config^, runtime_env^)
-			record_preview_image(summary, item.relative_path, preview.preview, progress_pacer)
+			record_preview_image(
+				summary,
+				item.relative_path,
+				progress_layout.items[index].path,
+				preview.preview,
+				progress_pacer,
+			)
 			append(previews, preview)
 		}
 		return
@@ -318,6 +342,7 @@ process_image_previews_parallel :: proc(
 		items             = items,
 		config            = config,
 		runtime_env       = runtime_env,
+		progress_layout   = progress_layout,
 		progress_pacer    = progress_pacer,
 		summary           = summary,
 		previews          = previews,
@@ -362,6 +387,7 @@ process_image_preview_worker :: proc(worker: ^thread.Thread) {
 			record_preview_image(
 				state.summary,
 				state.items[index].relative_path,
+				state.progress_layout.items[index].path,
 				result.preview,
 				state.progress_pacer,
 			)
@@ -510,6 +536,7 @@ destroy_preview_image_result :: proc(result: ^Preview_Image_Result) {
 record_finalized_image :: proc(
 	summary: ^Processing_Summary,
 	relative_path: string,
+	display_path: string,
 	finalize: Finalize_Output_Result,
 	progress_pacer: ^Console_Pacer,
 ) {
@@ -527,8 +554,8 @@ record_finalized_image :: proc(
 			finalize.reduction_percent,
 			finalize.output_path,
 		)
-		print_progress_ok(
-			relative_path,
+		print_progress_ok_display(
+			display_path,
 			finalize.original_size,
 			finalize.optimized_size,
 			finalize.reduction_percent,
@@ -540,7 +567,7 @@ record_finalized_image :: proc(
 			relative_path,
 			finalize.detail,
 		)
-		print_progress_skip(relative_path)
+		print_progress_skip_display(display_path)
 	} else {
 		summary.failed += 1
 		debug_log_errorf(
@@ -549,17 +576,18 @@ record_finalized_image :: proc(
 			finalize.err,
 			finalize.detail,
 		)
-		print_progress_error(relative_path, finalize.err)
+		print_progress_error_display(display_path, finalize.err)
 	}
 }
 
 record_preview_image :: proc(
 	summary: ^Processing_Summary,
 	relative_path: string,
+	display_path: string,
 	preview: Finalize_Output_Result,
 	progress_pacer: ^Console_Pacer,
 ) {
-	record_finalized_image(summary, relative_path, preview, progress_pacer)
+	record_finalized_image(summary, relative_path, display_path, preview, progress_pacer)
 }
 
 finalize_dry_run_outputs :: proc(
@@ -2127,37 +2155,37 @@ image_process_error_summary :: proc(err: Image_Process_Error) -> string {
 	case .None:
 		return ""
 	case .Disabled_File_Type:
-		return "Image type is disabled by config"
+		return "This image type is disabled in imgoptz.json."
 	case .Temp_Path_Failed:
-		return "Failed to create temporary file path"
+		return "Could not create a temporary file for this image."
 	case .Identify_Failed:
-		return "Failed to inspect ICC profile"
+		return "Could not read this image's color profile."
 	case .Icc_Extract_Failed:
-		return "Failed to extract ICC profile"
+		return "Could not preserve this image's color profile."
 	case .Icc_Embed_Failed:
-		return "Failed to embed PNG ICC profile"
+		return "Could not write the color profile into the optimized PNG."
 	case .Icc_Verify_Failed:
-		return "Failed to verify PNG ICC profile"
+		return "Could not verify the optimized PNG color profile."
 	case .Magick_Failed:
-		return "ImageMagick resize/orientation failed"
+		return "Could not resize or rotate this image."
 	case .Mozjpeg_Failed:
-		return "MozJPEG compression failed"
+		return "Could not compress this JPEG."
 	case .Pngquant_Failed:
-		return "pngquant compression failed"
+		return "Could not compress this PNG."
 	case .Oxipng_Failed:
-		return "Oxipng optimization failed"
+		return "Could not finish PNG optimization."
 	case .Empty_Output:
-		return "Optimized output was empty"
+		return "Optimizer produced an empty file, so the original was kept."
 	case .Size_Read_Failed:
-		return "Failed to compare output size"
+		return "Could not compare file sizes, so the original was kept."
 	case .Optimized_Not_Smaller:
-		return "Optimized output was not smaller"
+		return "Skipped: optimized file was not smaller."
 	case .Final_Path_Failed:
-		return "Failed to plan final output path"
+		return "Could not prepare the final output filename."
 	case .Replace_Failed:
-		return "Failed to safely replace original"
+		return "Could not safely replace the original file."
 	case .Copy_Failed:
-		return "Failed to write optimized output"
+		return "Could not write the optimized file."
 	}
-	return "Image processing failed"
+	return "Could not process this image."
 }

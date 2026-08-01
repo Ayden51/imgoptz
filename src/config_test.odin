@@ -87,7 +87,7 @@ test_parse_config_invalid_json_uses_full_defaults :: proc(t: ^testing.T) {
 
 	testing.expect_value(t, result.status, Config_Load_Status.Invalid_JSON)
 	testing.expect_value(t, len(result.warnings), 1)
-	testing.expect(t, strings.contains(result.warnings[0], "Invalid imgoptz.json"))
+	testing.expect(t, strings.contains(result.warnings[0], "imgoptz.json is invalid"))
 	expect_default_config(t, result.config)
 }
 

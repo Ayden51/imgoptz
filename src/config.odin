@@ -146,7 +146,7 @@ load_app_config_from_directory :: proc(app_root: string) -> Config_Load_Result {
 		}
 		add_config_warning(
 			&result,
-			fmt.aprintf("Failed to read %s; using default config.", CONFIG_FILE_NAME),
+			fmt.aprintf("Could not read %s. Using default settings.", CONFIG_FILE_NAME),
 		)
 		return result
 	}
@@ -180,7 +180,7 @@ parse_config_text :: proc(text: string) -> Config_Load_Result {
 		result.status = .Invalid_JSON
 		add_config_warning(
 			&result,
-			fmt.aprintf("Invalid %s; using default config.", CONFIG_FILE_NAME),
+			fmt.aprintf("%s is invalid. Using default settings.", CONFIG_FILE_NAME),
 		)
 		return result
 	}
@@ -193,7 +193,10 @@ parse_config_text :: proc(text: string) -> Config_Load_Result {
 		result.status = .Invalid_Root
 		add_config_warning(
 			&result,
-			fmt.aprintf("%s must contain a JSON object; using default config.", CONFIG_FILE_NAME),
+			fmt.aprintf(
+				"%s must contain a JSON object. Using default settings.",
+				CONFIG_FILE_NAME,
+			),
 		)
 	}
 
@@ -588,11 +591,20 @@ replace_config_string :: proc(slot: ^string, value: string) {
 }
 
 warn_invalid_config_value :: proc(result: ^Config_Load_Result, path: string) {
-	add_config_warning(result, fmt.aprintf("Invalid config value for %s; using default.", path))
+	add_config_warning(
+		result,
+		fmt.aprintf(
+			"Invalid setting \"%s\" in imgoptz.json. Using the default for that setting.",
+			path,
+		),
+	)
 }
 
 warn_unknown_config_option :: proc(result: ^Config_Load_Result, path: string) {
-	add_config_warning(result, fmt.aprintf("Unknown config option %s; ignoring.", path))
+	add_config_warning(
+		result,
+		fmt.aprintf("Unknown setting \"%s\" in imgoptz.json. Ignoring it.", path),
+	)
 }
 
 add_config_warning :: proc(result: ^Config_Load_Result, warning: string) {

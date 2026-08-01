@@ -50,8 +50,12 @@ test_parse_approval_input_accepts_specified_values :: proc(t: ^testing.T) {
 }
 
 @(test, require)
-test_parse_approval_input_rejects_empty_and_unlisted_values :: proc(t: ^testing.T) {
-	testing.expect_value(t, parse_approval_input(""), Approval_Input_Kind.Invalid)
+test_parse_approval_input_treats_empty_as_decline :: proc(t: ^testing.T) {
+	testing.expect_value(t, parse_approval_input(""), Approval_Input_Kind.Decline)
+}
+
+@(test, require)
+test_parse_approval_input_rejects_unlisted_values :: proc(t: ^testing.T) {
 	testing.expect_value(t, parse_approval_input("Y"), Approval_Input_Kind.Invalid)
 	testing.expect_value(t, parse_approval_input("n"), Approval_Input_Kind.Invalid)
 	testing.expect_value(t, parse_approval_input(" y"), Approval_Input_Kind.Invalid)

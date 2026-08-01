@@ -154,6 +154,7 @@ process_input_directory :: proc(
 		)
 		print_discovery_summary(result, runtime_env.recursive)
 		if config.dry_run {
+			print_dry_run_mode(runtime_env.output_mode)
 			dry_run_result := process_discovered_images_dry_run(result, config, runtime_env)
 			defer destroy_dry_run_process_result(&dry_run_result)
 			if !handle_dry_run_approval(&dry_run_result, runtime_env, approval_sc) {
@@ -164,10 +165,13 @@ process_input_directory :: proc(
 		}
 	case .Not_Directory:
 		debug_log_warnf("directory rejected: not a directory path=\"%s\"", input_path)
-		print_ui_errorf("Not a directory: %s", input_path)
+		print_ui_errorf(
+			"Folder not found or not readable: %s. Please check the path and try again.",
+			input_path,
+		)
 	case .Resolve_Failed:
 		debug_log_errorf("directory rejected: resolve failed path=\"%s\"", input_path)
-		print_ui_error("Failed to resolve directory path.")
+		print_ui_error("Could not read that folder path. Please check it and try again.")
 	}
 }
 
@@ -182,12 +186,12 @@ handle_dry_run_approval :: proc(
 		return false
 	}
 
-	approval := prompt_for_dry_run_approval(approval_sc)
+	approval := prompt_for_dry_run_approval(approval_sc, runtime_env.output_mode)
 	switch approval {
 	case .Approve:
 		debug_log_info("dry-run approved by user")
 		final_summary := finalize_dry_run_outputs(result, runtime_env.output_mode)
-		print_dry_run_saved(final_summary)
+		print_dry_run_saved(final_summary, runtime_env)
 	case .Decline:
 		debug_log_info("dry-run declined by user")
 		print_dry_run_declined()
@@ -198,9 +202,12 @@ handle_dry_run_approval :: proc(
 	return true
 }
 
-prompt_for_dry_run_approval :: proc(approval_sc: ^bufio.Scanner) -> Approval_Input_Kind {
+prompt_for_dry_run_approval :: proc(
+	approval_sc: ^bufio.Scanner,
+	output_mode: Config_Output_Mode,
+) -> Approval_Input_Kind {
 	for {
-		print_dry_run_approval_prompt()
+		print_dry_run_approval_prompt(output_mode)
 		raw, ok := read_approval_line(approval_sc)
 		if !ok {
 			return .Invalid

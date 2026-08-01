@@ -50,6 +50,9 @@ is_exit_command :: proc(s: string) -> bool {
 }
 
 parse_approval_input :: proc(raw: string) -> Approval_Input_Kind {
+	if raw == "" {
+		return .Decline
+	}
 	if raw == "y" || ascii_equal_fold(raw, "yes") {
 		return .Approve
 	}
