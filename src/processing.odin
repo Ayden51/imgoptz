@@ -10,6 +10,7 @@ import "core:time"
 
 IMAGE_PROCESS_MAGICK_THREAD_LIMIT_SINGLE_WORKER :: "2"
 IMAGE_PROCESS_MAGICK_THREAD_LIMIT_MULTI_WORKER :: "1"
+JPEG_PIPE_PRODUCER_SHUTDOWN_TIMEOUT :: 250 * time.Millisecond
 
 Image_Process_Error :: enum {
 	None,
@@ -1153,7 +1154,7 @@ run_jpeg_pipe_to_mozjpeg :: proc(
 		workspace_path,
 		magick_environment,
 	)
-	if ok || err != .Mozjpeg_Failed || len(icc_path) == 0 {
+	if !jpeg_pipe_should_retry_without_icc(err, ok, icc_path) {
 		return err, detail, ok
 	}
 
@@ -1173,6 +1174,14 @@ run_jpeg_pipe_to_mozjpeg :: proc(
 		workspace_path,
 		magick_environment,
 	)
+}
+
+jpeg_pipe_should_retry_without_icc :: proc(
+	err: Image_Process_Error,
+	ok: bool,
+	icc_path: string,
+) -> bool {
+	return !ok && err == .Mozjpeg_Failed && len(icc_path) > 0
 }
 
 run_jpeg_pipe_once :: proc(
@@ -1414,7 +1423,7 @@ read_optional_process_file :: proc(path: string) -> []byte {
 }
 
 wait_process_or_kill :: proc(process: os.Process) -> (os.Process_State, os.Error) {
-	state, err := os.process_wait(process, 2 * time.Second)
+	state, err := os.process_wait(process, JPEG_PIPE_PRODUCER_SHUTDOWN_TIMEOUT)
 	if err != .Timeout {
 		return state, err
 	}

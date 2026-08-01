@@ -405,71 +405,10 @@ test_process_jpeg_unicode_source_uses_workspace_and_cleans_artifacts :: proc(t: 
 
 @(test, require)
 test_jpeg_pipe_retries_without_icc_when_mozjpeg_rejects_profile_path :: proc(t: ^testing.T) {
-	runtime_env := processing_test_runtime_environment(t)
-	if !processing_runtime_tools_exist(runtime_env) {
-		return
-	}
-
-	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-jpeg-icc-retry-*", context.allocator)
-	if !testing.expect_value(t, temp_err, nil) {
-		return
-	}
-	defer cleanup_test_directory(temp_dir)
-
-	source_path := processing_join(t, temp_dir, "source.jpg")
-	if len(source_path) == 0 {
-		return
-	}
-	create_detail, create_ok := run_tool(
-		[]string{runtime_env.magick_path, "-size", "96x96", "gradient:red-blue", source_path},
-		imagemagick_process_environment(runtime_env),
-		"ImageMagick test JPEG create",
-	)
-	defer delete(create_detail)
-	if !testing.expect_value(t, create_ok, true) {
-		return
-	}
-
-	workspace_path, workspace_err := os.make_directory_temp(
-		"",
-		"imgoptz-jpeg-retry-workspace-*",
-		context.allocator,
-	)
-	if !testing.expect_value(t, workspace_err, nil) {
-		return
-	}
-	defer delete(workspace_path)
-	defer os.remove_all(workspace_path)
-	output_path, output_ok := jpeg_workspace_path(workspace_path, "optimized.jpg")
-	bad_icc_path, bad_icc_ok := jpeg_workspace_path(workspace_path, "missing.icc")
-	if !testing.expect_value(t, output_ok, true) || !testing.expect_value(t, bad_icc_ok, true) {
-		return
-	}
-	defer delete(output_path)
-	defer delete(bad_icc_path)
-
-	config := default_config()
-	defer destroy_config(&config)
-	resize_command := build_jpeg_magick_resize_command(
-		runtime_env.magick_path,
-		source_path,
-		config.max_dimension,
-		"",
-		"-",
-	)
-	pipe_err, detail, ok := run_jpeg_pipe_to_mozjpeg(
-		resize_command,
-		runtime_env.mozjpeg_path,
-		config.jpeg,
-		output_path,
-		bad_icc_path,
-		workspace_path,
-		imagemagick_process_environment(runtime_env),
-	)
-	defer delete(detail)
-
-	testing.expectf(t, ok, "expected ICC-less retry to succeed, got %v: %s", pipe_err, detail)
-	testing.expect(t, file_is_non_empty(output_path))
+	testing.expect(t, jpeg_pipe_should_retry_without_icc(.Mozjpeg_Failed, false, "profile.icc"))
+	testing.expect(t, !jpeg_pipe_should_retry_without_icc(.None, true, "profile.icc"))
+	testing.expect(t, !jpeg_pipe_should_retry_without_icc(.Magick_Failed, false, "profile.icc"))
+	testing.expect(t, !jpeg_pipe_should_retry_without_icc(.Mozjpeg_Failed, false, ""))
 }
 
 @(test, require)
