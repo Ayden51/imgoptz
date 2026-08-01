@@ -101,6 +101,7 @@ test_parse_config_partial_file_overrides_only_present_options :: proc(t: ^testin
 			"gpu": false,
 			"debug_log": true,
 			"debug_log_file": "debug.log",
+			"dry_run": false,
 			"output_mode": "dir",
 			"out_dir": "optimized",
 			"jpeg": {
@@ -131,6 +132,7 @@ test_parse_config_partial_file_overrides_only_present_options :: proc(t: ^testin
 	testing.expect_value(t, result.config.gpu, false)
 	testing.expect_value(t, result.config.debug_log, true)
 	testing.expect_value(t, result.config.debug_log_file, "debug.log")
+	testing.expect_value(t, result.config.dry_run, false)
 	testing.expect_value(t, result.config.output_mode, Config_Output_Mode.Dir)
 	testing.expect_value(t, result.config.out_dir, "optimized")
 	testing.expect_value(t, result.config.jpeg.enabled, true)
@@ -184,6 +186,7 @@ test_parse_config_invalid_values_fall_back_per_option :: proc(t: ^testing.T) {
 			"gpu": "auto",
 			"debug_log": "yes",
 			"debug_log_file": "",
+			"dry_run": "yes",
 			"output_mode": "inplace",
 			"out_dir": "",
 			"jpeg": {
@@ -212,13 +215,14 @@ test_parse_config_invalid_values_fall_back_per_option :: proc(t: ^testing.T) {
 	defer destroy_config_load_result(&result)
 
 	testing.expect_value(t, result.status, Config_Load_Status.Loaded)
-	testing.expect_value(t, len(result.warnings), 24)
+	testing.expect_value(t, len(result.warnings), 25)
 	testing.expect_value(t, result.config.recursive, true)
 	testing.expect_value(t, result.config.max_dimension, 1920)
 	testing.expect_value(t, result.config.workers.kind, Config_Workers_Kind.Auto)
 	testing.expect_value(t, result.config.gpu, true)
 	testing.expect_value(t, result.config.debug_log, false)
 	testing.expect_value(t, result.config.debug_log_file, "imgoptz.log")
+	testing.expect_value(t, result.config.dry_run, true)
 	testing.expect_value(t, result.config.output_mode, Config_Output_Mode.In_Place)
 	testing.expect_value(t, result.config.out_dir, "output")
 	testing.expect_value(t, result.config.jpeg.enabled, true)
@@ -327,6 +331,7 @@ expect_default_config :: proc(t: ^testing.T, config: App_Config) {
 	testing.expect_value(t, config.gpu, true)
 	testing.expect_value(t, config.debug_log, false)
 	testing.expect_value(t, config.debug_log_file, "imgoptz.log")
+	testing.expect_value(t, config.dry_run, true)
 	testing.expect_value(t, config.output_mode, Config_Output_Mode.In_Place)
 	testing.expect_value(t, config.out_dir, "output")
 	testing.expect_value(t, config.jpeg.enabled, true)

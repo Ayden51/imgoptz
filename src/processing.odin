@@ -10,6 +10,7 @@ import "core:time"
 
 IMAGE_PROCESS_MAGICK_THREAD_LIMIT_SINGLE_WORKER :: "2"
 IMAGE_PROCESS_MAGICK_THREAD_LIMIT_MULTI_WORKER :: "1"
+JPEG_PIPE_PRODUCER_SHUTDOWN_TIMEOUT :: 250 * time.Millisecond
 
 Image_Process_Error :: enum {
 	None,
@@ -44,6 +45,18 @@ Process_Image_Result :: struct {
 	detail:       string,
 }
 
+Preview_Image_Result :: struct {
+	item:    Image_Work_Item,
+	temp:    Process_Image_Result,
+	preview: Finalize_Output_Result,
+}
+
+Dry_Run_Process_Result :: struct {
+	previews: [dynamic]Preview_Image_Result,
+	summary:  Processing_Summary,
+	elapsed:  time.Duration,
+}
+
 Image_Process_Worker_State :: struct {
 	items:          []Image_Work_Item,
 	config:         ^App_Config,
@@ -52,6 +65,18 @@ Image_Process_Worker_State :: struct {
 	progress_mutex: sync.Mutex,
 	progress_pacer: ^Console_Pacer,
 	summary:        ^Processing_Summary,
+}
+
+Image_Preview_Worker_State :: struct {
+	items:             []Image_Work_Item,
+	config:            ^App_Config,
+	runtime_env:       ^Runtime_Environment,
+	next_index:        int,
+	progress_mutex:    sync.Mutex,
+	progress_pacer:    ^Console_Pacer,
+	summary:           ^Processing_Summary,
+	previews:          ^[dynamic]Preview_Image_Result,
+	preview_allocator: mem.Allocator,
 }
 
 Processing_Summary :: struct {
@@ -124,6 +149,68 @@ process_discovered_images :: proc(
 	)
 	print_processing_summary(summary, elapsed)
 	pause_after_processing_summary()
+}
+
+process_discovered_images_dry_run :: proc(
+	discovery: Discovery_Result,
+	config: App_Config,
+	runtime_env: Runtime_Environment,
+) -> Dry_Run_Process_Result {
+	print_progress_header()
+	started_at := time.now()
+	result: Dry_Run_Process_Result
+	result.previews.allocator = context.allocator
+	debug_log_section("PROGRESS")
+	debug_log_infof(
+		"dry-run processing start: items=%d worker_count=%d",
+		len(discovery.items),
+		runtime_env.worker_count,
+	)
+
+	if len(discovery.items) == 0 {
+		debug_log_info("dry-run processing skipped: no supported images")
+		debug_log_section("SUMMARY")
+		debug_log_info(
+			"dry-run processing finish: succeeded=0 skipped=0 failed=0 original_total=0 optimized_total=0",
+		)
+		print_progress_empty()
+		print_processing_summary(result.summary, 0 * time.Millisecond)
+		return result
+	}
+
+	worker_config := config
+	worker_runtime_env := runtime_env
+	progress_pacer := console_pacer_init(CONSOLE_PROGRESS_ROW_DELAY)
+	process_image_previews_parallel(
+		discovery.items[:],
+		&worker_config,
+		&worker_runtime_env,
+		&result.summary,
+		&result.previews,
+		&progress_pacer,
+	)
+
+	result.elapsed = elapsed_excluding_ui_delay(started_at, console_pacer_slept(&progress_pacer))
+	debug_log_section("SUMMARY")
+	debug_log_infof(
+		"dry-run processing finish: succeeded=%d skipped=%d failed=%d original_total=%d optimized_total=%d elapsed_seconds=%.3f",
+		result.summary.succeeded,
+		result.summary.skipped,
+		result.summary.failed,
+		result.summary.original_total,
+		result.summary.optimized_total,
+		time.duration_seconds(result.elapsed),
+	)
+	print_processing_summary(result.summary, result.elapsed)
+	return result
+}
+
+destroy_dry_run_process_result :: proc(result: ^Dry_Run_Process_Result) {
+	for index in 0 ..< len(result.previews) {
+		destroy_preview_image_result(&result.previews[index])
+	}
+	delete(result.previews)
+	result^ = {}
 }
 
 process_images_parallel :: proc(
@@ -203,6 +290,123 @@ process_image_worker :: proc(worker: ^thread.Thread) {
 	}
 }
 
+process_image_previews_parallel :: proc(
+	items: []Image_Work_Item,
+	config: ^App_Config,
+	runtime_env: ^Runtime_Environment,
+	summary: ^Processing_Summary,
+	previews: ^[dynamic]Preview_Image_Result,
+	progress_pacer: ^Console_Pacer,
+) {
+	worker_count := min(max(runtime_env.worker_count, 1), len(items))
+	debug_log_infof("dry-run worker pool: items=%d active_workers=%d", len(items), worker_count)
+	if worker_count <= 1 {
+		for item in items {
+			preview := process_image_item_to_preview(item, config^, runtime_env^)
+			record_preview_image(summary, item.relative_path, preview.preview, progress_pacer)
+			append(previews, preview)
+		}
+		return
+	}
+
+	worker_allocator: mem.Mutex_Allocator
+	mem.mutex_allocator_init(&worker_allocator, context.allocator)
+	worker_context := context
+	worker_context.allocator = mem.mutex_allocator(&worker_allocator)
+
+	state := Image_Preview_Worker_State {
+		items             = items,
+		config            = config,
+		runtime_env       = runtime_env,
+		progress_pacer    = progress_pacer,
+		summary           = summary,
+		previews          = previews,
+		preview_allocator = context.allocator,
+	}
+	threads := make([]^thread.Thread, worker_count)
+	defer delete(threads)
+
+	for _, index in threads {
+		worker := thread.create(process_image_preview_worker)
+		worker.init_context = worker_context
+		worker.data = &state
+		threads[index] = worker
+		debug_log_debugf("dry-run worker start requested: index=%d", index)
+		thread.start(worker)
+	}
+	for worker in threads {
+		thread.join(worker)
+		thread.destroy(worker)
+	}
+}
+
+process_image_preview_worker :: proc(worker: ^thread.Thread) {
+	state := cast(^Image_Preview_Worker_State)worker.data
+	for {
+		index := sync.atomic_add(&state.next_index, 1)
+		if index >= len(state.items) {
+			debug_log_debugf("dry-run worker idle: no more items")
+			break
+		}
+		debug_log_debugf(
+			"dry-run worker picked item: index=%d relative=\"%s\"",
+			index,
+			state.items[index].relative_path,
+		)
+		result := process_image_item_to_preview(
+			state.items[index],
+			state.config^,
+			state.runtime_env^,
+		)
+		if sync.mutex_guard(&state.progress_mutex) {
+			record_preview_image(
+				state.summary,
+				state.items[index].relative_path,
+				result.preview,
+				state.progress_pacer,
+			)
+			owned := clone_preview_image_result(result, state.preview_allocator)
+			append(state.previews, owned)
+		}
+		destroy_process_image_result(&result.temp)
+		destroy_finalize_output_result(&result.preview)
+	}
+}
+
+clone_preview_image_result :: proc(
+	result: Preview_Image_Result,
+	allocator: mem.Allocator,
+) -> Preview_Image_Result {
+	return Preview_Image_Result {
+		item = result.item,
+		temp = Process_Image_Result {
+			output_path = clone_string_with_allocator(result.temp.output_path, allocator),
+			cleanup_path = clone_string_with_allocator(result.temp.cleanup_path, allocator),
+			err = result.temp.err,
+			detail = clone_string_with_allocator(result.temp.detail, allocator),
+		},
+		preview = Finalize_Output_Result {
+			output_path = clone_string_with_allocator(result.preview.output_path, allocator),
+			original_size = result.preview.original_size,
+			optimized_size = result.preview.optimized_size,
+			reduction_percent = result.preview.reduction_percent,
+			err = result.preview.err,
+			detail = clone_string_with_allocator(result.preview.detail, allocator),
+		},
+	}
+}
+
+clone_string_with_allocator :: proc(value: string, allocator: mem.Allocator) -> string {
+	if len(value) == 0 {
+		return ""
+	}
+	cloned, clone_err := strings.clone(value, allocator)
+	if clone_err != nil {
+		return ""
+	}
+	return cloned
+}
+
 elapsed_excluding_ui_delay :: proc(
 	started_at: time.Time,
 	ui_delay: time.Duration,
@@ -251,6 +455,58 @@ process_image_item_to_final :: proc(
 	return finalize
 }
 
+process_image_item_to_preview :: proc(
+	item: Image_Work_Item,
+	config: App_Config,
+	runtime_env: Runtime_Environment,
+) -> Preview_Image_Result {
+	debug_log_infof(
+		"dry-run image start: relative=\"%s\" source=\"%s\" destination=\"%s\" kind=%v",
+		item.relative_path,
+		item.source_path,
+		item.destination_path,
+		item.kind,
+	)
+	result := Preview_Image_Result {
+		item = item,
+	}
+	result.temp = process_image_to_temp(item, config, runtime_env)
+	if result.temp.err != .None {
+		debug_log_errorf(
+			"dry-run image temp failed: relative=\"%s\" err=%v detail=\"%s\"",
+			item.relative_path,
+			result.temp.err,
+			result.temp.detail,
+		)
+		result.preview = Finalize_Output_Result {
+			err    = result.temp.err,
+			detail = strings.clone(result.temp.detail),
+		}
+		cleanup_process_image_result(&result.temp)
+		return result
+	}
+
+	result.preview = evaluate_optimized_output(item, result.temp.output_path)
+	debug_log_infof(
+		"dry-run image finish: relative=\"%s\" err=%v original_size=%d optimized_size=%d detail=\"%s\"",
+		item.relative_path,
+		result.preview.err,
+		result.preview.original_size,
+		result.preview.optimized_size,
+		result.preview.detail,
+	)
+	if result.preview.err != .None {
+		cleanup_process_image_result(&result.temp)
+	}
+	return result
+}
+
+destroy_preview_image_result :: proc(result: ^Preview_Image_Result) {
+	cleanup_process_image_result(&result.temp)
+	destroy_finalize_output_result(&result.preview)
+	result^ = {}
+}
+
 record_finalized_image :: proc(
 	summary: ^Processing_Summary,
 	relative_path: string,
@@ -295,6 +551,55 @@ record_finalized_image :: proc(
 		)
 		print_progress_error(relative_path, finalize.err)
 	}
+}
+
+record_preview_image :: proc(
+	summary: ^Processing_Summary,
+	relative_path: string,
+	preview: Finalize_Output_Result,
+	progress_pacer: ^Console_Pacer,
+) {
+	record_finalized_image(summary, relative_path, preview, progress_pacer)
+}
+
+finalize_dry_run_outputs :: proc(
+	result: ^Dry_Run_Process_Result,
+	output_mode: Config_Output_Mode,
+) -> Processing_Summary {
+	final_summary: Processing_Summary
+	for &preview in result.previews {
+		if preview.preview.err != .None {
+			continue
+		}
+
+		finalize := finalize_accepted_optimized_output(
+			preview.item,
+			preview.temp.output_path,
+			output_mode,
+			preview.preview,
+		)
+		if finalize.err == .None {
+			final_summary.succeeded += 1
+			final_summary.original_total += finalize.original_size
+			final_summary.optimized_total += finalize.optimized_size
+			debug_log_infof(
+				"dry-run final write succeeded: relative=\"%s\" output=\"%s\"",
+				preview.item.relative_path,
+				finalize.output_path,
+			)
+		} else {
+			final_summary.failed += 1
+			debug_log_errorf(
+				"dry-run final write failed: relative=\"%s\" err=%v detail=\"%s\"",
+				preview.item.relative_path,
+				finalize.err,
+				finalize.detail,
+			)
+			print_progress_error(preview.item.relative_path, finalize.err)
+		}
+		destroy_finalize_output_result(&finalize)
+	}
+	return final_summary
 }
 
 process_image_to_temp :: proc(
@@ -356,6 +661,17 @@ finalize_optimized_output :: proc(
 		temp_output_path,
 		debug_log_output_mode(output_mode),
 	)
+	preview := evaluate_optimized_output(item, temp_output_path)
+	if preview.err != .None {
+		return preview
+	}
+	return finalize_accepted_optimized_output(item, temp_output_path, output_mode, preview)
+}
+
+evaluate_optimized_output :: proc(
+	item: Image_Work_Item,
+	temp_output_path: string,
+) -> Finalize_Output_Result {
 	original_size, original_size_ok := file_size_by_path(item.source_path)
 	optimized_size, optimized_size_ok := file_size_by_path(temp_output_path)
 	if !original_size_ok || !optimized_size_ok {
@@ -388,6 +704,20 @@ finalize_optimized_output :: proc(
 			original_size,
 		)
 		return result
+	}
+	return result
+}
+
+finalize_accepted_optimized_output :: proc(
+	item: Image_Work_Item,
+	temp_output_path: string,
+	output_mode: Config_Output_Mode,
+	preview: Finalize_Output_Result,
+) -> Finalize_Output_Result {
+	result := Finalize_Output_Result {
+		original_size     = preview.original_size,
+		optimized_size    = preview.optimized_size,
+		reduction_percent = preview.reduction_percent,
 	}
 
 	final_path, final_path_ok := final_output_path_for_item(item, output_mode)
@@ -824,7 +1154,7 @@ run_jpeg_pipe_to_mozjpeg :: proc(
 		workspace_path,
 		magick_environment,
 	)
-	if ok || err != .Mozjpeg_Failed || len(icc_path) == 0 {
+	if !jpeg_pipe_should_retry_without_icc(err, ok, icc_path) {
 		return err, detail, ok
 	}
 
@@ -844,6 +1174,14 @@ run_jpeg_pipe_to_mozjpeg :: proc(
 		workspace_path,
 		magick_environment,
 	)
+}
+
+jpeg_pipe_should_retry_without_icc :: proc(
+	err: Image_Process_Error,
+	ok: bool,
+	icc_path: string,
+) -> bool {
+	return !ok && err == .Mozjpeg_Failed && len(icc_path) > 0
 }
 
 run_jpeg_pipe_once :: proc(
@@ -1085,7 +1423,7 @@ read_optional_process_file :: proc(path: string) -> []byte {
 }
 
 wait_process_or_kill :: proc(process: os.Process) -> (os.Process_State, os.Error) {
-	state, err := os.process_wait(process, 2 * time.Second)
+	state, err := os.process_wait(process, JPEG_PIPE_PRODUCER_SHUTDOWN_TIMEOUT)
 	if err != .Timeout {
 		return state, err
 	}

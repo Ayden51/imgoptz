@@ -13,6 +13,12 @@ Prompt_Input :: struct {
 	path: string,
 }
 
+Approval_Input_Kind :: enum {
+	Invalid,
+	Approve,
+	Decline,
+}
+
 parse_prompt_input :: proc(raw: string) -> Prompt_Input {
 	path := normalize_input_path(raw)
 	if is_exit_command(path) {
@@ -41,4 +47,14 @@ is_exit_command :: proc(s: string) -> bool {
 		(s[2] == 'i' || s[2] == 'I') &&
 		(s[3] == 't' || s[3] == 'T') \
 	)
+}
+
+parse_approval_input :: proc(raw: string) -> Approval_Input_Kind {
+	if raw == "y" || ascii_equal_fold(raw, "yes") {
+		return .Approve
+	}
+	if raw == "N" || ascii_equal_fold(raw, "no") {
+		return .Decline
+	}
+	return .Invalid
 }

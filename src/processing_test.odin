@@ -405,71 +405,10 @@ test_process_jpeg_unicode_source_uses_workspace_and_cleans_artifacts :: proc(t: 
 
 @(test, require)
 test_jpeg_pipe_retries_without_icc_when_mozjpeg_rejects_profile_path :: proc(t: ^testing.T) {
-	runtime_env := processing_test_runtime_environment(t)
-	if !processing_runtime_tools_exist(runtime_env) {
-		return
-	}
-
-	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-jpeg-icc-retry-*", context.allocator)
-	if !testing.expect_value(t, temp_err, nil) {
-		return
-	}
-	defer cleanup_test_directory(temp_dir)
-
-	source_path := processing_join(t, temp_dir, "source.jpg")
-	if len(source_path) == 0 {
-		return
-	}
-	create_detail, create_ok := run_tool(
-		[]string{runtime_env.magick_path, "-size", "96x96", "gradient:red-blue", source_path},
-		imagemagick_process_environment(runtime_env),
-		"ImageMagick test JPEG create",
-	)
-	defer delete(create_detail)
-	if !testing.expect_value(t, create_ok, true) {
-		return
-	}
-
-	workspace_path, workspace_err := os.make_directory_temp(
-		"",
-		"imgoptz-jpeg-retry-workspace-*",
-		context.allocator,
-	)
-	if !testing.expect_value(t, workspace_err, nil) {
-		return
-	}
-	defer delete(workspace_path)
-	defer os.remove_all(workspace_path)
-	output_path, output_ok := jpeg_workspace_path(workspace_path, "optimized.jpg")
-	bad_icc_path, bad_icc_ok := jpeg_workspace_path(workspace_path, "missing.icc")
-	if !testing.expect_value(t, output_ok, true) || !testing.expect_value(t, bad_icc_ok, true) {
-		return
-	}
-	defer delete(output_path)
-	defer delete(bad_icc_path)
-
-	config := default_config()
-	defer destroy_config(&config)
-	resize_command := build_jpeg_magick_resize_command(
-		runtime_env.magick_path,
-		source_path,
-		config.max_dimension,
-		"",
-		"-",
-	)
-	pipe_err, detail, ok := run_jpeg_pipe_to_mozjpeg(
-		resize_command,
-		runtime_env.mozjpeg_path,
-		config.jpeg,
-		output_path,
-		bad_icc_path,
-		workspace_path,
-		imagemagick_process_environment(runtime_env),
-	)
-	defer delete(detail)
-
-	testing.expectf(t, ok, "expected ICC-less retry to succeed, got %v: %s", pipe_err, detail)
-	testing.expect(t, file_is_non_empty(output_path))
+	testing.expect(t, jpeg_pipe_should_retry_without_icc(.Mozjpeg_Failed, false, "profile.icc"))
+	testing.expect(t, !jpeg_pipe_should_retry_without_icc(.None, true, "profile.icc"))
+	testing.expect(t, !jpeg_pipe_should_retry_without_icc(.Magick_Failed, false, "profile.icc"))
+	testing.expect(t, !jpeg_pipe_should_retry_without_icc(.Mozjpeg_Failed, false, ""))
 }
 
 @(test, require)
@@ -546,6 +485,100 @@ test_finalize_in_place_replaces_smaller_output_and_slugifies_name :: proc(t: ^te
 	testing.expect(t, os.exists(final_path))
 	testing.expect(t, processing_file_has_contents(t, final_path, "tiny"))
 	testing.expect(t, !processing_temp_artifacts_exist(source_path))
+}
+
+@(test, require)
+test_dry_run_decline_cleanup_removes_retained_temp_without_writing :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp(
+		"",
+		"imgoptz-dry-run-decline-*",
+		context.allocator,
+	)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	source_path := processing_join(t, temp_dir, "Photo.JPG")
+	temp_output_path := processing_join(t, temp_dir, "optimized.tmp")
+	if len(source_path) == 0 ||
+	   len(temp_output_path) == 0 ||
+	   !testing.expect_value(t, os.write_entire_file(source_path, "original-large"), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(temp_output_path, "tiny"), nil) {
+		return
+	}
+
+	item := Image_Work_Item {
+		source_path      = source_path,
+		relative_path    = "Photo.JPG",
+		destination_path = source_path,
+		kind             = .Jpeg,
+	}
+	preview := evaluate_optimized_output(item, temp_output_path)
+	dry_run: Dry_Run_Process_Result
+	append(
+		&dry_run.previews,
+		Preview_Image_Result {
+			item = item,
+			temp = Process_Image_Result{output_path = strings.clone(temp_output_path)},
+			preview = preview,
+		},
+	)
+
+	destroy_dry_run_process_result(&dry_run)
+
+	testing.expect(t, processing_file_has_contents(t, source_path, "original-large"))
+	testing.expect(t, !os.exists(temp_output_path))
+}
+
+@(test, require)
+test_dry_run_approval_finalizes_retained_temp_without_rerunning :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp(
+		"",
+		"imgoptz-dry-run-approve-*",
+		context.allocator,
+	)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	source_path := processing_join(t, temp_dir, "Ảnh Đẹp.JPG")
+	temp_output_path := processing_join(t, temp_dir, "optimized.tmp")
+	final_path := processing_join(t, temp_dir, "anh-dep.jpg")
+	if len(source_path) == 0 ||
+	   len(temp_output_path) == 0 ||
+	   len(final_path) == 0 ||
+	   !testing.expect_value(t, os.write_entire_file(source_path, "original-large"), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(temp_output_path, "tiny"), nil) {
+		return
+	}
+
+	item := Image_Work_Item {
+		source_path      = source_path,
+		relative_path    = "Ảnh Đẹp.JPG",
+		destination_path = source_path,
+		kind             = .Jpeg,
+	}
+	preview := evaluate_optimized_output(item, temp_output_path)
+	dry_run: Dry_Run_Process_Result
+	append(
+		&dry_run.previews,
+		Preview_Image_Result {
+			item = item,
+			temp = Process_Image_Result{output_path = strings.clone(temp_output_path)},
+			preview = preview,
+		},
+	)
+	defer destroy_dry_run_process_result(&dry_run)
+
+	summary := finalize_dry_run_outputs(&dry_run, .In_Place)
+
+	testing.expect_value(t, summary.succeeded, 1)
+	testing.expect_value(t, summary.failed, 0)
+	testing.expect(t, !os.exists(source_path))
+	testing.expect(t, !os.exists(temp_output_path))
+	testing.expect(t, processing_file_has_contents(t, final_path, "tiny"))
 }
 
 @(test, require)

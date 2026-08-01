@@ -225,19 +225,19 @@ Goal: keep JPEG optimization working for Unicode input paths even when MozJPEG c
 
 Goal: make optimization preview-first and require explicit approval before final writes by default.
 
-- [ ] Add `dry_run` config as a JSON boolean defaulting to `true`.
-- [ ] In dry-run mode, run resize and optimization to temp files, then reject outputs that are not smaller before asking for approval.
-- [ ] Keep successful temp optimized files available for finalization after approval.
-- [ ] Prompt users to approve saving optimized files after dry-run results.
-- [ ] Accept `y` exactly and `yes` case-insensitively as approval.
-- [ ] Accept `N` exactly and `no` case-insensitively as decline.
-- [ ] Treat empty approval input as invalid and re-prompt.
-- [ ] Treat other approval input as invalid and re-prompt.
-- [ ] On approval, finalize only successful dry-run temp outputs.
-- [ ] On decline, delete all temp artifacts and write nothing.
-- [ ] When `dry_run = false`, skip approval and finalize successful temp outputs immediately.
-- [ ] Update `dist/imgoptz.json` so the development distribution includes the new `dry_run` default.
-- [ ] Add tests for `dry_run` default config, approval parsing, approval finalization, decline cleanup, and no-prompt non-dry-run finalization.
+- [x] Add `dry_run` config as a JSON boolean defaulting to `true`.
+- [x] In dry-run mode, run resize and optimization to temp files, then reject outputs that are not smaller before asking for approval.
+- [x] Keep successful temp optimized files available for finalization after approval.
+- [x] Prompt users to approve saving optimized files after dry-run results.
+- [x] Accept `y` exactly and `yes` case-insensitively as approval.
+- [x] Accept `N` exactly and `no` case-insensitively as decline.
+- [x] Treat empty approval input as invalid and re-prompt.
+- [x] Treat other approval input as invalid and re-prompt.
+- [x] On approval, finalize only successful dry-run temp outputs.
+- [x] On decline, delete all temp artifacts and write nothing.
+- [x] When `dry_run = false`, skip approval and finalize successful temp outputs immediately.
+- [x] Update `dist/imgoptz.json` so the development distribution includes the new `dry_run` default.
+- [x] Add tests for `dry_run` default config, approval parsing, approval finalization, decline cleanup, and no-prompt non-dry-run finalization.
 
 ## Phase 10: Target-Relative Output Directory Defaults
 
@@ -265,6 +265,6 @@ Goal: run the broad manual and build matrix before release.
 
 ## Current Feature Selection
 
-- Current feature branch: `fix/jpeg-unicode-temp-workspace`.
-- Scope: Phase 8A JPEG Unicode temp workspace implementation only.
-- Reason: Phase 8A hardens JPEG Unicode-path handling before dry-run approval and target-relative output defaults remain separated for later phases.
+- Current feature branch: `feat/dry-run-approval`.
+- Scope: Phase 9 dry-run approval mode implementation only.
+- Reason: Phase 9 makes optimization preview-first before target-relative output defaults remain separated for later phases.

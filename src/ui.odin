@@ -227,6 +227,34 @@ print_processing_summary :: proc(summary: Processing_Summary, elapsed: time.Dura
 	)
 }
 
+print_dry_run_approval_prompt :: proc() {
+	print_ui_blank()
+	print_ui_linef(
+		"%s Dry run complete. Check the results above before saving optimized files.",
+		UI_INFO,
+	)
+	print_ui_line("Save optimized files? (y/N)")
+}
+
+print_dry_run_approval_invalid :: proc() {
+	print_ui_warning("Save optimized files? (y/N)")
+}
+
+print_dry_run_declined :: proc() {
+	print_ui_linef("%s Declined. No optimized files were written.", UI_SKIP)
+}
+
+print_dry_run_nothing_to_save :: proc() {
+	print_ui_linef("%s No smaller optimized outputs to save.", UI_INFO)
+}
+
+print_dry_run_saved :: proc(summary: Processing_Summary) {
+	print_ui_linef("%s Saved %d optimized files.", UI_OK, summary.succeeded)
+	if summary.failed > 0 {
+		print_ui_warning("Some optimized files could not be written.")
+	}
+}
+
 summary_reduction_percent :: proc(original_size, optimized_size: i64) -> f64 {
 	if original_size <= 0 || optimized_size >= original_size {
 		return 0

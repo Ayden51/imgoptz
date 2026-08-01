@@ -278,11 +278,22 @@ test_resolve_worker_count_clamps_explicit_minimum :: proc(t: ^testing.T) {
 }
 
 make_temp_runtime_root :: proc(t: ^testing.T) -> string {
-	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-runtime-*", context.allocator)
-	if !testing.expect_value(t, temp_err, nil) {
-		return ""
+	last_err := os.ERROR_NONE
+	for attempt in 0 ..< 8 {
+		temp_dir, temp_err := os.make_directory_temp("", "imgoptz-runtime-*", context.allocator)
+		if temp_err == nil {
+			return temp_dir
+		}
+		last_err = temp_err
+		if temp_err != .Permission_Denied {
+			if !testing.expect_value(t, temp_err, nil) {
+				return ""
+			}
+		}
+		_ = attempt
 	}
-	return temp_dir
+	testing.expect_value(t, last_err, nil)
+	return ""
 }
 
 write_required_runtime_tree :: proc(t: ^testing.T, app_root: string) -> bool {
