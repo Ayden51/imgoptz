@@ -3,7 +3,7 @@ package main
 run_imgoptz :: proc() {
 	if !configure_console_utf8() {
 		print_ui_warning(
-			"Failed to set console code page to UTF-8; Unicode pasted paths may not work correctly.",
+			"Could not enable UTF-8 console input. Unicode pasted paths may not work correctly.",
 		)
 	}
 
@@ -40,8 +40,8 @@ print_app_root_error :: proc(app_root: App_Root) {
 	switch app_root.err {
 	case .None:
 	case .Get_Executable_Directory_Failed:
-		print_ui_errorf("Failed to get executable directory: %v", app_root.os_err)
+		print_ui_errorf("Could not find the imgoptz app folder: %v", app_root.os_err)
 	case .Change_Directory_Failed:
-		print_ui_errorf("Failed to change directory to executable directory: %v", app_root.os_err)
+		print_ui_errorf("Could not open the imgoptz app folder: %v", app_root.os_err)
 	}
 }
