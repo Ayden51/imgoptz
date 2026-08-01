@@ -624,6 +624,18 @@ JPEG ICC sidecars are temp files. Delete JPEG workspace ICC files on every path:
 
 Normal console output should read like a structured console UI, not a raw log stream. Do not print `[INFO]`, `[WARN]`, or `[ERROR]` level prefixes in the default console UI. Reserve log-level prefixes for optional debug log files only.
 
+Approved UX copy updates:
+
+1. Dry-run output should frame processing as a preview before saving. In in-place mode, print `? Mode: preview first, then replace originals only after approval.` after discovery.
+2. Dry-run summaries should use `Preview:  N Ready - N Skipped - N Failed` and `Potential savings:`. Non-dry-run summaries keep `Files:  N Succeeded - N Skipped - N Failed` and `Saved:`.
+3. Keep negative percentage reductions such as `-78%`; for successful reductions below 1%, show `(<1%)`.
+4. The dry-run approval prompt should say `? Finish processing. Optimized files are waiting to be saved to disk. Check the results above before saving optimized files.` and use `(y/N)`, with empty input meaning No.
+5. In-place approval success should say `√ Replaced N original files with optimized versions.` Dir mode approval success should say `√ Wrote N optimized files to folder "<absolute path>".`
+6. Declining dry-run approval should say `- Discarded optimized files. Originals unchanged.`
+7. Accepted input should say `√ Directory accepted`. Discovery should say `? Found N images (N JPG, N PNG) - Scope: current folder only.` or `Scope: including subfolders.`
+8. User-facing error copy should prefer direct, friendly language. Add `Please` when instructing users to check a path, permissions, or configuration and try again.
+9. Progress rows should separate filenames from details with `|`. Filename stems longer than 25 characters should be shortened for display only by keeping the first 15 Unicode characters, then `...`, then the last word and extension. Last-word separators are spaces, `_`, and `-`, but not `.`.
+
 Keep the stdin prompt loop and console-subsystem double-click flow. Do not replace it with a GUI, fullscreen TUI, command-line batch mode, watcher, or multi-directory interface.
 
 The normal console UI is independent from debug logging and must stay the same whether `debug_log` is enabled or disabled in a later phase.
