@@ -120,7 +120,7 @@ process_discovered_images :: proc(
 			"processing finish: succeeded=0 skipped=0 failed=0 original_total=0 optimized_total=0",
 		)
 		print_progress_empty()
-		print_processing_summary(summary, time.since(started_at))
+		print_processing_summary(summary, time.since(started_at), false)
 		pause_after_processing_summary()
 		return
 	}
@@ -147,7 +147,7 @@ process_discovered_images :: proc(
 		summary.optimized_total,
 		time.duration_seconds(elapsed),
 	)
-	print_processing_summary(summary, elapsed)
+	print_processing_summary(summary, elapsed, false)
 	pause_after_processing_summary()
 }
 
@@ -174,7 +174,7 @@ process_discovered_images_dry_run :: proc(
 			"dry-run processing finish: succeeded=0 skipped=0 failed=0 original_total=0 optimized_total=0",
 		)
 		print_progress_empty()
-		print_processing_summary(result.summary, 0 * time.Millisecond)
+		print_processing_summary(result.summary, 0 * time.Millisecond, true)
 		return result
 	}
 
@@ -201,7 +201,7 @@ process_discovered_images_dry_run :: proc(
 		result.summary.optimized_total,
 		time.duration_seconds(result.elapsed),
 	)
-	print_processing_summary(result.summary, result.elapsed)
+	print_processing_summary(result.summary, result.elapsed, true)
 	return result
 }
 
@@ -2127,37 +2127,37 @@ image_process_error_summary :: proc(err: Image_Process_Error) -> string {
 	case .None:
 		return ""
 	case .Disabled_File_Type:
-		return "Image type is disabled by config"
+		return "This image type is disabled in imgoptz.json."
 	case .Temp_Path_Failed:
-		return "Failed to create temporary file path"
+		return "Could not create a temporary file for this image."
 	case .Identify_Failed:
-		return "Failed to inspect ICC profile"
+		return "Could not read this image's color profile."
 	case .Icc_Extract_Failed:
-		return "Failed to extract ICC profile"
+		return "Could not preserve this image's color profile."
 	case .Icc_Embed_Failed:
-		return "Failed to embed PNG ICC profile"
+		return "Could not write the color profile into the optimized PNG."
 	case .Icc_Verify_Failed:
-		return "Failed to verify PNG ICC profile"
+		return "Could not verify the optimized PNG color profile."
 	case .Magick_Failed:
-		return "ImageMagick resize/orientation failed"
+		return "Could not resize or rotate this image."
 	case .Mozjpeg_Failed:
-		return "MozJPEG compression failed"
+		return "Could not compress this JPEG."
 	case .Pngquant_Failed:
-		return "pngquant compression failed"
+		return "Could not compress this PNG."
 	case .Oxipng_Failed:
-		return "Oxipng optimization failed"
+		return "Could not finish PNG optimization."
 	case .Empty_Output:
-		return "Optimized output was empty"
+		return "Optimizer produced an empty file, so the original was kept."
 	case .Size_Read_Failed:
-		return "Failed to compare output size"
+		return "Could not compare file sizes, so the original was kept."
 	case .Optimized_Not_Smaller:
-		return "Optimized output was not smaller"
+		return "Skipped: optimized file was not smaller."
 	case .Final_Path_Failed:
-		return "Failed to plan final output path"
+		return "Could not prepare the final output filename."
 	case .Replace_Failed:
-		return "Failed to safely replace original"
+		return "Could not safely replace the original file."
 	case .Copy_Failed:
-		return "Failed to write optimized output"
+		return "Could not write the optimized file."
 	}
-	return "Image processing failed"
+	return "Could not process this image."
 }
