@@ -153,7 +153,7 @@ test_resolve_output_root_falls_back_to_default_output :: proc(t: ^testing.T) {
 	testing.expect_value(t, result.err, Output_Root_Error.None)
 	testing.expect_value(t, result.path, default_output)
 	testing.expect_value(t, len(result.warnings), 1)
-	testing.expect(t, strings.contains(result.warnings[0], "falling back"))
+	testing.expect(t, strings.contains(result.warnings[0], "Falling back"))
 }
 
 @(test, require)
@@ -252,7 +252,7 @@ test_load_runtime_environment_warns_when_gpu_probe_fails :: proc(t: ^testing.T) 
 	testing.expect_value(t, env.gpu_status, Runtime_GPU_Status.Probe_Failed)
 	testing.expect_value(t, env.magick_use_gpu, false)
 	testing.expect_value(t, len(env.warnings), 1)
-	testing.expect(t, strings.contains(env.warnings[0], "GPU probe failed"))
+	testing.expect(t, strings.contains(env.warnings[0], "GPU acceleration is unavailable"))
 }
 
 @(test, require)

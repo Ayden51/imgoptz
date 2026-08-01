@@ -116,10 +116,7 @@ load_runtime_environment_with_probe :: proc(
 			} else {
 				env.gpu_status = .Probe_Failed
 				debug_log_warnf("gpu probe failed for magick_path=\"%s\"", env.magick_path)
-				add_runtime_warning(
-					&env,
-					"ImageMagick OpenCL GPU probe failed; falling back to CPU.",
-				)
+				add_runtime_warning(&env, "GPU acceleration is unavailable. Continuing with CPU.")
 			}
 		}
 	} else {
@@ -226,7 +223,11 @@ validate_required_runtime_files :: proc(env: ^Runtime_Environment, app_root: str
 			debug_log_errorf("missing runtime file: label=%s path=\"%s\"", required.label, path)
 			add_runtime_error(
 				env,
-				fmt.tprintf("Missing %s: %s", required.label, required.relative_path),
+				fmt.tprintf(
+					"Required file is missing: %s (%s).",
+					required.relative_path,
+					required.label,
+				),
 			)
 		} else {
 			debug_log_debugf("runtime file ok: label=%s path=\"%s\"", required.label, path)
@@ -264,7 +265,7 @@ resolve_output_root :: proc(app_root: string, config: App_Config) -> Output_Root
 		append(
 			&result.warnings,
 			fmt.aprintf(
-				"Configured out_dir does not exist; falling back to %s.",
+				"Configured output folder does not exist. Falling back to %s.",
 				RUNTIME_DEFAULT_OUTPUT_DIR,
 			),
 		)
@@ -399,11 +400,13 @@ output_root_error_summary :: proc(err: Output_Root_Error) -> string {
 	case .None:
 		return ""
 	case .Resolve_Failed:
-		return "Failed to resolve output directory path."
+		return "Could not read the output folder path."
 	case .Default_Root_Missing:
-		return "Output mode is dir, but the accepted output root does not exist: output"
+		return(
+			"Output folder does not exist: output. Please create it or update out_dir in imgoptz.json." \
+		)
 	}
-	return "Failed to resolve output directory path."
+	return "Could not read the output folder path."
 }
 
 add_runtime_warning :: proc(env: ^Runtime_Environment, warning: string) {
