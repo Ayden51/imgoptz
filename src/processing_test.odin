@@ -677,6 +677,53 @@ test_finalize_dir_copies_smaller_output_with_slug_collision_suffix :: proc(t: ^t
 }
 
 @(test, require)
+test_finalize_dir_creates_missing_target_relative_output_root_when_writing :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp(
+		"",
+		"imgoptz-finalize-target-output-*",
+		context.allocator,
+	)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	input_dir := processing_join(t, temp_dir, "input")
+	output_dir := processing_join(t, input_dir, "imgoptz-output")
+	if len(input_dir) == 0 ||
+	   len(output_dir) == 0 ||
+	   !testing.expect_value(t, os.make_directory_all(input_dir), nil) {
+		return
+	}
+
+	source_path := processing_join(t, input_dir, "Photo.JPG")
+	temp_output_path := processing_join(t, input_dir, "optimized.tmp")
+	destination_path := processing_join(t, output_dir, "Photo.JPG")
+	final_path := processing_join(t, output_dir, "photo.jpg")
+	if len(source_path) == 0 ||
+	   len(temp_output_path) == 0 ||
+	   len(destination_path) == 0 ||
+	   len(final_path) == 0 ||
+	   !testing.expect_value(t, os.write_entire_file(source_path, "original-large"), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(temp_output_path, "tiny"), nil) {
+		return
+	}
+
+	item := Image_Work_Item {
+		source_path      = source_path,
+		relative_path    = "Photo.JPG",
+		destination_path = destination_path,
+		kind             = .Jpeg,
+	}
+	result := finalize_optimized_output(item, temp_output_path, .Dir)
+	defer destroy_finalize_output_result(&result)
+
+	testing.expect_value(t, result.err, Image_Process_Error.None)
+	testing.expect(t, os.exists(output_dir))
+	testing.expect(t, processing_file_has_contents(t, final_path, "tiny"))
+}
+
+@(test, require)
 test_finalize_dir_does_not_ignore_existing_destination_matching_source :: proc(t: ^testing.T) {
 	temp_dir, temp_err := os.make_directory_temp(
 		"",
