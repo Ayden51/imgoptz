@@ -169,6 +169,42 @@ test_discover_images_does_not_create_missing_output_root :: proc(t: ^testing.T) 
 }
 
 @(test, require)
+test_discover_images_recursive_skips_output_root_inside_input :: proc(t: ^testing.T) {
+	temp_dir := make_temp_discovery_root(t)
+	if len(temp_dir) == 0 {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	input_dir := discovery_join(t, temp_dir, "input")
+	output_dir := discovery_join(t, input_dir, "imgoptz-output")
+	if len(input_dir) == 0 || len(output_dir) == 0 {
+		return
+	}
+	defer delete(input_dir)
+	defer delete(output_dir)
+
+	if !testing.expect_value(t, os.make_directory_all(output_dir), nil) ||
+	   !write_discovery_file(t, input_dir, "source.jpg") ||
+	   !write_discovery_file(t, output_dir, "old-output.jpg") {
+		return
+	}
+
+	env := Runtime_Environment {
+		recursive   = true,
+		output_mode = .Dir,
+		output_root = output_dir,
+	}
+	result := discover_image_work(input_dir, env)
+	defer destroy_discovery_result(&result)
+
+	testing.expect_value(t, result.err, Discovery_Error.None)
+	testing.expect_value(t, len(result.items), 1)
+	testing.expect(t, discovery_has_relative_path(result, "source.jpg"))
+	testing.expect(t, !discovery_has_relative_path(result, "imgoptz-output/old-output.jpg"))
+}
+
+@(test, require)
 test_discover_images_empty_folder_succeeds :: proc(t: ^testing.T) {
 	temp_dir := make_temp_discovery_root(t)
 	if len(temp_dir) == 0 {

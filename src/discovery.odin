@@ -149,7 +149,7 @@ discover_directory :: proc(
 
 		#partial switch entry.type {
 		case .Directory:
-			if recursive {
+			if recursive && !directory_is_output_root(entry_path, output_mode, output_root) {
 				debug_log_debugf("descend directory: \"%s\"", entry_path)
 				discover_directory(
 					result,
@@ -173,6 +173,21 @@ discover_directory :: proc(
 		case:
 		}
 	}
+}
+
+directory_is_output_root :: proc(
+	directory_path: string,
+	output_mode: Config_Output_Mode,
+	output_root: string,
+) -> bool {
+	if output_mode != .Dir || len(output_root) == 0 {
+		return false
+	}
+	if output_paths_match(directory_path, output_root) {
+		debug_log_infof("skip output root during recursive discovery: \"%s\"", directory_path)
+		return true
+	}
+	return false
 }
 
 add_image_work_item :: proc(
