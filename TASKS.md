@@ -243,17 +243,17 @@ Goal: make optimization preview-first and require explicit approval before final
 
 Goal: make default `dir` output non-destructive and relative to the user's accepted input directory.
 
-- [ ] Change the built-in default `output_mode` to `dir` in this phase.
-- [ ] Change the built-in default `out_dir` to `~/imgoptz-output` in this phase.
-- [ ] Update `dist/imgoptz.json` so the development distribution matches the new output defaults.
-- [ ] Resolve `~/...` output paths relative to the accepted user input directory.
-- [ ] Keep absolute `out_dir` paths resolved and existence-checked at startup.
-- [ ] Keep app-root-relative `out_dir` paths resolved and existence-checked at startup.
-- [ ] Warn and fall back to `~/imgoptz-output` when an absolute or app-root-relative configured output root is missing.
-- [ ] Skip startup existence checks for target-relative `~/...` output roots.
-- [ ] Do not create output roots during discovery.
-- [ ] Auto-create target-relative output folders only immediately before writing final output files.
-- [ ] Add tests for target-relative output resolution, fallback behavior, delayed directory creation, and updated output defaults.
+- [x] Change the built-in default `output_mode` to `dir` in this phase.
+- [x] Change the built-in default `out_dir` to `~/imgoptz-output` in this phase.
+- [x] Update `dist/imgoptz.json` so the development distribution matches the new output defaults.
+- [x] Resolve `~/...` output paths relative to the accepted user input directory.
+- [x] Keep absolute `out_dir` paths resolved and existence-checked at startup.
+- [x] Keep app-root-relative `out_dir` paths resolved and existence-checked at startup.
+- [x] Warn and fall back to `~/imgoptz-output` when an absolute or app-root-relative configured output root is missing.
+- [x] Skip startup existence checks for target-relative `~/...` output roots.
+- [x] Do not create output roots during discovery.
+- [x] Auto-create target-relative output folders only immediately before writing final output files.
+- [x] Add tests for target-relative output resolution, fallback behavior, delayed directory creation, and updated output defaults.
 
 ## Phase 11: Release Hardening
 
@@ -265,6 +265,6 @@ Goal: run the broad manual and build matrix before release.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/dry-run-approval`.
-- Scope: Phase 9 dry-run approval mode implementation only.
-- Reason: Phase 9 makes optimization preview-first before target-relative output defaults remain separated for later phases.
+- Current feature branch: `feat/target-relative-output-defaults`.
+- Scope: Phase 10 target-relative output directory defaults implementation only.
+- Reason: Phase 10 makes the default output mode non-destructive and target-relative after dry-run approval is in place.

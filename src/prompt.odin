@@ -138,7 +138,24 @@ process_input_directory :: proc(
 	case .None:
 		debug_log_infof("accepted directory absolute path: \"%s\"", absolute_path)
 		print_input_accepted()
-		result := discover_image_work(absolute_path, runtime_env)
+		effective_runtime_env := runtime_env
+		resolved_output_root, output_root_ok := resolve_runtime_output_root_for_input(
+			runtime_env,
+			absolute_path,
+		)
+		if !output_root_ok {
+			debug_log_errorf("output root rejected for input: \"%s\"", absolute_path)
+			print_ui_error(
+				"Could not prepare the output folder. Please check imgoptz.json and try again.",
+			)
+			return
+		}
+		defer delete(resolved_output_root)
+		if runtime_env.output_mode == .Dir {
+			effective_runtime_env.output_root = resolved_output_root
+		}
+
+		result := discover_image_work(absolute_path, effective_runtime_env)
 		defer destroy_discovery_result(&result)
 		if result.err != .None {
 			debug_log_errorf("discovery failed: err=%v path=\"%s\"", result.err, result.err_path)
@@ -150,18 +167,22 @@ process_input_directory :: proc(
 			len(result.items),
 			result.jpeg_count,
 			result.png_count,
-			runtime_env.recursive,
+			effective_runtime_env.recursive,
 		)
-		print_discovery_summary(result, runtime_env.recursive)
+		print_discovery_summary(result, effective_runtime_env.recursive)
 		if config.dry_run {
-			print_dry_run_mode(runtime_env.output_mode)
-			dry_run_result := process_discovered_images_dry_run(result, config, runtime_env)
+			print_dry_run_mode(effective_runtime_env.output_mode)
+			dry_run_result := process_discovered_images_dry_run(
+				result,
+				config,
+				effective_runtime_env,
+			)
 			defer destroy_dry_run_process_result(&dry_run_result)
-			if !handle_dry_run_approval(&dry_run_result, runtime_env, approval_sc) {
+			if !handle_dry_run_approval(&dry_run_result, effective_runtime_env, approval_sc) {
 				pause_after_processing_summary()
 			}
 		} else {
-			process_discovered_images(result, config, runtime_env)
+			process_discovered_images(result, config, effective_runtime_env)
 		}
 	case .Not_Directory:
 		debug_log_warnf("directory rejected: not a directory path=\"%s\"", input_path)
@@ -190,7 +211,12 @@ handle_dry_run_approval :: proc(
 	switch approval {
 	case .Approve:
 		debug_log_info("dry-run approved by user")
-		final_summary := finalize_dry_run_outputs(result, runtime_env.output_mode)
+		final_summary := finalize_dry_run_outputs(
+			result,
+			runtime_env.output_mode,
+			runtime_env.output_root_kind,
+			runtime_env.output_root,
+		)
 		print_dry_run_saved(final_summary, runtime_env)
 	case .Decline:
 		debug_log_info("dry-run declined by user")

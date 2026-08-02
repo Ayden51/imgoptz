@@ -1,32 +1,32 @@
 {
-	"recursive": false,
-	"max_dimension": 1920,
-	"workers": "auto",
-	"gpu": true,
-	"debug_log": false,
-	"debug_log_file": "imgoptz.log",
-	"dry_run": true,
-	"output_mode": "in-place",
-	"out_dir": "output",
-	"jpeg": {
-		"enabled": true,
-		"quality": 78,
-		"progressive": true,
-		"optimize": true,
-		"sample": "2x2",
-		"quant_table": 2,
-		"tune": "ms-ssim",
-		"preserve_profiles": true
-	},
-	"png": {
-		"enabled": true,
-		"pngquant_quality": "40-95",
-		"pngquant_speed": 1,
-		"pngquant_dither": false,
-		"oxipng_level": 4,
-		"interlace": false,
-		"strip": "safe",
-		"alpha": true,
-		"preserve_profiles": true
-	}
+    "recursive": false,
+    "max_dimension": 1920,
+    "workers": "auto",
+    "gpu": true,
+    "debug_log": false,
+    "debug_log_file": "imgoptz.log",
+    "dry_run": true,
+    "output_mode": "dir",
+    "out_dir": "~/imgoptz-output",
+    "jpeg": {
+        "enabled": true,
+        "quality": 78,
+        "progressive": true,
+        "optimize": true,
+        "sample": "2x2",
+        "quant_table": 2,
+        "tune": "ms-ssim",
+        "preserve_profiles": true
+    },
+    "png": {
+        "enabled": true,
+        "pngquant_quality": "40-95",
+        "pngquant_speed": 1,
+        "pngquant_dither": false,
+        "oxipng_level": 4,
+        "interlace": false,
+        "strip": "safe",
+        "alpha": true,
+        "preserve_profiles": true
+    }
 }

@@ -13,26 +13,33 @@ Runtime_GPU_Status :: enum {
 
 Runtime_GPU_Probe :: proc(magick_path: string) -> bool
 
+Output_Root_Kind :: enum {
+	None,
+	Prechecked,
+	Target_Relative,
+}
+
 Runtime_Required_File :: struct {
 	relative_path: string,
 	label:         string,
 }
 
 Runtime_Environment :: struct {
-	ok:             bool,
-	recursive:      bool,
-	output_mode:    Config_Output_Mode,
-	output_root:    string,
-	worker_count:   int,
-	mozjpeg_path:   string,
-	oxipng_path:    string,
-	pngquant_path:  string,
-	magick_path:    string,
-	srgb_profile:   string,
-	gpu_status:     Runtime_GPU_Status,
-	magick_use_gpu: bool,
-	warnings:       [dynamic]string,
-	errors:         [dynamic]string,
+	ok:               bool,
+	recursive:        bool,
+	output_mode:      Config_Output_Mode,
+	output_root:      string,
+	output_root_kind: Output_Root_Kind,
+	worker_count:     int,
+	mozjpeg_path:     string,
+	oxipng_path:      string,
+	pngquant_path:    string,
+	magick_path:      string,
+	srgb_profile:     string,
+	gpu_status:       Runtime_GPU_Status,
+	magick_use_gpu:   bool,
+	warnings:         [dynamic]string,
+	errors:           [dynamic]string,
 }
 
 Output_Root_Error :: enum {
@@ -43,11 +50,13 @@ Output_Root_Error :: enum {
 
 Output_Root_Result :: struct {
 	path:     string,
+	kind:     Output_Root_Kind,
 	err:      Output_Root_Error,
 	warnings: [dynamic]string,
 }
 
-RUNTIME_DEFAULT_OUTPUT_DIR :: "output"
+RUNTIME_DEFAULT_OUTPUT_DIR :: "~/imgoptz-output"
+RUNTIME_TARGET_RELATIVE_OUTPUT_PREFIX :: "~/"
 RUNTIME_MOZJPEG_PATH :: "tools/mozjpeg/mozjpeg.exe"
 RUNTIME_OXIPNG_PATH :: "tools/oxipng/oxipng.exe"
 RUNTIME_PNGQUANT_PATH :: "tools/pngquant/pngquant.exe"
@@ -102,6 +111,7 @@ load_runtime_environment_with_probe :: proc(
 		add_runtime_error(&env, output_root_error_summary(output_root.err))
 	} else if len(output_root.path) > 0 {
 		env.output_root = strings.clone(output_root.path)
+		env.output_root_kind = output_root.kind
 	}
 
 	if config.gpu {
@@ -242,7 +252,14 @@ resolve_output_root :: proc(app_root: string, config: App_Config) -> Output_Root
 		return result
 	}
 
-	configured_path := resolve_app_relative_path(app_root, config.out_dir, context.allocator)
+	if output_path_is_target_relative(config.out_dir) {
+		debug_log_infof("target-relative output root deferred: \"%s\"", config.out_dir)
+		result.path = strings.clone(config.out_dir)
+		result.kind = .Target_Relative
+		return result
+	}
+
+	configured_path := resolve_app_output_path(app_root, config.out_dir, context.allocator)
 	if len(configured_path) == 0 {
 		debug_log_errorf("configured output root resolve failed: out_dir=\"%s\"", config.out_dir)
 		result.err = .Resolve_Failed
@@ -253,45 +270,76 @@ resolve_output_root :: proc(app_root: string, config: App_Config) -> Output_Root
 	if os.is_directory(configured_path) {
 		debug_log_infof("configured output root accepted: \"%s\"", configured_path)
 		result.path = strings.clone(configured_path)
+		result.kind = .Prechecked
 		return result
 	}
 
-	if config.out_dir != RUNTIME_DEFAULT_OUTPUT_DIR {
-		debug_log_warnf(
-			"configured output root missing: \"%s\"; falling back to %s",
-			configured_path,
-			RUNTIME_DEFAULT_OUTPUT_DIR,
-		)
-		append(
-			&result.warnings,
-			fmt.aprintf(
-				"Configured output folder does not exist. Falling back to %s.",
-				RUNTIME_DEFAULT_OUTPUT_DIR,
-			),
-		)
-	}
-
-	default_path := resolve_app_relative_path(
-		app_root,
+	debug_log_warnf(
+		"configured output root missing: \"%s\"; falling back to %s",
+		configured_path,
 		RUNTIME_DEFAULT_OUTPUT_DIR,
-		context.allocator,
 	)
-	if len(default_path) == 0 {
-		debug_log_errorf("default output root resolve failed")
-		result.err = .Resolve_Failed
-		return result
-	}
-	defer delete(default_path)
-
-	if !os.is_directory(default_path) {
-		debug_log_errorf("default output root missing: \"%s\"", default_path)
-		result.err = .Default_Root_Missing
-		return result
-	}
-
-	debug_log_infof("default output root accepted: \"%s\"", default_path)
-	result.path = strings.clone(default_path)
+	append(
+		&result.warnings,
+		fmt.aprintf(
+			"Configured output folder does not exist. Falling back to %s.",
+			RUNTIME_DEFAULT_OUTPUT_DIR,
+		),
+	)
+	result.path = strings.clone(RUNTIME_DEFAULT_OUTPUT_DIR)
+	result.kind = .Target_Relative
 	return result
+}
+
+resolve_runtime_output_root_for_input :: proc(
+	runtime_env: Runtime_Environment,
+	input_root: string,
+	allocator := context.allocator,
+) -> (
+	string,
+	bool,
+) {
+	if runtime_env.output_mode != .Dir {
+		return "", true
+	}
+
+	switch runtime_env.output_root_kind {
+	case .Target_Relative:
+		return resolve_target_relative_output_root(input_root, runtime_env.output_root, allocator)
+	case .Prechecked:
+		cloned, clone_err := strings.clone(runtime_env.output_root, allocator)
+		return cloned, clone_err == nil
+	case .None:
+	}
+	return "", false
+}
+
+resolve_target_relative_output_root :: proc(
+	input_root, out_dir: string,
+	allocator := context.allocator,
+) -> (
+	string,
+	bool,
+) {
+	if !output_path_is_target_relative(out_dir) {
+		return "", false
+	}
+
+	relative := out_dir[len(RUNTIME_TARGET_RELATIVE_OUTPUT_PREFIX):]
+	for len(relative) > 0 && os.is_path_separator(relative[0]) {
+		relative = relative[1:]
+	}
+	if len(relative) == 0 {
+		cloned, clone_err := strings.clone(input_root, allocator)
+		return cloned, clone_err == nil
+	}
+
+	parts := [?]string{input_root, relative}
+	path, path_err := os.join_path(parts[:], allocator)
+	if path_err != nil {
+		return "", false
+	}
+	return path, true
 }
 
 destroy_output_root_result :: proc(result: ^Output_Root_Result) {
@@ -321,6 +369,37 @@ resolve_app_relative_path :: proc(
 		return ""
 	}
 	return joined
+}
+
+resolve_app_output_path :: proc(app_root, path: string, allocator := context.allocator) -> string {
+	if output_path_is_rooted_app_relative(path) {
+		return resolve_app_relative_path(
+			app_root,
+			path_without_leading_separators(path),
+			allocator,
+		)
+	}
+	return resolve_app_relative_path(app_root, path, allocator)
+}
+
+output_path_is_target_relative :: proc(path: string) -> bool {
+	return strings.has_prefix(path, RUNTIME_TARGET_RELATIVE_OUTPUT_PREFIX)
+}
+
+output_path_is_rooted_app_relative :: proc(path: string) -> bool {
+	return(
+		len(path) > 0 &&
+		os.is_path_separator(path[0]) &&
+		!(len(path) > 1 && os.is_path_separator(path[1])) \
+	)
+}
+
+path_without_leading_separators :: proc(path: string) -> string {
+	result := path
+	for len(result) > 0 && os.is_path_separator(result[0]) {
+		result = result[1:]
+	}
+	return result
 }
 
 probe_imagemagick_opencl :: proc(magick_path: string) -> bool {
