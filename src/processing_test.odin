@@ -839,6 +839,54 @@ test_finalize_dir_copy_failure_preserves_source_and_temp :: proc(t: ^testing.T) 
 }
 
 @(test, require)
+test_finalize_dir_prechecked_root_missing_fails_without_recreating_root :: proc(t: ^testing.T) {
+	temp_dir, temp_err := os.make_directory_temp(
+		"",
+		"imgoptz-prechecked-root-missing-*",
+		context.allocator,
+	)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	input_dir := processing_join(t, temp_dir, "input")
+	output_dir := processing_join(t, temp_dir, "output")
+	if len(input_dir) == 0 ||
+	   len(output_dir) == 0 ||
+	   !testing.expect_value(t, os.make_directory_all(input_dir), nil) ||
+	   !testing.expect_value(t, os.make_directory_all(output_dir), nil) {
+		return
+	}
+
+	source_path := processing_join(t, input_dir, "Photo.JPG")
+	temp_output_path := processing_join(t, input_dir, "optimized.tmp")
+	destination_path := processing_join(t, output_dir, "Photo.JPG")
+	if len(source_path) == 0 ||
+	   len(temp_output_path) == 0 ||
+	   len(destination_path) == 0 ||
+	   !testing.expect_value(t, os.write_entire_file(source_path, "original-large"), nil) ||
+	   !testing.expect_value(t, os.write_entire_file(temp_output_path, "tiny"), nil) ||
+	   !testing.expect_value(t, os.remove_all(output_dir), nil) {
+		return
+	}
+
+	item := Image_Work_Item {
+		source_path      = source_path,
+		relative_path    = "Photo.JPG",
+		destination_path = destination_path,
+		kind             = .Jpeg,
+	}
+	result := finalize_optimized_output(item, temp_output_path, .Dir, .Prechecked, output_dir)
+	defer destroy_finalize_output_result(&result)
+
+	testing.expect_value(t, result.err, Image_Process_Error.Copy_Failed)
+	testing.expect(t, !os.exists(output_dir))
+	testing.expect(t, processing_file_has_contents(t, source_path, "original-large"))
+	testing.expect(t, processing_file_has_contents(t, temp_output_path, "tiny"))
+}
+
+@(test, require)
 test_imagemagick_environment_filters_managed_entries :: proc(t: ^testing.T) {
 	testing.expect(t, imagemagick_environment_entry_is_managed("MAGICK_THREAD_LIMIT=8"))
 	testing.expect(t, imagemagick_environment_entry_is_managed("magick_ocl_device=CPU"))

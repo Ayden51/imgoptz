@@ -211,7 +211,12 @@ handle_dry_run_approval :: proc(
 	switch approval {
 	case .Approve:
 		debug_log_info("dry-run approved by user")
-		final_summary := finalize_dry_run_outputs(result, runtime_env.output_mode)
+		final_summary := finalize_dry_run_outputs(
+			result,
+			runtime_env.output_mode,
+			runtime_env.output_root_kind,
+			runtime_env.output_root,
+		)
 		print_dry_run_saved(final_summary, runtime_env)
 	case .Decline:
 		debug_log_info("dry-run declined by user")

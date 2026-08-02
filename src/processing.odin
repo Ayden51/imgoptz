@@ -468,7 +468,13 @@ process_image_item_to_final :: proc(
 		)
 		return Finalize_Output_Result{err = result.err, detail = strings.clone(result.detail)}
 	}
-	finalize := finalize_optimized_output(item, result.output_path, runtime_env.output_mode)
+	finalize := finalize_optimized_output(
+		item,
+		result.output_path,
+		runtime_env.output_mode,
+		runtime_env.output_root_kind,
+		runtime_env.output_root,
+	)
 	debug_log_infof(
 		"image finish: relative=\"%s\" err=%v output=\"%s\" original_size=%d optimized_size=%d detail=\"%s\"",
 		item.relative_path,
@@ -593,6 +599,8 @@ record_preview_image :: proc(
 finalize_dry_run_outputs :: proc(
 	result: ^Dry_Run_Process_Result,
 	output_mode: Config_Output_Mode,
+	output_root_kind := Output_Root_Kind.None,
+	output_root := "",
 ) -> Processing_Summary {
 	final_summary: Processing_Summary
 	for &preview in result.previews {
@@ -604,6 +612,8 @@ finalize_dry_run_outputs :: proc(
 			preview.item,
 			preview.temp.output_path,
 			output_mode,
+			output_root_kind,
+			output_root,
 			preview.preview,
 		)
 		if finalize.err == .None {
@@ -682,6 +692,8 @@ finalize_optimized_output :: proc(
 	item: Image_Work_Item,
 	temp_output_path: string,
 	output_mode: Config_Output_Mode,
+	output_root_kind := Output_Root_Kind.None,
+	output_root := "",
 ) -> Finalize_Output_Result {
 	debug_log_infof(
 		"finalize start: relative=\"%s\" temp_output=\"%s\" output_mode=%s",
@@ -693,7 +705,14 @@ finalize_optimized_output :: proc(
 	if preview.err != .None {
 		return preview
 	}
-	return finalize_accepted_optimized_output(item, temp_output_path, output_mode, preview)
+	return finalize_accepted_optimized_output(
+		item,
+		temp_output_path,
+		output_mode,
+		output_root_kind,
+		output_root,
+		preview,
+	)
 }
 
 evaluate_optimized_output :: proc(
@@ -740,6 +759,8 @@ finalize_accepted_optimized_output :: proc(
 	item: Image_Work_Item,
 	temp_output_path: string,
 	output_mode: Config_Output_Mode,
+	output_root_kind: Output_Root_Kind,
+	output_root: string,
 	preview: Finalize_Output_Result,
 ) -> Finalize_Output_Result {
 	result := Finalize_Output_Result {
@@ -766,7 +787,12 @@ finalize_accepted_optimized_output :: proc(
 			return result
 		}
 	case .Dir:
-		if detail, ok := copy_to_slugged_output(temp_output_path, final_path); !ok {
+		if detail, ok := copy_to_slugged_output(
+			temp_output_path,
+			final_path,
+			output_root_kind,
+			output_root,
+		); !ok {
 			delete(final_path)
 			result.err = .Copy_Failed
 			result.detail = detail
@@ -870,7 +896,23 @@ replace_in_place_with_slugged_output :: proc(
 	return "", true
 }
 
-copy_to_slugged_output :: proc(temp_output_path, final_path: string) -> (string, bool) {
+copy_to_slugged_output :: proc(
+	temp_output_path, final_path: string,
+	output_root_kind := Output_Root_Kind.None,
+	output_root := "",
+) -> (
+	string,
+	bool,
+) {
+	if output_root_kind == .Prechecked &&
+	   (len(output_root) == 0 || !os.is_directory(output_root)) {
+		debug_log_errorf("copy failed: prechecked output root missing: \"%s\"", output_root)
+		return strings.clone(
+				"Output folder is no longer available. Please check the path and try again.",
+			),
+			false
+	}
+
 	dir, _ := os.split_path(final_path)
 	if len(dir) > 0 {
 		mkdir_err := os.make_directory_all(dir)
