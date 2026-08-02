@@ -83,8 +83,8 @@ default_config :: proc() -> App_Config {
 		debug_log = false,
 		debug_log_file = strings.clone("imgoptz.log"),
 		dry_run = true,
-		output_mode = .In_Place,
-		out_dir = strings.clone("output"),
+		output_mode = .Dir,
+		out_dir = strings.clone("~/imgoptz-output"),
 		jpeg = Jpeg_Config {
 			enabled = true,
 			quality = 78,
