@@ -1,5 +1,5 @@
 {
-    "recursive": true,
+    "recursive": false,
     "max_dimension": 1920,
     "workers": "auto",
     "gpu": true,
