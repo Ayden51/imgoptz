@@ -88,6 +88,7 @@ test_validate_required_runtime_files_reports_missing_executable :: proc(t: ^test
 test_resolve_output_root_ignores_in_place_mode :: proc(t: ^testing.T) {
 	config := default_config()
 	defer destroy_config(&config)
+	config.output_mode = .In_Place
 
 	result := resolve_output_root("C:/imgoptz", config)
 	defer destroy_output_root_result(&result)
@@ -121,43 +122,86 @@ test_resolve_output_root_accepts_existing_configured_dir :: proc(t: ^testing.T) 
 
 	testing.expect_value(t, result.err, Output_Root_Error.None)
 	testing.expect_value(t, result.path, custom_dir)
+	testing.expect_value(t, result.kind, Output_Root_Kind.Prechecked)
 	testing.expect_value(t, len(result.warnings), 0)
 }
 
 @(test, require)
-test_resolve_output_root_falls_back_to_default_output :: proc(t: ^testing.T) {
+test_resolve_output_root_accepts_existing_absolute_dir :: proc(t: ^testing.T) {
 	temp_dir := make_temp_runtime_root(t)
 	if len(temp_dir) == 0 {
 		return
 	}
 	defer cleanup_test_directory(temp_dir)
 
-	default_output := resolve_app_relative_path(
-		temp_dir,
-		RUNTIME_DEFAULT_OUTPUT_DIR,
-		context.temp_allocator,
-	)
-	mkdir_err := os.make_directory(default_output)
-	if !testing.expect_value(t, mkdir_err, nil) {
+	custom_dir := resolve_app_relative_path(temp_dir, "absolute-output", context.temp_allocator)
+	if !testing.expect_value(t, os.make_directory(custom_dir), nil) {
 		return
 	}
 
 	config := default_config()
 	defer destroy_config(&config)
-	config.output_mode = .Dir
+	replace_config_string(&config.out_dir, custom_dir)
+
+	result := resolve_output_root(temp_dir, config)
+	defer destroy_output_root_result(&result)
+
+	testing.expect_value(t, result.err, Output_Root_Error.None)
+	testing.expect_value(t, result.path, custom_dir)
+	testing.expect_value(t, result.kind, Output_Root_Kind.Prechecked)
+	testing.expect_value(t, len(result.warnings), 0)
+}
+
+@(test, require)
+test_resolve_output_root_treats_rooted_path_as_app_relative :: proc(t: ^testing.T) {
+	temp_dir := make_temp_runtime_root(t)
+	if len(temp_dir) == 0 {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	output_dir := resolve_app_relative_path(temp_dir, "rooted-output", context.temp_allocator)
+	if !testing.expect_value(t, os.make_directory(output_dir), nil) {
+		return
+	}
+
+	config := default_config()
+	defer destroy_config(&config)
+	replace_config_string(&config.out_dir, "/rooted-output")
+
+	result := resolve_output_root(temp_dir, config)
+	defer destroy_output_root_result(&result)
+
+	testing.expect_value(t, result.err, Output_Root_Error.None)
+	testing.expect_value(t, result.path, output_dir)
+	testing.expect_value(t, result.kind, Output_Root_Kind.Prechecked)
+	testing.expect_value(t, len(result.warnings), 0)
+}
+
+@(test, require)
+test_resolve_output_root_falls_back_to_target_relative_default :: proc(t: ^testing.T) {
+	temp_dir := make_temp_runtime_root(t)
+	if len(temp_dir) == 0 {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	config := default_config()
+	defer destroy_config(&config)
 	replace_config_string(&config.out_dir, "typo-output")
 
 	result := resolve_output_root(temp_dir, config)
 	defer destroy_output_root_result(&result)
 
 	testing.expect_value(t, result.err, Output_Root_Error.None)
-	testing.expect_value(t, result.path, default_output)
+	testing.expect_value(t, result.path, RUNTIME_DEFAULT_OUTPUT_DIR)
+	testing.expect_value(t, result.kind, Output_Root_Kind.Target_Relative)
 	testing.expect_value(t, len(result.warnings), 1)
 	testing.expect(t, strings.contains(result.warnings[0], "Falling back"))
 }
 
 @(test, require)
-test_resolve_output_root_errors_when_default_output_missing :: proc(t: ^testing.T) {
+test_resolve_output_root_defers_target_relative_default :: proc(t: ^testing.T) {
 	temp_dir := make_temp_runtime_root(t)
 	if len(temp_dir) == 0 {
 		return
@@ -166,13 +210,45 @@ test_resolve_output_root_errors_when_default_output_missing :: proc(t: ^testing.
 
 	config := default_config()
 	defer destroy_config(&config)
-	config.output_mode = .Dir
 
 	result := resolve_output_root(temp_dir, config)
 	defer destroy_output_root_result(&result)
 
-	testing.expect_value(t, result.err, Output_Root_Error.Default_Root_Missing)
-	testing.expect_value(t, result.path, "")
+	testing.expect_value(t, result.err, Output_Root_Error.None)
+	testing.expect_value(t, result.path, RUNTIME_DEFAULT_OUTPUT_DIR)
+	testing.expect_value(t, result.kind, Output_Root_Kind.Target_Relative)
+	testing.expect_value(t, len(result.warnings), 0)
+	testing.expect(
+		t,
+		!os.exists(resolve_app_relative_path(temp_dir, "imgoptz-output", context.temp_allocator)),
+	)
+}
+
+@(test, require)
+test_resolve_runtime_output_root_for_input_uses_target_directory :: proc(t: ^testing.T) {
+	temp_dir := make_temp_runtime_root(t)
+	if len(temp_dir) == 0 {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	input_dir := resolve_app_relative_path(temp_dir, "photos", context.temp_allocator)
+	if !testing.expect_value(t, os.make_directory(input_dir), nil) {
+		return
+	}
+	expected := resolve_app_relative_path(input_dir, "custom-output", context.temp_allocator)
+
+	runtime_env := Runtime_Environment {
+		output_mode      = .Dir,
+		output_root      = "~/custom-output",
+		output_root_kind = .Target_Relative,
+	}
+	resolved, ok := resolve_runtime_output_root_for_input(runtime_env, input_dir)
+	defer delete(resolved)
+
+	testing.expect_value(t, ok, true)
+	testing.expect_value(t, resolved, expected)
+	testing.expect(t, !os.exists(resolved))
 }
 
 @(test, require)
