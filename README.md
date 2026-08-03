@@ -116,7 +116,7 @@ For debug memory leak checks, run the development executable through at least th
 
 ## Release Zip Checklist
 
-For `v0.1.0`, the GitHub Release asset should be one `.zip` containing the app root. The app root is the folder that contains `imgoptz.exe`; all runtime paths resolve relative to that folder.
+For `v0.1.0`, the user-facing app asset should be one `.zip` containing the app root. The app root is the folder that contains `imgoptz.exe`; all runtime paths resolve relative to that folder.
 
 Include these app files:
 
@@ -136,6 +136,7 @@ tools/oxipng/oxipng.exe
 tools/oxipng/LICENSE
 tools/pngquant/pngquant.exe
 tools/pngquant/COPYRIGHT
+tools/pngquant/SOURCE.txt
 tools/imagemagick/magick.exe
 tools/imagemagick/LICENSE.txt
 tools/imagemagick/NOTICE.txt
@@ -158,7 +159,16 @@ Documentation and notice findings for the release bundle:
 - Oxipng's MIT license notice should remain at `tools/oxipng/LICENSE`.
 - ImageMagick's license and notice should remain at `tools/imagemagick/LICENSE.txt` and `tools/imagemagick/NOTICE.txt`. Keep `policy.xml` beside `magick.exe` so runtime policy is explicit.
 - The ICC profile license should remain at `profiles/sRGB2014.LICENSE.txt`.
-- pngquant's `COPYRIGHT` file includes GPLv3 text and attribution. Before publishing a release that bundles `pngquant.exe`, confirm the corresponding source or written-offer obligation for that binary, or use an appropriate commercial pngquant license.
+- pngquant 2.17.0 is GPLv3-or-later or commercially licensed. If releasing under GPLv3, keep `tools/pngquant/COPYRIGHT` and `tools/pngquant/SOURCE.txt`, and attach a complete `pngquant-2.17.0-source.zip` source asset to the same GitHub Release page as the app zip. If the release must have exactly one downloadable asset, include that complete pngquant source folder inside the app zip instead. If using a commercial pngquant license instead, keep the license proof outside the public repo and update `tools/pngquant/SOURCE.txt` before release.
+
+Create the pngquant GPL source asset from a recursive checkout so the `libimagequant` submodule is included:
+
+```powershell
+git clone --branch 2.17.0 --recursive https://github.com/kornelski/pngquant.git pngquant-2.17.0-source
+Compress-Archive -Path "pngquant-2.17.0-source" -DestinationPath "pngquant-2.17.0-source.zip"
+```
+
+The bundled `pngquant.exe` reports `2.17.0 (September 2021)`. The checked source tag is `kornelski/pngquant` commit `7bc73591f4de8517f01a54d8f475fea2df193b7c`, with `ImageOptim/libimagequant` submodule commit `a6cc4ade66710ec799ca41297f6d2c2b4070d0ff`.
 
 ## License
 

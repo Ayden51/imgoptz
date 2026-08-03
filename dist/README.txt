@@ -242,6 +242,7 @@ Do not delete these files from the app folder:
   tools\oxipng\LICENSE
   tools\pngquant\pngquant.exe
   tools\pngquant\COPYRIGHT
+  tools\pngquant\SOURCE.txt
   tools\imagemagick\magick.exe
   tools\imagemagick\LICENSE.txt
   tools\imagemagick\NOTICE.txt
@@ -263,6 +264,7 @@ See these files for third-party license details:
   tools\mozjpeg\README-mozilla.txt
   tools\oxipng\LICENSE
   tools\pngquant\COPYRIGHT
+  tools\pngquant\SOURCE.txt
   tools\imagemagick\LICENSE.txt
   tools\imagemagick\NOTICE.txt
   profiles\sRGB2014.LICENSE.txt
