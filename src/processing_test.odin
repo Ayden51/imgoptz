@@ -404,6 +404,80 @@ test_process_jpeg_unicode_source_uses_workspace_and_cleans_artifacts :: proc(t: 
 }
 
 @(test, require)
+test_process_png_unicode_source_uses_workspace_and_cleans_artifacts :: proc(t: ^testing.T) {
+	runtime_env := processing_test_runtime_environment(t)
+	if !processing_runtime_tools_exist(runtime_env) {
+		return
+	}
+
+	temp_dir, temp_err := os.make_directory_temp("", "imgoptz-png-unicode-*", context.allocator)
+	if !testing.expect_value(t, temp_err, nil) {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	input_dir := processing_join(t, temp_dir, "Ảnh Unicode & (test)")
+	if len(input_dir) == 0 || !testing.expect_value(t, os.make_directory_all(input_dir), nil) {
+		return
+	}
+	source_path := processing_join(t, input_dir, "Ảnh Đẹp.png")
+	if len(source_path) == 0 {
+		return
+	}
+	create_detail, create_ok := run_tool(
+		[]string {
+			runtime_env.magick_path,
+			"-size",
+			"128x128",
+			"gradient:red-blue",
+			"-profile",
+			runtime_env.srgb_profile,
+			source_path,
+		},
+		imagemagick_process_environment(runtime_env),
+		"ImageMagick test PNG create",
+	)
+	defer delete(create_detail)
+	if !testing.expect_value(t, create_ok, true) {
+		return
+	}
+
+	config := default_config()
+	defer destroy_config(&config)
+	item := Image_Work_Item {
+		source_path   = source_path,
+		relative_path = "Ảnh Đẹp.png",
+		kind          = .Png,
+	}
+	result := process_image_to_temp(item, config, runtime_env)
+	if !testing.expectf(
+		t,
+		result.err == .None,
+		"expected no PNG processing error, got %v: %s",
+		result.err,
+		result.detail,
+	) {
+		cleanup_process_image_result(&result)
+		return
+	}
+
+	workspace_path := strings.clone(result.cleanup_path)
+	output_path := strings.clone(result.output_path)
+	defer delete(workspace_path)
+	defer delete(output_path)
+	_, output_name := os.split_path(result.output_path)
+	testing.expect_value(t, output_name, "optimized.png")
+	testing.expect(t, !strings.has_prefix(result.output_path, source_path))
+	testing.expect(t, os.exists(result.output_path))
+	testing.expect(t, os.exists(result.cleanup_path))
+
+	cleanup_process_image_result(&result)
+	testing.expect(t, !os.exists(output_path))
+	testing.expect(t, !os.exists(workspace_path))
+	testing.expect(t, !processing_temp_artifacts_exist(source_path))
+}
+
+@(test, require)
 test_jpeg_pipe_retries_without_icc_when_mozjpeg_rejects_profile_path :: proc(t: ^testing.T) {
 	testing.expect(t, jpeg_pipe_should_retry_without_icc(.Mozjpeg_Failed, false, "profile.icc"))
 	testing.expect(t, !jpeg_pipe_should_retry_without_icc(.None, true, "profile.icc"))
