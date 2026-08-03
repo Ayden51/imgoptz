@@ -1054,7 +1054,7 @@ process_jpeg_to_temp :: proc(
 	}
 	debug_log_debugf("jpeg temp workspace: \"%s\"", workspace_path)
 
-	output_path, output_ok := jpeg_workspace_path(workspace_path, "optimized.jpg")
+	output_path, output_ok := process_workspace_path(workspace_path, "optimized.jpg")
 	if !output_ok {
 		debug_log_errorf("jpeg output workspace path failed: workspace=\"%s\"", workspace_path)
 		_ = os.remove_all(workspace_path)
@@ -1092,7 +1092,7 @@ process_jpeg_to_temp :: proc(
 		switch icc_mode {
 		case .Embed_Source:
 			source_icc_ok: bool
-			source_icc_path, source_icc_ok = jpeg_workspace_path(workspace_path, "source.icc")
+			source_icc_path, source_icc_ok = process_workspace_path(workspace_path, "source.icc")
 			if !source_icc_ok {
 				debug_log_errorf(
 					"jpeg ICC source workspace path failed: workspace=\"%s\"",
@@ -1124,7 +1124,7 @@ process_jpeg_to_temp :: proc(
 			embed_icc_path = source_icc_path
 			owned_icc_path = source_icc_path
 		case .Convert_To_Srgb:
-			srgb_workspace_path, srgb_workspace_ok := jpeg_workspace_path(
+			srgb_workspace_path, srgb_workspace_ok := process_workspace_path(
 				workspace_path,
 				"sRGB2014.icc",
 			)
@@ -1196,7 +1196,7 @@ process_jpeg_to_temp :: proc(
 	return Process_Image_Result{output_path = output_path, cleanup_path = workspace_path}
 }
 
-jpeg_workspace_path :: proc(workspace_path, filename: string) -> (string, bool) {
+process_workspace_path :: proc(workspace_path, filename: string) -> (string, bool) {
 	parts := [?]string{workspace_path, filename}
 	path, err := os.join_path(parts[:], context.allocator)
 	if err != nil {
@@ -1272,7 +1272,7 @@ run_jpeg_pipe_once :: proc(
 	pipe_r_open := true
 	pipe_w_open := true
 
-	magick_stderr_path, magick_stderr_ok := jpeg_workspace_path(
+	magick_stderr_path, magick_stderr_ok := process_workspace_path(
 		workspace_path,
 		"magick.stderr.txt",
 	)
@@ -1348,7 +1348,7 @@ run_jpeg_pipe_once :: proc(
 			false
 	}
 
-	mozjpeg_stderr_path, mozjpeg_stderr_ok := jpeg_workspace_path(
+	mozjpeg_stderr_path, mozjpeg_stderr_ok := process_workspace_path(
 		workspace_path,
 		"mozjpeg.stderr.txt",
 	)
@@ -1516,30 +1516,50 @@ process_png_to_temp :: proc(
 	}
 	debug_log_infof("png pipeline start: source=\"%s\"", item.source_path)
 
-	resized_path, resized_ok := make_process_temp_path(item.source_path, "resized.png")
+	workspace_path, workspace_err := os.make_directory_temp("", "imgoptz-png-*", context.allocator)
+	if workspace_err != nil {
+		debug_log_errorf(
+			"png temp workspace failed: source=\"%s\" err=%v",
+			item.source_path,
+			workspace_err,
+		)
+		return Process_Image_Result{err = .Temp_Path_Failed}
+	}
+	debug_log_debugf("png temp workspace: \"%s\"", workspace_path)
+	workspace_retained := false
+	defer if !workspace_retained {
+		_ = os.remove_all(workspace_path)
+		delete(workspace_path)
+	}
+
+	resized_path, resized_ok := process_workspace_path(workspace_path, "resized.png")
 	if !resized_ok {
-		debug_log_errorf("png temp path failed: resized source=\"%s\"", item.source_path)
+		debug_log_errorf("png resized workspace path failed: workspace=\"%s\"", workspace_path)
 		return Process_Image_Result{err = .Temp_Path_Failed}
 	}
 	debug_log_debugf("png temp resized: \"%s\"", resized_path)
 	defer delete(resized_path)
 	defer remove_if_exists(resized_path)
 
-	quant_path, quant_ok := make_process_temp_path(item.source_path, "quant.png")
+	quant_path, quant_ok := process_workspace_path(workspace_path, "quant.png")
 	if !quant_ok {
-		debug_log_errorf("png temp path failed: quant source=\"%s\"", item.source_path)
+		debug_log_errorf("png quant workspace path failed: workspace=\"%s\"", workspace_path)
 		return Process_Image_Result{err = .Temp_Path_Failed}
 	}
 	debug_log_debugf("png temp quant: \"%s\"", quant_path)
 	defer delete(quant_path)
 	defer remove_if_exists(quant_path)
 
-	output_path, output_ok := make_process_temp_path(item.source_path, "optimized.png")
+	output_path, output_ok := process_workspace_path(workspace_path, "optimized.png")
 	if !output_ok {
-		debug_log_errorf("png temp path failed: optimized output source=\"%s\"", item.source_path)
+		debug_log_errorf("png output workspace path failed: workspace=\"%s\"", workspace_path)
 		return Process_Image_Result{err = .Temp_Path_Failed}
 	}
 	debug_log_debugf("png temp optimized output: \"%s\"", output_path)
+	output_retained := false
+	defer if len(output_path) > 0 && !output_retained {
+		delete(output_path)
+	}
 
 	convert_icc_path := ""
 	embed_icc_path := ""
@@ -1560,7 +1580,6 @@ process_png_to_temp :: proc(
 			icc_result.detail,
 		)
 		if icc_result.err != .None {
-			delete(output_path)
 			return Process_Image_Result {
 				err = icc_result.err,
 				detail = strings.clone(icc_result.detail),
@@ -1570,13 +1589,12 @@ process_png_to_temp :: proc(
 		switch icc_result.mode {
 		case .Embed_Source:
 			source_icc_ok: bool
-			source_icc_path, source_icc_ok = make_process_temp_path(item.source_path, "source.icc")
+			source_icc_path, source_icc_ok = process_workspace_path(workspace_path, "source.icc")
 			if !source_icc_ok {
 				debug_log_errorf(
-					"png ICC source temp path failed: source=\"%s\"",
-					item.source_path,
+					"png ICC source workspace path failed: workspace=\"%s\"",
+					workspace_path,
 				)
-				delete(output_path)
 				return Process_Image_Result{err = .Temp_Path_Failed}
 			}
 			debug_log_debugf("png source ICC temp: \"%s\"", source_icc_path)
@@ -1591,7 +1609,6 @@ process_png_to_temp :: proc(
 				imagemagick_process_environment(runtime_env),
 				"ImageMagick ICC extract",
 			); !ok {
-				delete(output_path)
 				return Process_Image_Result{err = .Icc_Extract_Failed, detail = detail}
 			}
 
@@ -1617,12 +1634,10 @@ process_png_to_temp :: proc(
 		imagemagick_process_environment(runtime_env),
 		"ImageMagick PNG resize",
 	); !ok {
-		delete(output_path)
 		return Process_Image_Result{err = .Magick_Failed, detail = detail}
 	}
 	if !file_is_non_empty(resized_path) {
 		debug_log_errorf("png resized output missing or empty: \"%s\"", resized_path)
-		delete(output_path)
 		return Process_Image_Result {
 			err = .Empty_Output,
 			detail = strings.clone("ImageMagick did not produce a resized PNG."),
@@ -1636,13 +1651,10 @@ process_png_to_temp :: proc(
 		resized_path,
 	)
 	if detail, ok := run_tool(pngquant_command, nil, "pngquant"); !ok {
-		remove_if_exists(output_path)
-		delete(output_path)
 		return Process_Image_Result{err = .Pngquant_Failed, detail = detail}
 	}
 	if !file_is_non_empty(quant_path) {
 		debug_log_errorf("png quant output missing or empty: \"%s\"", quant_path)
-		delete(output_path)
 		return Process_Image_Result {
 			err = .Empty_Output,
 			detail = strings.clone("pngquant did not produce a quantized PNG."),
@@ -1652,16 +1664,15 @@ process_png_to_temp :: proc(
 	oxipng_input_path := quant_path
 	if config.png.preserve_profiles {
 		profiled_quant_ok: bool
-		profiled_quant_path, profiled_quant_ok = make_process_temp_path(
-			item.source_path,
+		profiled_quant_path, profiled_quant_ok = process_workspace_path(
+			workspace_path,
 			"profiled.png",
 		)
 		if !profiled_quant_ok {
 			debug_log_errorf(
-				"png profiled quant temp path failed: source=\"%s\"",
-				item.source_path,
+				"png profiled quant workspace path failed: workspace=\"%s\"",
+				workspace_path,
 			)
-			delete(output_path)
 			return Process_Image_Result{err = .Temp_Path_Failed}
 		}
 		debug_log_debugf("png profiled quant temp: \"%s\"", profiled_quant_path)
@@ -1677,12 +1688,10 @@ process_png_to_temp :: proc(
 			imagemagick_process_environment(runtime_env),
 			"ImageMagick PNG ICC embed",
 		); !ok {
-			delete(output_path)
 			return Process_Image_Result{err = .Icc_Embed_Failed, detail = detail}
 		}
 		if !file_is_non_empty(profiled_quant_path) {
 			debug_log_errorf("png profiled output missing or empty: \"%s\"", profiled_quant_path)
-			delete(output_path)
 			return Process_Image_Result {
 				err = .Empty_Output,
 				detail = strings.clone("ImageMagick did not produce a profiled PNG."),
@@ -1699,14 +1708,10 @@ process_png_to_temp :: proc(
 		runtime_env.worker_count,
 	)
 	if detail, ok := run_tool(oxipng_command, nil, "Oxipng"); !ok {
-		remove_if_exists(output_path)
-		delete(output_path)
 		return Process_Image_Result{err = .Oxipng_Failed, detail = detail}
 	}
 	if !file_is_non_empty(output_path) {
-		remove_if_exists(output_path)
 		debug_log_errorf("png optimized output missing or empty: \"%s\"", output_path)
-		delete(output_path)
 		return Process_Image_Result {
 			err = .Empty_Output,
 			detail = strings.clone("Oxipng did not produce an optimized PNG."),
@@ -1721,19 +1726,19 @@ process_png_to_temp :: proc(
 			expected_icc_exact,
 			runtime_env,
 		); !ok {
-			remove_if_exists(output_path)
 			debug_log_errorf(
 				"png ICC verification failed: output=\"%s\" detail=\"%s\"",
 				output_path,
 				detail,
 			)
-			delete(output_path)
 			return Process_Image_Result{err = .Icc_Verify_Failed, detail = detail}
 		}
 	}
 
 	debug_log_infof("png pipeline produced temp output: \"%s\"", output_path)
-	return Process_Image_Result{output_path = output_path}
+	output_retained = true
+	workspace_retained = true
+	return Process_Image_Result{output_path = output_path, cleanup_path = workspace_path}
 }
 
 Icc_Profile_Result :: struct {
