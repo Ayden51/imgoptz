@@ -4,6 +4,8 @@
 # Distribution
 dist/*
 !dist/
+!dist/LICENSE.txt
+!dist/README.txt
 !dist/imgoptz.json
 !dist/schema/
 !dist/schema/**
