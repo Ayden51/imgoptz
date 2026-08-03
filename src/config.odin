@@ -219,6 +219,8 @@ parse_strict_json :: proc(text: string) -> (json.Value, json.Error) {
 apply_config_object :: proc(result: ^Config_Load_Result, object: json.Object) {
 	for key, value in object {
 		switch key {
+		case "$schema":
+		// Editor metadata; validation is handled by JSON tooling, not at runtime.
 		case "recursive":
 			if value, ok := config_json_bool(value); ok {
 				result.config.recursive = value
