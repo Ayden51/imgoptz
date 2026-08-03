@@ -5,3 +5,5 @@
 dist/*
 !dist/
 !dist/imgoptz.json
+!dist/schema/
+!dist/schema/**

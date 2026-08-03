@@ -1,4 +1,5 @@
 {
+    "$schema": "./schema/imgoptz.schema.json",
     "recursive": false,
     "max_dimension": 1920,
     "workers": "auto",

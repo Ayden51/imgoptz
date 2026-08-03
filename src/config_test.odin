@@ -155,6 +155,21 @@ test_parse_config_partial_file_overrides_only_present_options :: proc(t: ^testin
 }
 
 @(test, require)
+test_parse_config_schema_metadata_is_ignored :: proc(t: ^testing.T) {
+	result := parse_config_text(
+		`{
+			"$schema": "./schema/imgoptz.schema.json",
+			"recursive": true
+		}`,
+	)
+	defer destroy_config_load_result(&result)
+
+	testing.expect_value(t, result.status, Config_Load_Status.Loaded)
+	testing.expect_value(t, len(result.warnings), 0)
+	testing.expect_value(t, result.config.recursive, true)
+}
+
+@(test, require)
 test_parse_config_unknown_options_warn_and_are_ignored :: proc(t: ^testing.T) {
 	result := parse_config_text(
 		`{
