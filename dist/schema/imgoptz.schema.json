@@ -1,0 +1,225 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://raw.githubusercontent.com/Ayden51/imgoptz/main/dist/schema/imgoptz.schema.json",
+    "title": "imgoptz configuration",
+    "description": "Schema for imgoptz.json. All settings are optional; missing settings use built-in defaults.",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+        "$schema": {
+            "type": "string",
+            "minLength": 1,
+            "default": "./schema/imgoptz.schema.json",
+            "description": "Optional JSON Schema reference for editor validation. imgoptz ignores this metadata field at runtime."
+        },
+        "recursive": {
+            "type": "boolean",
+            "default": false,
+            "description": "Search supported images in subfolders when true. Default discovery is current folder only."
+        },
+        "max_dimension": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1920,
+            "description": "Maximum width or height after resize. Smaller images are not enlarged."
+        },
+        "workers": {
+            "oneOf": [
+                {
+                    "const": "auto",
+                    "description": "Choose a balanced worker count automatically."
+                },
+                {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Use an explicit positive worker count."
+                }
+            ],
+            "default": "auto"
+        },
+        "gpu": {
+            "type": "boolean",
+            "default": true,
+            "description": "Probe ImageMagick OpenCL GPU support and enable it only if the probe succeeds."
+        },
+        "debug_log": {
+            "type": "boolean",
+            "default": false,
+            "description": "Write detailed debug logs to a per-run log file."
+        },
+        "debug_log_file": {
+            "type": "string",
+            "minLength": 1,
+            "default": "imgoptz.log",
+            "description": "Base debug log path. Relative paths resolve against the app root."
+        },
+        "dry_run": {
+            "type": "boolean",
+            "default": true,
+            "description": "Preview optimized files first and ask before writing final output."
+        },
+        "output_mode": {
+            "enum": ["in-place", "dir"],
+            "default": "dir",
+            "description": "Use in-place replacement after approval, or write optimized files to out_dir."
+        },
+        "out_dir": {
+            "type": "string",
+            "minLength": 1,
+            "default": "~/imgoptz-output",
+            "description": "Output directory for output_mode = dir. Relative paths resolve according to imgoptz path rules."
+        },
+        "jpeg": {
+            "$ref": "#/definitions/jpeg"
+        },
+        "png": {
+            "$ref": "#/definitions/png"
+        }
+    },
+    "definitions": {
+        "jpeg": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Process JPEG files when true."
+                },
+                "quality": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "default": 78,
+                    "description": "MozJPEG quality value."
+                },
+                "progressive": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Pass -progressive to MozJPEG when true."
+                },
+                "optimize": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Pass -optimize to MozJPEG when true."
+                },
+                "sample": {
+                    "type": "string",
+                    "pattern": "^[1-9][0-9]*x[1-9][0-9]*$",
+                    "default": "2x2",
+                    "description": "MozJPEG sampling string in HxV form."
+                },
+                "quant_table": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 8,
+                    "default": 2,
+                    "description": "MozJPEG quantization table id."
+                },
+                "tune": {
+                    "const": "ms-ssim",
+                    "default": "ms-ssim",
+                    "description": "MozJPEG tune mode. imgoptz currently accepts only ms-ssim."
+                },
+                "preserve_profiles": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Preserve supported source color profiles or convert to the bundled sRGB profile."
+                }
+            }
+        },
+        "png": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Process PNG files when true."
+                },
+                "pngquant_quality": {
+                    "type": "string",
+                    "pattern": "^(100|[0-9]{1,2})-(100|[0-9]{1,2})$",
+                    "default": "40-95",
+                    "description": "pngquant MIN-MAX quality range. Each value must be 0..100, and MIN must be less than or equal to MAX."
+                },
+                "pngquant_speed": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 11,
+                    "default": 1,
+                    "description": "pngquant speed value."
+                },
+                "pngquant_dither": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Allow pngquant dithering when true; pass --nofs when false."
+                },
+                "oxipng_level": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 6,
+                    "default": 4,
+                    "description": "Oxipng optimization level."
+                },
+                "interlace": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Write interlaced PNG output when true."
+                },
+                "strip": {
+                    "anyOf": [
+                        {
+                            "enum": ["safe", "all", "none"]
+                        },
+                        {
+                            "type": "string",
+                            "pattern": "^[^,]{4}(,[^,]{4})*$",
+                            "description": "Comma-separated list of PNG chunk names to strip. Each chunk name must be four characters."
+                        }
+                    ],
+                    "default": "safe",
+                    "description": "Oxipng strip mode. With preserve_profiles enabled, do not strip all, iCCP, sRGB, or cICP."
+                },
+                "alpha": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Pass --alpha to Oxipng when true."
+                },
+                "preserve_profiles": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Preserve supported source color profiles or convert to the bundled sRGB profile."
+                }
+            },
+            "allOf": [
+                {
+                    "if": {
+                        "required": ["strip"],
+                        "properties": {
+                            "strip": {
+                                "oneOf": [
+                                    {
+                                        "const": "all"
+                                    },
+                                    {
+                                        "type": "string",
+                                        "pattern": "(^|,)(iCCP|sRGB|cICP)(,|$)"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "then": {
+                        "required": ["preserve_profiles"],
+                        "properties": {
+                            "preserve_profiles": {
+                                "const": false
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}
