@@ -255,16 +255,33 @@ Goal: make default `dir` output non-destructive and relative to the user's accep
 - [x] Auto-create target-relative output folders only immediately before writing final output files.
 - [x] Add tests for target-relative output resolution, fallback behavior, delayed directory creation, and updated output defaults.
 
+## Phase 10A: Dependency Setup And Bundling
+
+Goal: make the distributable runtime reproducible from pinned official dependency inputs instead of relying on checked-out vendor source folders.
+
+- [ ] Add a pinned dependency manifest for ImageMagick, MozJPEG, Oxipng, pngquant, and `sRGB2014.icc`.
+- [ ] Add `scripts/setup_dist_deps.ps1` to download dependencies, verify SHA-256 checksums, extract or build as required, and copy only required runtime files into `dist/`.
+- [ ] Verify installed dependency versions with `magick.exe -version`, `mozjpeg.exe -version`, `oxipng.exe --version`, and `pngquant.exe --version`.
+- [ ] Bundle ImageMagick `7.1.2-29` portable Q16-HDRI x64 with `LICENSE.txt`, `NOTICE.txt`, and `policy.xml`.
+- [ ] Bundle Oxipng `10.1.1` from the official Windows release with `LICENSE`.
+- [ ] Bundle pngquant `3.0.3` from crates.io source with `COPYRIGHT` and `SOURCE.txt` documenting exact corresponding source for GPL compliance.
+- [ ] Bundle ICC `sRGB2014.icc` from the ICC registry with `sRGB2014.LICENSE.txt` and verify SHA-256 `384B832DE3412066743B52A75EE906B6FB9FB8D9E09E936FC2C43223815C6E0A`.
+- [ ] Bundle MozJPEG from the official `v4.1.5` source tag by building `cjpeg-static.exe`, copying it as `tools\mozjpeg\mozjpeg.exe`, and bundling `LICENSE.md`, `README.ijg`, and `README-mozilla.txt` from the same source.
+- [ ] Add `scripts/bundle_dist.ps1` to build `dist/imgoptz.exe`, call setup when required files are missing, validate the complete runtime layout, and package from local `dist/` only.
+- [ ] Remove `mozjpeg/` and `oxipng/` submodules only after setup can reproduce the required runtime binaries from pinned inputs.
+- [ ] Document the dependency update policy: maintainer-only version bumps, checksum refresh, compatibility testing, license/source review, docs update, and app version update.
+- [ ] Verify setup and bundling from a clean `dist/` dependency state.
+
 ## Phase 11: Release Hardening
 
 Goal: run the broad manual and build matrix before release.
 
-- [ ] Run full manual matrix from `PLAN.md` implementation phases 24-36.
+- [ ] Run full manual matrix from `PLAN.md` implementation phases 27-39.
 - [ ] Re-run `./scripts/build.ps1` with warnings as errors.
 - [ ] Document any remaining operational constraints.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/target-relative-output-defaults`.
-- Scope: Phase 10 target-relative output directory defaults implementation only.
-- Reason: Phase 10 makes the default output mode non-destructive and target-relative after dry-run approval is in place.
+- Current feature branch: `feat/dependency-setup-bundling-plan`.
+- Scope: Phase 10A dependency setup and bundling plan only.
+- Reason: Phase 10A defines how pinned runtime dependencies are acquired, verified, bundled, and eventually removed from vendor submodules before release hardening.
