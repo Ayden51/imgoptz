@@ -32,6 +32,7 @@ The distributed app root should use this layout:
     pngquant/
       pngquant.exe
       COPYRIGHT
+      SOURCE.txt
     imagemagick/
       magick.exe
       LICENSE.txt
@@ -77,9 +78,10 @@ pngquant/libimagequant:
 
 ```text
 tools\pngquant\COPYRIGHT
+tools\pngquant\SOURCE.txt
 ```
 
-Keep pngquant's copyright and license notice beside the binary.
+Keep pngquant's copyright and license notice beside the binary. pngquant is GPL-3.0-or-later, so binary distribution must also identify the exact corresponding source. Keep `SOURCE.txt` beside the binary with the pinned source URL, version, checksum, and source-retrieval instructions used for the bundled executable.
 
 ImageMagick:
 
@@ -99,6 +101,65 @@ profiles\sRGB2014.LICENSE.txt
 ```
 
 Use ICC's official `sRGB2014.icc`, not a copied Windows system `sRGB Color Space Profile.icm`, for distribution. The ICC profile may be copied, distributed, embedded, made, used, and sold without restriction when unaltered. Keep the profile copyright tag intact and include the ICC license text in `sRGB2014.LICENSE.txt`.
+
+## Dependency Setup And Bundling
+
+Runtime dependencies are pinned distribution inputs, not app source. The release process should download, verify, and install exact dependency versions into `dist/`, then bundle only the verified local `dist/` layout.
+
+Use PowerShell scripts for Windows setup and packaging:
+
+1. `scripts/setup_dist_deps.ps1` downloads pinned dependency archives or source packages, verifies SHA-256 checksums, extracts or builds them when required, copies only the required runtime files into `dist/`, and verifies each tool version.
+2. `scripts/bundle_dist.ps1` builds `dist/imgoptz.exe`, validates the complete runtime layout, and creates the distributable package from local `dist/` files only.
+3. If bundling finds missing dependency files, it may call `scripts/setup_dist_deps.ps1` first. It must fail rather than package a partial runtime layout.
+
+Pinned dependency manifest entries should include:
+
+```text
+name
+version
+download_url
+sha256
+archive_type
+expected_version_regex
+source_url
+source_sha256
+license_urls
+install_exe_name
+dist_exe_path
+dist_license_paths
+```
+
+Every setup run must verify these version commands after install:
+
+```text
+tools\imagemagick\magick.exe -version
+tools\mozjpeg\mozjpeg.exe -version
+tools\oxipng\oxipng.exe --version
+tools\pngquant\pngquant.exe --version
+```
+
+Initial pinned dependency targets:
+
+```text
+ImageMagick  7.1.2-29 Q16-HDRI x64 portable
+MozJPEG      unresolved: prefer latest official source/tag build over older v4.0.3 prebuilt Windows binary
+Oxipng       10.1.1 x86_64-pc-windows-msvc
+pngquant     3.0.3 built from crates.io source, with corresponding source recorded for GPL compliance
+sRGB ICC     ICC sRGB2014.icc, SHA-256 384B832DE3412066743B52A75EE906B6FB9FB8D9E09E936FC2C43223815C6E0A
+```
+
+Recommended pinned sources from the dependency research:
+
+```text
+ImageMagick  https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-29/ImageMagick-7.1.2-29-portable-Q16-HDRI-x64.7z
+Oxipng       https://github.com/oxipng/oxipng/releases/download/v10.1.1/oxipng-10.1.1-x86_64-pc-windows-msvc.zip
+pngquant     https://crates.io/api/v1/crates/pngquant/3.0.3/download
+sRGB ICC     https://registry.color.org/rgb-registry/profiles/sRGB2014.icc
+```
+
+Do not vendor `mozjpeg/` or `oxipng/` submodules once setup can reproduce the required binaries from pinned official inputs. Oxipng can use the official Windows binary. MozJPEG needs an explicit choice before submodule removal: either build the latest official source/tag locally and copy `cjpeg-static.exe` as `tools\mozjpeg\mozjpeg.exe`, or accept the older official `v4.0.3` Windows binary and document the compatibility tradeoff. Prefer the latest official source/tag build if it can be made reproducible with a minimal Windows build step.
+
+Dependency version updates are release work. Updating any pinned tool or profile version requires a maintainer, checksum refresh, compatibility testing of JPEG and PNG command lines, license/source documentation review, `PLAN.md`/`TASKS.md` updates, and an app version update.
 
 ## User Flow
 
@@ -776,16 +837,19 @@ odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o
 21. Add progress output and final summary, including original size, optimized size, and percentage size reduction in success rows, without final/slugified output path detail rows.
 22. Add optional debug logging.
 23. Phase 8A: Harden JPEG Unicode-path handling with a per-run temp workspace, `ppm:-` ImageMagick-to-MozJPEG piping, and graceful ICC omission when MozJPEG cannot open temp ICC paths.
-24. Test with spaces, special characters, Unicode paths, and quoted paths.
-25. Test relative and absolute input directories.
-26. Test relative and absolute `out_dir`.
-27. Test missing configured `out_dir` fallback to default output.
-28. Test missing default output folder error.
-29. Test recursive input with preserved output paths.
-30. Test slugify collisions.
-31. Test uppercase extensions.
-32. Test corrupt images.
-33. Test missing tools.
-34. Test PNG ICC retention through ImageMagick, pngquant, and Oxipng.
-35. Test progress success rows include before/after sizes and percentage reduction, and do not print final/slugified output path detail rows.
-36. Test repeated prompt loop and `exit`.
+24. Phase 9: Add dry-run approval mode, defaulting to preview-first and requiring explicit approval before final writes.
+25. Phase 10: Change default output behavior to `output_mode = "dir"` with target-relative `out_dir = "~/imgoptz-output"`.
+26. Phase 10A: Add pinned dependency setup and bundling scripts, including checksum verification, required notices/source records, version checks, and vendor submodule removal where reproducible.
+27. Test with spaces, special characters, Unicode paths, and quoted paths.
+28. Test relative and absolute input directories.
+29. Test relative, absolute, and target-relative `out_dir`.
+30. Test missing configured `out_dir` fallback to target-relative default output.
+31. Test delayed creation of target-relative output folders.
+32. Test recursive input with preserved output paths.
+33. Test slugify collisions.
+34. Test uppercase extensions.
+35. Test corrupt images.
+36. Test missing tools and missing third-party notices/source records.
+37. Test PNG ICC retention through ImageMagick, pngquant, and Oxipng.
+38. Test progress success rows include before/after sizes and percentage reduction, and do not print final/slugified output path detail rows.
+39. Test repeated prompt loop and `exit`.
