@@ -142,7 +142,7 @@ Initial pinned dependency targets:
 
 ```text
 ImageMagick  7.1.2-29 Q16-HDRI x64 portable
-MozJPEG      unresolved: prefer latest official source/tag build over older v4.0.3 prebuilt Windows binary
+MozJPEG      v4.1.5 official source tag, built locally to cjpeg-static.exe
 Oxipng       10.1.1 x86_64-pc-windows-msvc
 pngquant     3.0.3 built from crates.io source, with corresponding source recorded for GPL compliance
 sRGB ICC     ICC sRGB2014.icc, SHA-256 384B832DE3412066743B52A75EE906B6FB9FB8D9E09E936FC2C43223815C6E0A
@@ -152,12 +152,13 @@ Recommended pinned sources from the dependency research:
 
 ```text
 ImageMagick  https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-29/ImageMagick-7.1.2-29-portable-Q16-HDRI-x64.7z
+MozJPEG      https://github.com/mozilla/mozjpeg/archive/refs/tags/v4.1.5.zip
 Oxipng       https://github.com/oxipng/oxipng/releases/download/v10.1.1/oxipng-10.1.1-x86_64-pc-windows-msvc.zip
 pngquant     https://crates.io/api/v1/crates/pngquant/3.0.3/download
 sRGB ICC     https://registry.color.org/rgb-registry/profiles/sRGB2014.icc
 ```
 
-Do not vendor `mozjpeg/` or `oxipng/` submodules once setup can reproduce the required binaries from pinned official inputs. Oxipng can use the official Windows binary. MozJPEG needs an explicit choice before submodule removal: either build the latest official source/tag locally and copy `cjpeg-static.exe` as `tools\mozjpeg\mozjpeg.exe`, or accept the older official `v4.0.3` Windows binary and document the compatibility tradeoff. Prefer the latest official source/tag build if it can be made reproducible with a minimal Windows build step.
+Do not vendor `mozjpeg/` or `oxipng/` submodules once setup can reproduce the required binaries from pinned official inputs. Oxipng can use the official Windows binary. MozJPEG must use the official `v4.1.5` source tag, built locally by the setup script. Copy the resulting `cjpeg-static.exe` as `tools\mozjpeg\mozjpeg.exe`, then bundle `LICENSE.md`, `README.ijg`, and `README-mozilla.txt` from the same source. Do not use the older official `v4.0.3` Windows binary.
 
 Dependency version updates are release work. Updating any pinned tool or profile version requires a maintainer, checksum refresh, compatibility testing of JPEG and PNG command lines, license/source documentation review, `PLAN.md`/`TASKS.md` updates, and an app version update.
 

@@ -266,7 +266,7 @@ Goal: make the distributable runtime reproducible from pinned official dependenc
 - [ ] Bundle Oxipng `10.1.1` from the official Windows release with `LICENSE`.
 - [ ] Bundle pngquant `3.0.3` from crates.io source with `COPYRIGHT` and `SOURCE.txt` documenting exact corresponding source for GPL compliance.
 - [ ] Bundle ICC `sRGB2014.icc` from the ICC registry with `sRGB2014.LICENSE.txt` and verify SHA-256 `384B832DE3412066743B52A75EE906B6FB9FB8D9E09E936FC2C43223815C6E0A`.
-- [ ] Resolve the MozJPEG distribution choice: prefer latest official source/tag build producing `cjpeg-static.exe` copied as `tools\mozjpeg\mozjpeg.exe`; document any decision to use the older `v4.0.3` official Windows binary instead.
+- [ ] Bundle MozJPEG from the official `v4.1.5` source tag by building `cjpeg-static.exe`, copying it as `tools\mozjpeg\mozjpeg.exe`, and bundling `LICENSE.md`, `README.ijg`, and `README-mozilla.txt` from the same source.
 - [ ] Add `scripts/bundle_dist.ps1` to build `dist/imgoptz.exe`, call setup when required files are missing, validate the complete runtime layout, and package from local `dist/` only.
 - [ ] Remove `mozjpeg/` and `oxipng/` submodules only after setup can reproduce the required runtime binaries from pinned inputs.
 - [ ] Document the dependency update policy: maintainer-only version bumps, checksum refresh, compatibility testing, license/source review, docs update, and app version update.
