@@ -1,0 +1,102 @@
+{
+    "schema_version": 1,
+    "cache_dir": "dist/.deps",
+    "dependencies": [
+        {
+            "name": "imagemagick",
+            "version": "7.1.2-29",
+            "download_url": "https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-29/ImageMagick-7.1.2-29-portable-Q16-HDRI-x64.7z",
+            "download_file": "ImageMagick-7.1.2-29-portable-Q16-HDRI-x64.7z",
+            "sha256": "b68e312b21556ae8872704e37df3c69cbdc0ea7100366bf823e7e3a1b69405bc",
+            "archive_type": "7z",
+            "expected_version_regex": "ImageMagick 7\\.1\\.2-29\\b.*Q16-HDRI x64",
+            "source_url": "https://github.com/ImageMagick/ImageMagick/archive/refs/tags/7.1.2-29.tar.gz",
+            "source_sha256": "b05924ad73c6932ba62c9b32f338f0619b90b767162c8b767f3566556187a284",
+            "license_urls": [
+                "https://imagemagick.org/script/license.php",
+                "https://imagemagick.org/script/resources.php"
+            ],
+            "install_exe_name": "magick.exe",
+            "dist_exe_path": "tools/imagemagick/magick.exe",
+            "dist_license_paths": [
+                "tools/imagemagick/LICENSE.txt",
+                "tools/imagemagick/NOTICE.txt",
+                "tools/imagemagick/policy.xml"
+            ]
+        },
+        {
+            "name": "mozjpeg",
+            "version": "v4.1.5",
+            "download_url": "https://github.com/mozilla/mozjpeg/archive/refs/tags/v4.1.5.zip",
+            "download_file": "mozjpeg-v4.1.5.zip",
+            "sha256": "00335b3f8bad0faf35ad543968365bdc14a5f62f603ddd52b3be8573a211f0fd",
+            "archive_type": "zip",
+            "expected_version_regex": "mozjpeg version 4\\.1\\.5\\b",
+            "source_url": "https://github.com/mozilla/mozjpeg/archive/refs/tags/v4.1.5.tar.gz",
+            "source_sha256": "9fcbb7171f6ac383f5b391175d6fb3acde5e64c4c4727274eade84ed0998fcc1",
+            "license_urls": [
+                "https://github.com/mozilla/mozjpeg/blob/v4.1.5/LICENSE.md",
+                "https://github.com/mozilla/mozjpeg/blob/v4.1.5/README.ijg",
+                "https://github.com/mozilla/mozjpeg/blob/v4.1.5/README-mozilla.txt"
+            ],
+            "install_exe_name": "cjpeg-static.exe",
+            "dist_exe_path": "tools/mozjpeg/mozjpeg.exe",
+            "dist_license_paths": [
+                "tools/mozjpeg/LICENSE.md",
+                "tools/mozjpeg/README.ijg",
+                "tools/mozjpeg/README-mozilla.txt"
+            ]
+        },
+        {
+            "name": "oxipng",
+            "version": "10.1.1",
+            "download_url": "https://github.com/oxipng/oxipng/releases/download/v10.1.1/oxipng-10.1.1-x86_64-pc-windows-msvc.zip",
+            "download_file": "oxipng-10.1.1-x86_64-pc-windows-msvc.zip",
+            "sha256": "0f57b33abb46c76258ac8e20be604a48208141d514bc2936b5200ed626976dd8",
+            "archive_type": "zip",
+            "expected_version_regex": "^oxipng 10\\.1\\.1\\b",
+            "source_url": "https://github.com/oxipng/oxipng/archive/refs/tags/v10.1.1.tar.gz",
+            "source_sha256": "ce19b1f060d586ceb3ea682f27d00e41675ec4093d8ac200a61ccd9d967d0999",
+            "license_urls": ["https://github.com/oxipng/oxipng/blob/v10.1.1/LICENSE"],
+            "install_exe_name": "oxipng.exe",
+            "dist_exe_path": "tools/oxipng/oxipng.exe",
+            "dist_license_paths": ["tools/oxipng/LICENSE"]
+        },
+        {
+            "name": "pngquant",
+            "version": "3.0.3",
+            "download_url": "https://crates.io/api/v1/crates/pngquant/3.0.3/download",
+            "download_file": "pngquant-3.0.3.crate",
+            "sha256": "68a12bdd8825f9989f4ee9a6ab0b42727dae57728b939ef63453366697a07232",
+            "archive_type": "crate",
+            "expected_version_regex": "^3\\.0\\.3\\b",
+            "source_url": "https://crates.io/api/v1/crates/pngquant/3.0.3/download",
+            "source_sha256": "68a12bdd8825f9989f4ee9a6ab0b42727dae57728b939ef63453366697a07232",
+            "license_urls": [
+                "https://crates.io/crates/pngquant/3.0.3",
+                "https://github.com/kornelski/pngquant/blob/3.0.3/COPYRIGHT"
+            ],
+            "install_exe_name": "pngquant.exe",
+            "dist_exe_path": "tools/pngquant/pngquant.exe",
+            "dist_license_paths": ["tools/pngquant/COPYRIGHT", "tools/pngquant/SOURCE.txt"]
+        },
+        {
+            "name": "srgb2014",
+            "version": "2014",
+            "download_url": "https://registry.color.org/rgb-registry/profiles/sRGB2014.icc",
+            "download_file": "sRGB2014.icc",
+            "sha256": "384b832de3412066743b52a75ee906b6fb9fb8d9e09e936fc2c43223815c6e0a",
+            "archive_type": "file",
+            "expected_version_regex": "",
+            "source_url": "https://registry.color.org/rgb-registry/profiles/sRGB2014.icc",
+            "source_sha256": "384b832de3412066743b52a75ee906b6fb9fb8d9e09e936fc2c43223815c6e0a",
+            "license_urls": [
+                "https://registry.color.org/profile-library/",
+                "https://registry.color.org/rgb-registry/srgbprofiles"
+            ],
+            "install_exe_name": "sRGB2014.icc",
+            "dist_exe_path": "profiles/sRGB2014.icc",
+            "dist_license_paths": ["profiles/sRGB2014.LICENSE.txt"]
+        }
+    ]
+}
