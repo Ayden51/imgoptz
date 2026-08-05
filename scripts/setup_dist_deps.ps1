@@ -309,7 +309,8 @@ function Install-Pngquant {
 		"Downloaded by: scripts/setup_dist_deps.ps1 using scripts/dependencies.json",
 		"Build command: cargo build --release --manifest-path <extracted-source>/Cargo.toml",
 		"Bundled binary: tools/pngquant/pngquant.exe",
-		"License notice: tools/pngquant/COPYRIGHT copied from the same verified source package."
+		"License notice: tools/pngquant/COPYRIGHT copied from the same verified source package.",
+		"Release source archive: scripts/bundle_dist.ps1 prepares pngquant-$($Dependency.version)-source.zip beside the imgoptz app bundle."
 	)
 	Set-Content -LiteralPath (Join-Path $destination "SOURCE.txt") -Value $sourceNotice -Encoding UTF8
 }
