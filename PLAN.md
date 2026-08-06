@@ -813,6 +813,8 @@ odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o
 ./dist/imgoptz_dev.exe
 ```
 
+Future script unification should remove duplicate shell-specific implementation scripts. Keep the PowerShell scripts as the canonical implementation on Windows, and add one thin launcher entrypoint that can be invoked from common Windows developer shells (`cmd.exe`, PowerShell, Git Bash, and bash-like environments) and dispatches to the matching PowerShell script. The launcher must not duplicate build, setup, or bundle logic; it should only normalize invocation and forward arguments/exit codes. Research and verify the safest launcher form in Phase 10B before removing the current `.sh` scripts.
+
 ## Implementation Phases
 
 1. Keep and clean up the current `src/main.odin` UI loop.
@@ -841,16 +843,17 @@ odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o
 24. Phase 9: Add dry-run approval mode, defaulting to preview-first and requiring explicit approval before final writes.
 25. Phase 10: Change default output behavior to `output_mode = "dir"` with target-relative `out_dir = "~/imgoptz-output"`.
 26. Phase 10A: Add pinned dependency setup and bundling scripts, including checksum verification, required notices/source records, version checks, and vendor submodule removal where reproducible.
-27. Test with spaces, special characters, Unicode paths, and quoted paths.
-28. Test relative and absolute input directories.
-29. Test relative, absolute, and target-relative `out_dir`.
-30. Test missing configured `out_dir` fallback to target-relative default output.
-31. Test delayed creation of target-relative output folders.
-32. Test recursive input with preserved output paths.
-33. Test slugify collisions.
-34. Test uppercase extensions.
-35. Test corrupt images.
-36. Test missing tools and missing third-party notices/source records.
-37. Test PNG ICC retention through ImageMagick, pngquant, and Oxipng.
-38. Test progress success rows include before/after sizes and percentage reduction, and do not print final/slugified output path detail rows.
-39. Test repeated prompt loop and `exit`.
+27. Phase 10B: Remove duplicate bash scripts after researching and adding one unified launcher command that can be called from common Windows developer shells and invokes the canonical PowerShell scripts.
+28. Test with spaces, special characters, Unicode paths, and quoted paths.
+29. Test relative and absolute input directories.
+30. Test relative, absolute, and target-relative `out_dir`.
+31. Test missing configured `out_dir` fallback to target-relative default output.
+32. Test delayed creation of target-relative output folders.
+33. Test recursive input with preserved output paths.
+34. Test slugify collisions.
+35. Test uppercase extensions.
+36. Test corrupt images.
+37. Test missing tools and missing third-party notices/source records.
+38. Test PNG ICC retention through ImageMagick, pngquant, and Oxipng.
+39. Test progress success rows include before/after sizes and percentage reduction, and do not print final/slugified output path detail rows.
+40. Test repeated prompt loop and `exit`.

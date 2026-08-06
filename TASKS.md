@@ -259,18 +259,29 @@ Goal: make default `dir` output non-destructive and relative to the user's accep
 
 Goal: make the distributable runtime reproducible from pinned official dependency inputs instead of relying on checked-out vendor source folders.
 
-- [ ] Add a pinned dependency manifest for ImageMagick, MozJPEG, Oxipng, pngquant, and `sRGB2014.icc`.
-- [ ] Add `scripts/setup_dist_deps.ps1` to download dependencies, verify SHA-256 checksums, extract or build as required, and copy only required runtime files into `dist/`.
-- [ ] Verify installed dependency versions with `magick.exe -version`, `mozjpeg.exe -version`, `oxipng.exe --version`, and `pngquant.exe --version`.
-- [ ] Bundle ImageMagick `7.1.2-29` portable Q16-HDRI x64 with `LICENSE.txt`, `NOTICE.txt`, and `policy.xml`.
-- [ ] Bundle Oxipng `10.1.1` from the official Windows release with `LICENSE`.
-- [ ] Bundle pngquant `3.0.3` from crates.io source with `COPYRIGHT` and `SOURCE.txt` documenting exact corresponding source for GPL compliance.
-- [ ] Bundle ICC `sRGB2014.icc` from the ICC registry with `sRGB2014.LICENSE.txt` and verify SHA-256 `384B832DE3412066743B52A75EE906B6FB9FB8D9E09E936FC2C43223815C6E0A`.
-- [ ] Bundle MozJPEG from the official `v4.1.5` source tag by building `cjpeg-static.exe`, copying it as `tools\mozjpeg\mozjpeg.exe`, and bundling `LICENSE.md`, `README.ijg`, and `README-mozilla.txt` from the same source.
-- [ ] Add `scripts/bundle_dist.ps1` to build `dist/imgoptz.exe`, call setup when required files are missing, validate the complete runtime layout, and package from local `dist/` only.
-- [ ] Remove `mozjpeg/` and `oxipng/` submodules only after setup can reproduce the required runtime binaries from pinned inputs.
-- [ ] Document the dependency update policy: maintainer-only version bumps, checksum refresh, compatibility testing, license/source review, docs update, and app version update.
-- [ ] Verify setup and bundling from a clean `dist/` dependency state.
+- [x] Add a pinned dependency manifest for ImageMagick, MozJPEG, Oxipng, pngquant, and `sRGB2014.icc`.
+- [x] Add `scripts/setup_dist_deps.ps1` to download dependencies, verify SHA-256 checksums, extract or build as required, and copy only required runtime files into `dist/`.
+- [x] Verify installed dependency versions with `magick.exe -version`, `mozjpeg.exe -version`, `oxipng.exe --version`, and `pngquant.exe --version`.
+- [x] Bundle ImageMagick `7.1.2-29` portable Q16-HDRI x64 with `LICENSE.txt`, `NOTICE.txt`, and `policy.xml`.
+- [x] Bundle Oxipng `10.1.1` from the official Windows release with `LICENSE`.
+- [x] Bundle pngquant `3.0.3` from crates.io source with `COPYRIGHT` and `SOURCE.txt` documenting exact corresponding source for GPL compliance.
+- [x] Bundle ICC `sRGB2014.icc` from the ICC registry with `sRGB2014.LICENSE.txt` and verify SHA-256 `384B832DE3412066743B52A75EE906B6FB9FB8D9E09E936FC2C43223815C6E0A`.
+- [x] Bundle MozJPEG from the official `v4.1.5` source tag by building `cjpeg-static.exe`, copying it as `tools\mozjpeg\mozjpeg.exe`, and bundling `LICENSE.md`, `README.ijg`, and `README-mozilla.txt` from the same source.
+- [x] Add `scripts/bundle_dist.ps1` to build `dist/imgoptz.exe`, call setup when required files are missing, validate the complete runtime layout, and package from local `dist/` only.
+- [x] Remove `mozjpeg/` and `oxipng/` submodules only after setup can reproduce the required runtime binaries from pinned inputs.
+- [x] Document the dependency update policy: maintainer-only version bumps, checksum refresh, compatibility testing, license/source review, docs update, and app version update.
+- [x] Verify setup and bundling from a clean `dist/` dependency state.
+- [x] Fail early with clear setup errors when required MozJPEG/pngquant build tooling is missing before downloading or building dependencies.
+
+## Phase 10B: Script Entrypoint Unification
+
+Goal: remove duplicate shell-specific script implementations and keep PowerShell as the canonical Windows automation path.
+
+- [ ] Research the safest single launcher command for Windows developer shells (`cmd.exe`, PowerShell, Git Bash, and bash-like environments).
+- [ ] Prefer a thin launcher that only forwards to canonical `.ps1` scripts, preserving arguments and exit codes without duplicating build/setup/bundle logic.
+- [ ] Verify launcher behavior with paths containing spaces and special characters.
+- [ ] Remove existing bash duplicate scripts after the unified launcher is proven.
+- [ ] Update command documentation to point contributors at the unified launcher and canonical PowerShell scripts.
 
 ## Phase 11: Release Hardening
 
