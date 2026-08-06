@@ -85,6 +85,33 @@ function Get-VisualStudioDevCmd {
 	return $devCmdPath
 }
 
+function Assert-AnyCommandAvailable {
+	param(
+		[string[]]$Names,
+		[string]$Purpose
+	)
+
+	foreach ($name in $Names) {
+		if (Get-Command $name -ErrorAction SilentlyContinue) {
+			return
+		}
+	}
+
+	throw "$($Names -join ' or ') is required for $Purpose. Install it or add it to PATH, then rerun scripts/setup_dist_deps.ps1."
+}
+
+function Assert-SetupPrerequisites {
+	Write-Host "Checking dependency setup prerequisites"
+	Assert-AnyCommandAvailable -Names @("7z", "tar") -Purpose "extracting ImageMagick's pinned 7z archive"
+	Assert-CommandAvailable "tar" "extracting pngquant's crates.io source package"
+	Assert-CommandAvailable "cmake" "building MozJPEG from source"
+	Assert-CommandAvailable "nasm" "building MozJPEG SIMD code"
+	Assert-CommandAvailable "ninja" "building MozJPEG with Visual Studio C++ tools"
+	Assert-CommandAvailable "cargo" "building pngquant from crates.io source"
+	Assert-CommandAvailable "rustc" "building pngquant from crates.io source"
+	Get-VisualStudioDevCmd | Out-Null
+}
+
 function Assert-LastExitCode {
 	param([string]$Action)
 	if ($LASTEXITCODE -ne 0) {
@@ -232,9 +259,6 @@ function Install-ImageMagick {
 function Install-MozJpeg {
 	param($Dependency)
 
-	Assert-CommandAvailable "cmake" "building MozJPEG from source"
-	Assert-CommandAvailable "nasm" "building MozJPEG SIMD code"
-	Assert-CommandAvailable "ninja" "building MozJPEG with Visual Studio C++ tools"
 	$devCmdPath = Get-VisualStudioDevCmd
 
 	$archivePath = Download-PinnedFile $Dependency
@@ -279,9 +303,6 @@ function Install-Oxipng {
 
 function Install-Pngquant {
 	param($Dependency)
-
-	Assert-CommandAvailable "cargo" "building pngquant from crates.io source"
-	Assert-CommandAvailable "rustc" "building pngquant from crates.io source"
 
 	$archivePath = Download-PinnedFile $Dependency
 	$extractPath = Join-Path $ExtractDir $Dependency.name
@@ -382,6 +403,7 @@ function Assert-InstalledFiles {
 	}
 }
 
+Assert-SetupPrerequisites
 Ensure-Directory $DistDir
 Ensure-Directory $DownloadDir
 Ensure-Directory $ExtractDir

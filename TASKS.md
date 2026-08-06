@@ -271,6 +271,7 @@ Goal: make the distributable runtime reproducible from pinned official dependenc
 - [x] Remove `mozjpeg/` and `oxipng/` submodules only after setup can reproduce the required runtime binaries from pinned inputs.
 - [x] Document the dependency update policy: maintainer-only version bumps, checksum refresh, compatibility testing, license/source review, docs update, and app version update.
 - [x] Verify setup and bundling from a clean `dist/` dependency state.
+- [x] Fail early with clear setup errors when required MozJPEG/pngquant build tooling is missing before downloading or building dependencies.
 
 ## Phase 11: Release Hardening
 
