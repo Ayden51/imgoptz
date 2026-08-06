@@ -44,12 +44,14 @@ The v0.1.0 goal is a real-life MVP centered on the current console TUI flow. Pla
 
 ### Release Build
 
-1. Download the release `.zip` from GitHub Releases.
+1. Download `imgoptz-v0.1.0-windows-x64.zip` from GitHub Releases. This is the app bundle listed as `Windows 64-bit (x64)`.
 2. Extract the whole zip file to a writable folder such as `Downloads`, `Desktop`, or another local folder.
 3. Keep the extracted files together. `imgoptz.exe` expects its config, profiles, schema, tools, and license files beside it.
 4. Double-click `imgoptz.exe`.
 
 Do not run `imgoptz.exe` from inside the zip preview window, and do not move the executable by itself.
+
+The `pngquant-3.0.3-source.zip` release asset is provided for GPL source-compliance. You do not need to download it to run `imgoptz`.
 
 ### From Source
 
@@ -344,7 +346,9 @@ For image-processing tests, prepare your own JPEG and PNG files or use throwaway
 
 ## Release Bundle
 
-The release zip should contain one app root folder. The app root is the folder that contains `imgoptz.exe`; all runtime paths resolve relative to that folder.
+The release asset for users is `imgoptz-v0.1.0-windows-x64.zip`, shown on release pages as `Windows 64-bit (x64)`. The zip should contain one app root folder. The app root is the folder that contains `imgoptz.exe`; all runtime paths resolve relative to that folder.
+
+`pngquant-3.0.3-source.zip` is a separate source-compliance archive for the bundled pngquant dependency. It is not required to run the app.
 
 Required release layout:
 
