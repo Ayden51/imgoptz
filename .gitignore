@@ -2,6 +2,7 @@
 .vscode
 
 # Distribution
+scripts.exe
 dist/*
 !dist/
 !dist/LICENSE.txt

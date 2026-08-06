@@ -275,24 +275,30 @@ Goal: make the distributable runtime reproducible from pinned official dependenc
 
 ## Phase 10B: Script Entrypoint Unification
 
-Goal: remove duplicate shell-specific script implementations and keep PowerShell as the canonical Windows automation path.
+Goal: replace shell-specific script implementations with a registered Odin CLI launcher that works from common Windows developer shells.
 
-- [ ] Research the safest single launcher command for Windows developer shells (`cmd.exe`, PowerShell, Git Bash, and bash-like environments).
-- [ ] Prefer a thin launcher that only forwards to canonical `.ps1` scripts, preserving arguments and exit codes without duplicating build/setup/bundle logic.
-- [ ] Verify launcher behavior with paths containing spaces and special characters.
-- [ ] Remove existing bash duplicate scripts after the unified launcher is proven.
-- [ ] Update command documentation to point contributors at the unified launcher and canonical PowerShell scripts.
+- [x] Research uv-style shell dispatch and reject it for this repo in favor of an Odin launcher because contributors already require Odin.
+- [x] Add `scripts/main.odin` as the launcher entrypoint, built locally as `scripts.exe`.
+- [x] Add startup self-registration so each script lives in one `.odin` file under `scripts/` and registers its enabled/disabled descriptor with the launcher.
+- [x] Register local development scripts for `dev`, `build`, `preview`, and `test`.
+- [x] Use standard script names `setup` for pinned dependency installation and `package` for distributable archives.
+- [x] Port legacy dependency setup behavior into exactly one Odin `setup` file.
+- [x] Port legacy packaging behavior into exactly one Odin `package` file.
+- [x] Remove legacy `.ps1` and `.sh` scripts only after their registered Odin replacements are fully verified.
+- [x] Verify launcher behavior from PowerShell, `cmd.exe`, Git Bash, and bash-like environments where available.
+- [x] Verify launcher behavior with repo paths containing spaces and special characters.
+- [x] Update command documentation to point contributors at `scripts.exe` and the Odin bootstrap command.
 
 ## Phase 11: Release Hardening
 
 Goal: run the broad manual and build matrix before release.
 
 - [ ] Run full manual matrix from `PLAN.md` implementation phases 27-39.
-- [ ] Re-run `./scripts/build.ps1` with warnings as errors.
+- [ ] Re-run `./scripts.exe build` with warnings as errors.
 - [ ] Document any remaining operational constraints.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/dependency-setup-bundling-plan`.
-- Scope: Phase 10A dependency setup and bundling plan only.
-- Reason: Phase 10A defines how pinned runtime dependencies are acquired, verified, bundled, and eventually removed from vendor submodules before release hardening.
+- Current feature branch: `feat/odin-script-launcher`.
+- Scope: Phase 10B Odin script launcher foundation.
+- Reason: Phase 10B replaces shell-specific automation with registered Odin scripts that contributors can launch from any common Windows developer shell after bootstrapping `scripts.exe`.

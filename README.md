@@ -44,12 +44,14 @@ The v0.1.0 goal is a real-life MVP centered on the current console TUI flow. Pla
 
 ### Release Build
 
-1. Download the release `.zip` from GitHub Releases.
+1. Download `imgoptz-v0.1.0-windows-x64.zip` from GitHub Releases. This is the app bundle listed as `Windows 64-bit (x64)`.
 2. Extract the whole zip file to a writable folder such as `Downloads`, `Desktop`, or another local folder.
 3. Keep the extracted files together. `imgoptz.exe` expects its config, profiles, schema, tools, and license files beside it.
 4. Double-click `imgoptz.exe`.
 
 Do not run `imgoptz.exe` from inside the zip preview window, and do not move the executable by itself.
+
+The `pngquant-3.0.3-source.zip` release asset is provided for GPL source-compliance. You do not need to download it to run `imgoptz`.
 
 ### From Source
 
@@ -82,24 +84,44 @@ dist/
       └─ SOURCE.txt
 ```
 
-The build scripts compile only the `imgoptz` executable. They do not download ImageMagick, MozJPEG, pngquant, Oxipng, or the ICC profile. If these files are missing, the app will fail runtime validation.
+The build script compiles only the `imgoptz` executable. Run the setup script when ImageMagick, MozJPEG, pngquant, Oxipng, or the ICC profile are missing from `dist/`.
+
+Bootstrap the local Odin script launcher:
+
+```powershell
+odin build scripts -out:scripts.exe -target:windows_amd64 -strict-style -vet -vet-tabs -warnings-as-errors
+```
+
+The generated `scripts.exe` is local build output and is ignored by git.
+
+Install pinned runtime dependencies:
+
+```powershell
+./scripts.exe setup
+```
 
 Production build:
 
 ```powershell
-./scripts/build.ps1
+./scripts.exe build
 ```
 
-Development build:
+Development run:
 
 ```powershell
-./scripts/build_dev.ps1
+./scripts.exe dev
 ```
 
-Build and run the development executable:
+Preview the production executable after building:
 
 ```powershell
-./scripts/run.ps1
+./scripts.exe preview
+```
+
+Create distributable archives:
+
+```powershell
+./scripts.exe package
 ```
 
 The build output is written under `dist/`.
@@ -314,8 +336,8 @@ Run the required handoff checks before returning code changes:
 
 ```powershell
 odin test src
-./scripts/build.ps1
-./scripts/build_dev.ps1
+./scripts.exe build
+./scripts.exe dev
 ```
 
 For memory leak checks, run the development executable through at least the `exit` prompt path. Treat any `=== N allocations not freed: ===` report as a failure.
@@ -324,7 +346,9 @@ For image-processing tests, prepare your own JPEG and PNG files or use throwaway
 
 ## Release Bundle
 
-The release zip should contain one app root folder. The app root is the folder that contains `imgoptz.exe`; all runtime paths resolve relative to that folder.
+The release asset for users is `imgoptz-v0.1.0-windows-x64.zip`, shown on release pages as `Windows 64-bit (x64)`. The zip should contain one app root folder. The app root is the folder that contains `imgoptz.exe`; all runtime paths resolve relative to that folder.
+
+`pngquant-3.0.3-source.zip` is a separate source-compliance archive for the bundled pngquant dependency. It is not required to run the app.
 
 Required release layout:
 
