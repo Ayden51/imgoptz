@@ -82,24 +82,44 @@ dist/
       └─ SOURCE.txt
 ```
 
-The build scripts compile only the `imgoptz` executable. They do not download ImageMagick, MozJPEG, pngquant, Oxipng, or the ICC profile. If these files are missing, the app will fail runtime validation.
+The build script compiles only the `imgoptz` executable. Run the setup script when ImageMagick, MozJPEG, pngquant, Oxipng, or the ICC profile are missing from `dist/`.
+
+Bootstrap the local Odin script launcher:
+
+```powershell
+odin build scripts -out:scripts.exe -target:windows_amd64 -strict-style -vet -vet-tabs -warnings-as-errors
+```
+
+The generated `scripts.exe` is local build output and is ignored by git.
+
+Install pinned runtime dependencies:
+
+```powershell
+./scripts.exe setup
+```
 
 Production build:
 
 ```powershell
-./scripts/build.ps1
+./scripts.exe build
 ```
 
-Development build:
+Development run:
 
 ```powershell
-./scripts/build_dev.ps1
+./scripts.exe dev
 ```
 
-Build and run the development executable:
+Preview the production executable after building:
 
 ```powershell
-./scripts/run.ps1
+./scripts.exe preview
+```
+
+Create distributable archives:
+
+```powershell
+./scripts.exe package
 ```
 
 The build output is written under `dist/`.
@@ -314,8 +334,8 @@ Run the required handoff checks before returning code changes:
 
 ```powershell
 odin test src
-./scripts/build.ps1
-./scripts/build_dev.ps1
+./scripts.exe build
+./scripts.exe dev
 ```
 
 For memory leak checks, run the development executable through at least the `exit` prompt path. Treat any `=== N allocations not freed: ===` report as a failure.

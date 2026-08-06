@@ -8,16 +8,16 @@
 
 ## Commands
 
-- Agent scripts live in `scripts/`; use the PowerShell scripts in this Windows workspace because `odin` is available from PowerShell here. Bash copies are retained for compatible shells.
-- Production build exactly with `./scripts/build.ps1`, which runs `odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o:speed -strict-style -vet -vet-packages:main -vet-unused-procedures -vet-tabs -disallow-do -warnings-as-errors`.
-- Development build with `./scripts/build_dev.ps1`, which emits `dist/imgoptz_dev.exe` with `-debug` so the debug memory tracker is active.
-- Run with `./scripts/run.ps1`; it builds via `./scripts/build_dev.ps1`, then launches `./dist/imgoptz_dev.exe`.
+- Agent scripts live in `scripts/`; bootstrap the Odin launcher with `odin build scripts -out:scripts.exe -target:windows_amd64 -strict-style -vet -vet-tabs -warnings-as-errors` when `scripts.exe` is missing.
+- Production build exactly with `./scripts.exe build`, which runs `odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o:speed -strict-style -vet -vet-packages:main -vet-unused-procedures -vet-tabs -disallow-do -warnings-as-errors`.
+- Development run with `./scripts.exe dev`; it builds `dist/imgoptz_dev.exe` with `-debug` through the registered `dev` script, then launches it.
+- Preview with `./scripts.exe preview`; it launches `./dist/imgoptz.exe` and requires `./scripts.exe build` to have run first.
 - Run Odin tests with `odin test src`; focused runs use `-define:ODIN_TEST_NAMES=package.test_name`.
 - Use `dist\demo\in-place` only for in-place mode testing and demoing.
 - Use `dist\demo\out-dir` only as original-image fixtures and for `output_mode = "dir"` testing and demoing; never run in-place mode there.
 - For out-dir local testing, the default output directory is `<app-root>\output`, which is `dist\output` in this workspace.
 - Test discovery modes with their dedicated demo folders: `jpg`, `png`, `mixed`, and `recursive` exist under both `dist\demo\in-place` and `dist\demo\out-dir`.
-- Before handing back code changes, run `odin test src`, `./scripts/build.ps1`, and `./scripts/build_dev.ps1`.
+- Before handing back code changes, run `odin test src`, `./scripts.exe build`, and `./scripts.exe dev` through at least an `exit` prompt path.
 - For memory leak checks, run the development executable through at least an `exit` prompt path. If it prints `=== N allocations not freed: ===`, treat that as a failure and fix the leak before handoff. No leak report means the app-level debug tracker found no outstanding allocations.
 - Odin's test runner has its own memory tracking enabled by default; investigate any memory diagnostics it prints before considering tests passing.
 

@@ -106,11 +106,11 @@ Use ICC's official `sRGB2014.icc`, not a copied Windows system `sRGB Color Space
 
 Runtime dependencies are pinned distribution inputs, not app source. The release process should download, verify, and install exact dependency versions into `dist/`, then bundle only the verified local `dist/` layout.
 
-Use PowerShell scripts for Windows setup and packaging:
+Use the Odin script launcher for Windows setup and packaging after Phase 10B:
 
-1. `scripts/setup_dist_deps.ps1` downloads pinned dependency archives or source packages, verifies SHA-256 checksums, extracts or builds them when required, copies only the required runtime files into `dist/`, and verifies each tool version.
-2. `scripts/bundle_dist.ps1` builds `dist/imgoptz.exe`, validates the complete runtime layout, and creates the distributable package from local `dist/` files only.
-3. If bundling finds missing dependency files, it may call `scripts/setup_dist_deps.ps1` first. It must fail rather than package a partial runtime layout.
+1. `scripts.exe setup` downloads pinned dependency archives or source packages, verifies SHA-256 checksums, extracts or builds them when required, copies only the required runtime files into `dist/`, and verifies each tool version.
+2. `scripts.exe package` builds `dist/imgoptz.exe`, validates the complete runtime layout, and creates the distributable package from local `dist/` files only.
+3. If packaging finds missing dependency files, it may call the registered setup script first. It must fail rather than package a partial runtime layout.
 
 Pinned dependency manifest entries should include:
 
@@ -798,22 +798,44 @@ Debug log file entries must include log level and date/time. The file should be 
 
 Do not require logging for normal operation.
 
-## Build
+## Build And Script Launcher
 
-Current production build script emits the release binary to `dist/imgoptz.exe`:
+Contributor automation is driven by a small Odin CLI launcher compiled from the `scripts/` package. Contributors already need Odin to work on the repo, so the bootstrap command is intentionally one Odin build:
+
+```bash
+odin build scripts -out:scripts.exe -target:windows_amd64 -strict-style -vet -vet-tabs -warnings-as-errors
+```
+
+The generated `scripts.exe` is local build output and must not be committed. After bootstrap, contributors and AI agents should call the same launcher from any Windows developer shell:
+
+```bash
+./scripts.exe build
+./scripts.exe dev
+./scripts.exe test
+./scripts.exe preview
+./scripts.exe setup
+./scripts.exe package
+```
+
+Each script must live in exactly one `.odin` file under `scripts/`. `scripts/main.odin` is the launcher entrypoint; Odin automatically compiles the other `.odin` files in the same directory into the same package. Each script file registers one script descriptor with the launcher at startup, including whether the script is enabled. The launcher lists registered enabled and disabled scripts, but it only runs registered scripts that are enabled.
+
+Production build emits the release binary to `dist/imgoptz.exe`:
 
 ```bash
 odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o:speed -strict-style -vet -vet-packages:main -vet-unused-procedures -vet-tabs -disallow-do -warnings-as-errors
 ```
 
-`scripts/run.ps1` should call `scripts/build_dev.ps1` first, then launch the built development binary:
+`scripts.exe dev` should build the app in debug mode first, then launch the built development binary. `scripts.exe preview` should launch the production binary only, and it must print a clear error if `dist/imgoptz.exe` is missing:
 
-```powershell
-./scripts/build_dev.ps1
+```bash
+./scripts.exe dev
 ./dist/imgoptz_dev.exe
+
+./scripts.exe preview
+./dist/imgoptz.exe
 ```
 
-Future script unification should remove duplicate shell-specific implementation scripts. Keep the PowerShell scripts as the canonical implementation on Windows, and add one thin launcher entrypoint that can be invoked from common Windows developer shells (`cmd.exe`, PowerShell, Git Bash, and bash-like environments) and dispatches to the matching PowerShell script. The launcher must not duplicate build, setup, or bundle logic; it should only normalize invocation and forward arguments/exit codes. Research and verify the safest launcher form in Phase 10B before removing the current `.sh` scripts.
+Phase 10B replaces duplicate shell-specific automation with registered Odin scripts. PowerShell and bash scripts are legacy implementation files after the launcher exists and should be removed only after their behavior has been fully ported and verified in Odin.
 
 ## Implementation Phases
 
@@ -843,7 +865,7 @@ Future script unification should remove duplicate shell-specific implementation 
 24. Phase 9: Add dry-run approval mode, defaulting to preview-first and requiring explicit approval before final writes.
 25. Phase 10: Change default output behavior to `output_mode = "dir"` with target-relative `out_dir = "~/imgoptz-output"`.
 26. Phase 10A: Add pinned dependency setup and bundling scripts, including checksum verification, required notices/source records, version checks, and vendor submodule removal where reproducible.
-27. Phase 10B: Remove duplicate bash scripts after researching and adding one unified launcher command that can be called from common Windows developer shells and invokes the canonical PowerShell scripts.
+27. Phase 10B: Add the Odin `scripts.exe` launcher, move each automation script into one registered `.odin` file under `scripts/`, and remove legacy `.ps1`/`.sh` scripts only after their behavior is fully ported and verified.
 28. Test with spaces, special characters, Unicode paths, and quoted paths.
 29. Test relative and absolute input directories.
 30. Test relative, absolute, and target-relative `out_dir`.

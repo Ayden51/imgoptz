@@ -294,7 +294,7 @@ Goal: replace shell-specific script implementations with a registered Odin CLI l
 Goal: run the broad manual and build matrix before release.
 
 - [ ] Run full manual matrix from `PLAN.md` implementation phases 27-39.
-- [ ] Re-run `./scripts/build.ps1` with warnings as errors.
+- [ ] Re-run `./scripts.exe build` with warnings as errors.
 - [ ] Document any remaining operational constraints.
 
 ## Current Feature Selection
