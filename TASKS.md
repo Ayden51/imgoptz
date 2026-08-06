@@ -273,6 +273,16 @@ Goal: make the distributable runtime reproducible from pinned official dependenc
 - [x] Verify setup and bundling from a clean `dist/` dependency state.
 - [x] Fail early with clear setup errors when required MozJPEG/pngquant build tooling is missing before downloading or building dependencies.
 
+## Phase 10B: Script Entrypoint Unification
+
+Goal: remove duplicate shell-specific script implementations and keep PowerShell as the canonical Windows automation path.
+
+- [ ] Research the safest single launcher command for Windows developer shells (`cmd.exe`, PowerShell, Git Bash, and bash-like environments).
+- [ ] Prefer a thin launcher that only forwards to canonical `.ps1` scripts, preserving arguments and exit codes without duplicating build/setup/bundle logic.
+- [ ] Verify launcher behavior with paths containing spaces and special characters.
+- [ ] Remove existing bash duplicate scripts after the unified launcher is proven.
+- [ ] Update command documentation to point contributors at the unified launcher and canonical PowerShell scripts.
+
 ## Phase 11: Release Hardening
 
 Goal: run the broad manual and build matrix before release.
