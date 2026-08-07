@@ -69,6 +69,7 @@ dist/
    │  ├─ magick.exe
    │  ├─ LICENSE.txt
    │  ├─ NOTICE.txt
+   │  ├─ colors.xml
    │  └─ policy.xml
    ├─ mozjpeg/
    │  ├─ mozjpeg.exe
@@ -368,6 +369,7 @@ imgoptz/
    │  ├─ magick.exe
    │  ├─ LICENSE.txt
    │  ├─ NOTICE.txt
+   │  ├─ colors.xml
    │  └─ policy.xml
    ├─ mozjpeg/
    │  ├─ mozjpeg.exe
