@@ -37,6 +37,7 @@ The distributed app root should use this layout:
       magick.exe
       LICENSE.txt
       NOTICE.txt
+      colors.xml
       policy.xml
 ```
 
@@ -88,10 +89,11 @@ ImageMagick:
 ```text
 tools\imagemagick\LICENSE.txt
 tools\imagemagick\NOTICE.txt
+tools\imagemagick\colors.xml
 tools\imagemagick\policy.xml
 ```
 
-`policy.xml` is not strictly required for the basic resize-to-PPM command, but keep it so runtime resource/security policy is explicit and distributable.
+`colors.xml` is required to keep ImageMagick named-color lookup self-contained and warning-free. `policy.xml` is not strictly required for the basic resize-to-PPM command, but keep it so runtime resource/security policy is explicit and distributable.
 
 ICC sRGB profile:
 

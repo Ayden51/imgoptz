@@ -39,7 +39,7 @@
 - Preserve the prompt loop UI: users paste one directory path, processing finishes, then the app prompts again; `exit` closes it.
 - At startup, change cwd to the executable directory. All relative paths, config, logs, tools, and default output resolve against that app root.
 - Required runtime tool paths are `tools\mozjpeg\mozjpeg.exe`, `tools\oxipng\oxipng.exe`, and `tools\imagemagick\magick.exe` under the app root.
-- Keep third-party notices beside tools: MozJPEG `LICENSE.md`, `README.ijg`, `README-mozilla.txt`; Oxipng `LICENSE`; ImageMagick `LICENSE.txt`, `NOTICE.txt`, `policy.xml`.
+- Keep third-party notices and runtime config beside tools: MozJPEG `LICENSE.md`, `README.ijg`, `README-mozilla.txt`; Oxipng `LICENSE`; ImageMagick `LICENSE.txt`, `NOTICE.txt`, `colors.xml`, `policy.xml`.
 - Accept only JPEG/PNG extensions case-insensitively: `.jpg`, `.jpeg`, `.png`; default discovery is non-recursive.
 
 ## Implementation Pitfalls

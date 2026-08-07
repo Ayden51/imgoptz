@@ -220,6 +220,7 @@ install_imagemagick :: proc(state: ^Setup_State, dependency: ^Setup_Dependency) 
 			join_temp_path(destination, "LICENSE.txt"),
 		) &&
 		copy_from_extract(extract_path, "NOTICE.txt", join_temp_path(destination, "NOTICE.txt")) &&
+		copy_from_extract(extract_path, "colors.xml", join_temp_path(destination, "colors.xml")) &&
 		copy_from_extract(extract_path, "policy.xml", join_temp_path(destination, "policy.xml")) \
 	)
 }

@@ -262,7 +262,7 @@ Goal: make the distributable runtime reproducible from pinned official dependenc
 - [x] Add a pinned dependency manifest for ImageMagick, MozJPEG, Oxipng, pngquant, and `sRGB2014.icc`.
 - [x] Add `scripts/setup_dist_deps.ps1` to download dependencies, verify SHA-256 checksums, extract or build as required, and copy only required runtime files into `dist/`.
 - [x] Verify installed dependency versions with `magick.exe -version`, `mozjpeg.exe -version`, `oxipng.exe --version`, and `pngquant.exe --version`.
-- [x] Bundle ImageMagick `7.1.2-29` portable Q16-HDRI x64 with `LICENSE.txt`, `NOTICE.txt`, and `policy.xml`.
+- [x] Bundle ImageMagick `7.1.2-29` portable Q16-HDRI x64 with `LICENSE.txt`, `NOTICE.txt`, `colors.xml`, and `policy.xml`.
 - [x] Bundle Oxipng `10.1.1` from the official Windows release with `LICENSE`.
 - [x] Bundle pngquant `3.0.3` from crates.io source with `COPYRIGHT` and `SOURCE.txt` documenting exact corresponding source for GPL compliance.
 - [x] Bundle ICC `sRGB2014.icc` from the ICC registry with `sRGB2014.LICENSE.txt` and verify SHA-256 `384B832DE3412066743B52A75EE906B6FB9FB8D9E09E936FC2C43223815C6E0A`.

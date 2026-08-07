@@ -75,6 +75,7 @@ RUNTIME_REQUIRED_FILES :: [?]Runtime_Required_File {
 	{relative_path = RUNTIME_MAGICK_PATH, label = "ImageMagick executable"},
 	{relative_path = "tools/imagemagick/LICENSE.txt", label = "ImageMagick license"},
 	{relative_path = "tools/imagemagick/NOTICE.txt", label = "ImageMagick notice"},
+	{relative_path = "tools/imagemagick/colors.xml", label = "ImageMagick color config"},
 	{relative_path = "tools/imagemagick/policy.xml", label = "ImageMagick policy"},
 	{relative_path = RUNTIME_SRGB_PROFILE_PATH, label = "sRGB ICC profile"},
 	{relative_path = "profiles/sRGB2014.LICENSE.txt", label = "sRGB ICC profile license"},
