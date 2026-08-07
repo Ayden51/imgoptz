@@ -170,6 +170,12 @@ process_input_directory :: proc(
 			effective_runtime_env.recursive,
 		)
 		print_discovery_summary(result, effective_runtime_env.recursive)
+		if len(result.items) == 0 {
+			debug_log_info("processing skipped: no supported images")
+			print_progress_header()
+			print_progress_empty()
+			return
+		}
 		if config.dry_run {
 			print_dry_run_mode(effective_runtime_env.output_mode)
 			dry_run_result := process_discovered_images_dry_run(
