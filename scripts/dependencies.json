@@ -21,6 +21,7 @@
             "dist_license_paths": [
                 "tools/imagemagick/LICENSE.txt",
                 "tools/imagemagick/NOTICE.txt",
+                "tools/imagemagick/colors.xml",
                 "tools/imagemagick/policy.xml"
             ]
         },
