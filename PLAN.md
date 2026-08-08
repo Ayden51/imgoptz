@@ -512,24 +512,26 @@ Retained-profile command shape:
 ```text
 tools\libvips\vipsheader.exe -f icc-profile-data input.jpg
 decode base64 ICC stdout to temp.source.icc
-tools\libvips\vips.exe thumbnail input.jpg .ppm 1920 --height 1920 --size down
+tools\libvips\vips.exe thumbnail input.jpg .raw 1920 --height 1920 --size down
+prepend PPM header: P6\n<resized-width> <resized-height>\n255\n
 tools\mozjpeg\mozjpeg.exe -quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim -icc temp.source.icc -outfile temp.jpg
 ```
 
 Unsupported/no-profile command shape:
 
 ```text
-tools\libvips\vips.exe thumbnail input.jpg .ppm 1920 --height 1920 --size down --output-profile profiles\sRGB2014.icc
+tools\libvips\vips.exe thumbnail input.jpg .raw 1920 --height 1920 --size down --output-profile profiles\sRGB2014.icc
+prepend PPM header: P6\n<resized-width> <resized-height>\n255\n
 tools\mozjpeg\mozjpeg.exe -quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim -icc profiles\sRGB2014.icc -outfile temp.jpg
 ```
 
 Phase 8A JPEG Unicode-path hardening requirements:
 
-Implementation should pipe libvips PPM stdout into MozJPEG stdin. Avoid writing JPEG pixel intermediates to source-derived file paths, because MozJPEG's command-line tool may not open non-ASCII Windows paths reliably.
+Implementation should pipe libvips raw RGB stdout into MozJPEG stdin after the app writes the PPM `P6` header. Avoid writing JPEG pixel intermediates to source-derived file paths, because MozJPEG's command-line tool may not open non-ASCII Windows paths reliably.
 
 JPEG processing should create one per-run temp workspace for JPEG-only artifacts. Use generated ASCII filenames inside that workspace for MozJPEG-visible files such as `source.icc`, `sRGB2014.icc`, and `optimized.jpg`. Copy the bundled `profiles\sRGB2014.icc` into that workspace before passing it to MozJPEG, and extract retained source ICC profiles into that workspace instead of beside the source image.
 
-The JPEG resize/compress handoff must use libvips PPM stdout output, such as the CLI `.ppm` stdout target: libvips writes resized/oriented PPM bytes to stdout, and MozJPEG reads those bytes from stdin. MozJPEG should not receive a PPM input filename. MozJPEG may write its JPEG output to an ASCII temp workspace file or to stdout captured by the app; in either case, the final output rules still operate on a temp `.jpg` first. The bundled libvips build must include PPM output support; do not fall back to lossy libvips JPEG output for MozJPEG input.
+The JPEG resize/compress handoff must use libvips raw RGB stdout output, such as the CLI `.raw` stdout target. The app must determine the resized dimensions, write the PPM `P6` header to MozJPEG stdin, then stream the raw bytes from libvips into MozJPEG stdin. MozJPEG should not receive a PPM input filename. MozJPEG may write its JPEG output to an ASCII temp workspace file or to stdout captured by the app; in either case, the final output rules still operate on a temp `.jpg` first. Do not fall back to lossy libvips JPEG output for MozJPEG input.
 
 If the JPEG temp workspace path itself contains non-ASCII characters and MozJPEG cannot open the ICC profile path, do not fail the whole JPEG pipeline solely because ICC embedding is unavailable. Log the ICC preservation/embedding failure in debug logs, omit the `-icc` argument for that image, and continue compression so the image can still produce an optimized final file. libvips pixel conversion should still run when a conversion profile is available through libvips; the degraded behavior is only that the final JPEG may miss its intended embedded ICC profile.
 
