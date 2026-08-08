@@ -33,12 +33,12 @@ The distributed app root should use this layout:
       pngquant.exe
       COPYRIGHT
       SOURCE.txt
-    imagemagick/
-      magick.exe
-      LICENSE.txt
-      NOTICE.txt
-      colors.xml
-      policy.xml
+    libvips/
+      vips.exe
+      vipsheader.exe
+      LICENSE
+      README.md
+      versions.json
 ```
 
 The app changes cwd to the executable directory at startup, so all relative paths resolve against `<app-root>/`.
@@ -49,7 +49,8 @@ Required executable paths:
 tools\mozjpeg\mozjpeg.exe
 tools\oxipng\oxipng.exe
 tools\pngquant\pngquant.exe
-tools\imagemagick\magick.exe
+tools\libvips\vips.exe
+tools\libvips\vipsheader.exe
 profiles\sRGB2014.icc
 ```
 
@@ -84,16 +85,15 @@ tools\pngquant\SOURCE.txt
 
 Keep pngquant's copyright and license notice beside the binary. pngquant is GPL-3.0-or-later, so binary distribution must also identify the exact corresponding source. Keep `SOURCE.txt` beside the binary with the pinned source URL, version, checksum, and source-retrieval instructions used for the bundled executable.
 
-ImageMagick:
+libvips:
 
 ```text
-tools\imagemagick\LICENSE.txt
-tools\imagemagick\NOTICE.txt
-tools\imagemagick\colors.xml
-tools\imagemagick\policy.xml
+tools\libvips\LICENSE
+tools\libvips\README.md
+tools\libvips\versions.json
 ```
 
-`colors.xml` is required to keep ImageMagick named-color lookup self-contained and warning-free. `policy.xml` is not strictly required for the basic resize-to-PPM command, but keep it so runtime resource/security policy is explicit and distributable.
+libvips is LGPL-2.1-or-later. Bundle a custom minimal Windows build, not the broad `vips-all` distribution and not ImageMagick. Keep libvips license, README, and generated dependency version metadata beside the runtime executables. The bundled libvips build must not include ImageMagick/MagickCore, Ghostscript/gslib, Poppler/PDFium, PDF/PS/EPS/XPS support, SVG, HEIF/AVIF, WebP, TIFF, RAW camera, OpenEXR, JPEG XL, OpenJPEG, FFTW, text/font rendering stacks, or other loaders/savers outside imgoptz's JPEG/PNG needs.
 
 ICC sRGB profile:
 
@@ -129,12 +129,17 @@ license_urls
 install_exe_name
 dist_exe_path
 dist_license_paths
+build_recipe_url
+build_recipe_sha256
 ```
 
 Every setup run must verify these version commands after install:
 
 ```text
-tools\imagemagick\magick.exe -version
+tools\libvips\vips.exe --version
+tools\libvips\vips.exe --vips-config
+tools\libvips\vips.exe -l foreign
+tools\libvips\vips.exe ppmsave --help-operation
 tools\mozjpeg\mozjpeg.exe -version
 tools\oxipng\oxipng.exe --version
 tools\pngquant\pngquant.exe --version
@@ -143,7 +148,7 @@ tools\pngquant\pngquant.exe --version
 Initial pinned dependency targets:
 
 ```text
-ImageMagick  7.1.2-29 Q16-HDRI x64 portable
+libvips      8.18.5 custom minimal Windows build from pinned source archive
 MozJPEG      v4.1.5 official source tag, built locally to cjpeg-static.exe
 Oxipng       10.1.1 x86_64-pc-windows-msvc
 pngquant     3.0.3 built from crates.io source, with corresponding source recorded for GPL compliance
@@ -153,7 +158,8 @@ sRGB ICC     ICC sRGB2014.icc, SHA-256 384B832DE3412066743B52A75EE906B6FB9FB8D9E
 Recommended pinned sources from the dependency research:
 
 ```text
-ImageMagick  https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-29/ImageMagick-7.1.2-29-portable-Q16-HDRI-x64.7z
+libvips      https://github.com/libvips/libvips/releases/download/v8.18.5/vips-8.18.5.tar.xz
+libvips build recipe  https://github.com/libvips/build-win64-mxe/archive/refs/tags/v8.18.5.tar.gz
 MozJPEG      https://github.com/mozilla/mozjpeg/archive/refs/tags/v4.1.5.zip
 Oxipng       https://github.com/oxipng/oxipng/releases/download/v10.1.1/oxipng-10.1.1-x86_64-pc-windows-msvc.zip
 pngquant     https://crates.io/api/v1/crates/pngquant/3.0.3/download
@@ -161,6 +167,8 @@ sRGB ICC     https://registry.color.org/rgb-registry/profiles/sRGB2014.icc
 ```
 
 Do not vendor `mozjpeg/` or `oxipng/` submodules once setup can reproduce the required binaries from pinned official inputs. Oxipng can use the official Windows binary. MozJPEG must use the official `v4.1.5` source tag, built locally by the setup script. Copy the resulting `cjpeg-static.exe` as `tools\mozjpeg\mozjpeg.exe`, then bundle `LICENSE.md`, `README.ijg`, and `README-mozilla.txt` from the same source. Do not use the older official `v4.0.3` Windows binary.
+
+Build libvips from exact pinned release archives, not a moving git clone. Download and verify both the libvips `v8.18.5` source archive and the `build-win64-mxe` `v8.18.5` build recipe archive. Prefer the `.tar.gz`/`.tar.xz` archives for Docker/Linux build execution, verify SHA-256 before extraction, and patch or wrap build metadata that otherwise expects a `.git` checkout. The custom libvips build must use libjpeg-turbo for JPEG decode and must not build libvips against MozJPEG; external `tools\mozjpeg\mozjpeg.exe` remains the final JPEG encoder. Enable only JPEG decode, PNG load/save, LCMS, EXIF, raw output, and PPM load/save. Disable all other optional libvips loaders/savers and dynamic modules. Verify the resulting `vips --vips-config` reports PPM enabled, JPEG/PNG/LCMS/EXIF enabled, and Magick/PDF/Poppler/PDFium plus unwanted formats disabled.
 
 Dependency version updates are release work. Updating any pinned tool or profile version requires a maintainer, checksum refresh, compatibility testing of JPEG and PNG command lines, license/source documentation review, `PLAN.md`/`TASKS.md` updates, and an app version update.
 
@@ -172,7 +180,7 @@ Dependency version updates are release work. Updating any pinned tool or profile
 4. App changes cwd to its executable directory, which is the app root.
 5. App loads config from `imgoptz.json` if present.
 6. App validates required tools.
-7. If `gpu = true`, app probes ImageMagick OpenCL GPU support.
+7. The legacy `gpu` setting is ignored by the libvips pipeline unless a future GPU-capable resize backend is explicitly added.
 8. App prints banner and active config summary.
 9. App prompts for one input image directory.
 10. User enters a directory path or `exit`.
@@ -452,13 +460,13 @@ The dry-run preview must not require re-running external optimizers after approv
 
 All JPEG and PNG files go through a resize/orientation step before encoding/optimization.
 
-Use ImageMagick to apply:
+Use libvips to apply equivalent shrink-only resize and EXIF orientation behavior:
 
 ```text
--auto-orient -filter Lanczos -resize <max_dimension>x<max_dimension>
+vips thumbnail input output 1920 --height 1920 --size down
 ```
 
-Append `>` to the resize geometry:
+The libvips `--size down` setting replaces ImageMagick's `>` resize geometry:
 
 ```text
 1920x1920>
@@ -480,7 +488,7 @@ Examples with `max_dimension = 1920`:
 
 ## JPEG Pipeline
 
-JPEG files use the pipeline: ImageMagick resize/orient, ICC profile decision, then MozJPEG compression with the selected ICC profile embedded.
+JPEG files use the pipeline: libvips ICC profile decision and resize/orient to PPM stdout, then MozJPEG compression with the selected ICC profile embedded.
 
 Final MozJPEG flags:
 
@@ -493,7 +501,7 @@ PPM cannot carry ICC profiles, so the pixel stream and ICC profile must be handl
 Profile decision rules:
 
 1. If the source JPEG has an sRGB-family or P3-family ICC profile, extract that exact source profile to a temporary `*.source.icc` sidecar and embed it in the MozJPEG output.
-2. If the source JPEG has any other ICC profile, convert pixels to sRGB with `profiles\sRGB2014.icc` during the ImageMagick step, then embed `profiles\sRGB2014.icc` in the MozJPEG output.
+2. If the source JPEG has any other ICC profile, convert pixels to sRGB with `profiles\sRGB2014.icc` during the libvips step, then embed `profiles\sRGB2014.icc` in the MozJPEG output.
 3. If the source JPEG has no ICC profile, treat it as unsupported/unknown, convert pixels to sRGB with `profiles\sRGB2014.icc`, then embed `profiles\sRGB2014.icc` in the MozJPEG output.
 
 Retained profile families include at minimum profiles identified as `sRGB`, `IEC 61966-2-1`, `IEC61966-2.1`, `IEC61966-2-1`, `Display P3`, `DCI-P3 D65 Gamut with sRGB Transfer`, or other descriptions containing `P3`.
@@ -501,28 +509,28 @@ Retained profile families include at minimum profiles identified as `sRGB`, `IEC
 Retained-profile command shape:
 
 ```text
-tools\imagemagick\magick.exe identify -quiet -format %[profile:icc] input.jpg
-tools\imagemagick\magick.exe input.jpg icc:temp.source.icc
-tools\imagemagick\magick.exe input.jpg -auto-orient -filter Lanczos -resize 1920x1920> ppm:-
+tools\libvips\vipsheader.exe -f icc-profile-data input.jpg
+decode base64 ICC stdout to temp.source.icc
+tools\libvips\vips.exe thumbnail input.jpg .ppm 1920 --height 1920 --size down
 tools\mozjpeg\mozjpeg.exe -quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim -icc temp.source.icc -outfile temp.jpg
 ```
 
 Unsupported/no-profile command shape:
 
 ```text
-tools\imagemagick\magick.exe input.jpg -auto-orient -filter Lanczos -resize 1920x1920> -profile profiles\sRGB2014.icc ppm:-
+tools\libvips\vips.exe thumbnail input.jpg .ppm 1920 --height 1920 --size down --output-profile profiles\sRGB2014.icc
 tools\mozjpeg\mozjpeg.exe -quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim -icc profiles\sRGB2014.icc -outfile temp.jpg
 ```
 
 Phase 8A JPEG Unicode-path hardening requirements:
 
-Implementation should pipe ImageMagick stdout into MozJPEG stdin when practical. Avoid writing JPEG pixel intermediates to source-derived file paths, because MozJPEG's command-line tool may not open non-ASCII Windows paths reliably.
+Implementation should pipe libvips PPM stdout into MozJPEG stdin. Avoid writing JPEG pixel intermediates to source-derived file paths, because MozJPEG's command-line tool may not open non-ASCII Windows paths reliably.
 
 JPEG processing should create one per-run temp workspace for JPEG-only artifacts. Use generated ASCII filenames inside that workspace for MozJPEG-visible files such as `source.icc`, `sRGB2014.icc`, and `optimized.jpg`. Copy the bundled `profiles\sRGB2014.icc` into that workspace before passing it to MozJPEG, and extract retained source ICC profiles into that workspace instead of beside the source image.
 
-The JPEG resize/compress handoff must use `ppm:-`: ImageMagick writes resized/oriented PPM bytes to stdout, and MozJPEG reads those bytes from stdin. MozJPEG should not receive a PPM input filename. MozJPEG may write its JPEG output to an ASCII temp workspace file or to stdout captured by the app; in either case, the final output rules still operate on a temp `.jpg` first.
+The JPEG resize/compress handoff must use libvips PPM stdout output, such as the CLI `.ppm` stdout target: libvips writes resized/oriented PPM bytes to stdout, and MozJPEG reads those bytes from stdin. MozJPEG should not receive a PPM input filename. MozJPEG may write its JPEG output to an ASCII temp workspace file or to stdout captured by the app; in either case, the final output rules still operate on a temp `.jpg` first. The bundled libvips build must include PPM output support; do not fall back to lossy libvips JPEG output for MozJPEG input.
 
-If the JPEG temp workspace path itself contains non-ASCII characters and MozJPEG cannot open the ICC profile path, do not fail the whole JPEG pipeline solely because ICC embedding is unavailable. Log the ICC preservation/embedding failure in debug logs, omit the `-icc` argument for that image, and continue compression so the image can still produce an optimized final file. ImageMagick pixel conversion should still run when a conversion profile is available through ImageMagick; the degraded behavior is only that the final JPEG may miss its intended embedded ICC profile.
+If the JPEG temp workspace path itself contains non-ASCII characters and MozJPEG cannot open the ICC profile path, do not fail the whole JPEG pipeline solely because ICC embedding is unavailable. Log the ICC preservation/embedding failure in debug logs, omit the `-icc` argument for that image, and continue compression so the image can still produce an optimized final file. libvips pixel conversion should still run when a conversion profile is available through libvips; the degraded behavior is only that the final JPEG may miss its intended embedded ICC profile.
 
 JPEG config maps to MozJPEG flags:
 
@@ -539,36 +547,40 @@ Write MozJPEG output to a temp `.jpg` first, then apply output mode rules. Delet
 
 ## PNG Pipeline
 
-PNG files use the pipeline: ImageMagick resize/orient with ICC profile decision, pngquant lossy quantization without dithering, then Oxipng optimization.
+PNG files use the pipeline: libvips resize/orient with ICC profile decision, pngquant lossy quantization without dithering, libvips ICC profile embedding, then Oxipng optimization.
 
 PNG profile decision rules mirror the JPEG pipeline when `png.preserve_profiles = true`:
 
 1. If the source PNG has an sRGB-family or P3-family ICC profile, preserve that exact source profile through the optimized PNG.
-2. If the source PNG has any other ICC profile, convert pixels to sRGB with `profiles\sRGB2014.icc` during the ImageMagick step, then keep the sRGB ICC profile in the optimized PNG.
+2. If the source PNG has any other ICC profile, convert pixels to sRGB with `profiles\sRGB2014.icc` during the libvips step, then keep the sRGB ICC profile in the optimized PNG.
 3. If the source PNG has no ICC profile, treat it as unsupported/unknown, convert pixels to sRGB with `profiles\sRGB2014.icc`, then keep the sRGB ICC profile in the optimized PNG.
 
 Retained profile families use the same checks as JPEG: at minimum profiles identified as `sRGB`, `IEC 61966-2-1`, `IEC61966-2.1`, `IEC61966-2-1`, `Display P3`, `DCI-P3 D65 Gamut with sRGB Transfer`, or other descriptions containing `P3`.
 
 The PNG ICC implementation should not duplicate the JPEG-only ICC decision logic. Extract shared profile-family detection and preserve-vs-convert decision helpers that both JPEG and PNG pipelines call, while keeping format-specific extraction, embedding, and output verification in the relevant pipeline code.
 
-Do not pass `pngquant --strip` in the default pipeline. pngquant can copy PNG metadata and ICC data, while `--strip` disables metadata copying and conflicts with profile preservation. Let Oxipng own stripping behavior after quantization.
+Do not pass `pngquant --strip` in the default pipeline. Do not rely on pngquant to preserve ICC data; attach the selected ICC profile to `temp.quant.png` with libvips before Oxipng. Let Oxipng own final stripping behavior after profile embedding.
 
 Use Oxipng `--strip safe` by default. Oxipng safe stripping keeps PNG display/color-management chunks such as `iCCP`, `sRGB`, and `cICP`; `--strip all` is incompatible with `png.preserve_profiles = true`.
 
 Command shape:
 
 ```text
-tools\imagemagick\magick.exe input.png -auto-orient -filter Lanczos -resize 1920x1920> temp.resized.png
+tools\libvips\vipsheader.exe -f icc-profile-data input.png
+decode base64 ICC stdout to temp.source.icc when retaining a source profile
+tools\libvips\vips.exe thumbnail input.png temp.resized.png 1920 --height 1920 --size down
 tools\pngquant\pngquant.exe --force --output temp.quant.png --quality 40-95 --speed 1 --nofs -- temp.resized.png
-tools\oxipng\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.quant.png
+tools\libvips\vips.exe pngsave temp.quant.png temp.profiled.png --profile temp.source.icc
+tools\oxipng\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.profiled.png
 ```
 
 Unsupported/no-profile command shape:
 
 ```text
-tools\imagemagick\magick.exe input.png -auto-orient -filter Lanczos -resize 1920x1920> -profile profiles\sRGB2014.icc temp.resized.png
+tools\libvips\vips.exe thumbnail input.png temp.resized.png 1920 --height 1920 --size down --output-profile profiles\sRGB2014.icc
 tools\pngquant\pngquant.exe --force --output temp.quant.png --quality 40-95 --speed 1 --nofs -- temp.resized.png
-tools\oxipng\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.quant.png
+tools\libvips\vips.exe pngsave temp.quant.png temp.profiled.png --profile profiles\sRGB2014.icc
+tools\oxipng\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.profiled.png
 ```
 
 PNG config maps to tool flags:
@@ -584,7 +596,7 @@ png.alpha            -> oxipng --alpha when true
 png.preserve_profiles -> PNG ICC profile retention/conversion before pngquant and Oxipng
 ```
 
-Write Oxipng output to a temp `.png` first, then apply output mode rules. Delete `temp.resized.png` and `temp.quant.png` on all success, failure, and skip-larger paths.
+Write Oxipng output to a temp `.png` first, then apply output mode rules. Delete `temp.resized.png`, `temp.quant.png`, `temp.profiled.png`, and ICC sidecars on all success, failure, and skip-larger paths.
 
 When `png.preserve_profiles = true`, verify the optimized temp PNG still has the expected color profile before final output handling. If the expected profile is missing, delete temp files and mark the file failed rather than writing an unprofiled optimized PNG.
 
@@ -618,19 +630,9 @@ Collision handling is scoped to the destination directory. For recursive `dir` o
 
 Skipped files that do not get smaller do not produce renamed output.
 
-## GPU and OpenCL
+## GPU
 
-ImageMagick can use OpenCL for resize, and local `magick.exe` reports OpenCL support.
-
-Behavior:
-
-1. If `gpu = false`, never probe and never enable GPU.
-2. If `gpu = true`, run a lightweight startup probe.
-3. If probe succeeds, set `MAGICK_OCL_DEVICE=GPU` for ImageMagick child processes.
-4. If probe fails, warn and fall back to CPU.
-5. Never blindly enable GPU without a successful probe.
-
-GPU only applies to ImageMagick resize work. MozJPEG, pngquant, and Oxipng remain CPU tools.
+The libvips migration removes ImageMagick OpenCL resize work. Keep `gpu` config parsing for now so existing config files remain valid, but do not probe or enable GPU acceleration in the libvips pipeline. If `gpu = true`, print no warning solely because GPU acceleration is unavailable; it is a no-op compatibility setting until a future GPU-capable backend is specified.
 
 ## Worker Strategy
 
@@ -654,7 +656,7 @@ Also consider current system load if accessible from Odin/Windows APIs.
 Avoid thread oversubscription:
 
 ```text
-MAGICK_THREAD_LIMIT=1 or 2
+VIPS_CONCURRENCY=1 or 2
 oxipng --threads 1 when app-level workers > 1
 ```
 
@@ -676,7 +678,7 @@ Temp file naming should avoid collisions:
 
 Failure handling:
 
-1. If ImageMagick fails, delete temp files and mark file failed.
+1. If libvips fails, delete temp files and mark file failed.
 2. If MozJPEG/pngquant/Oxipng fails, delete temp files and mark file failed.
 3. If temp output does not exist or is empty, delete temp files and mark file failed.
 4. If final output is not smaller, delete temp files and mark file skipped.
@@ -758,7 +760,7 @@ X error
 Use concise user-facing error copy rather than raw internal enum names where practical:
 
 ```text
-ImageMagick resize/orientation failed
+libvips resize/orientation failed
 MozJPEG compression failed
 pngquant compression failed
 Oxipng optimization failed
@@ -848,11 +850,11 @@ Phase 10B replaces duplicate shell-specific automation with registered Odin scri
 5. Add `imgoptz.json` parser and validation warnings.
 6. Add tool validation for the final distribution paths.
 7. Add output mode validation and output root resolution.
-8. Add ImageMagick GPU probe when `gpu = true`.
+8. Validate runtime libvips availability and treat `gpu` as a no-op compatibility setting.
 9. Add supported file discovery with optional recursion.
 10. Add relative path preservation for recursive `dir` output mode.
-11. Add JPEG pipeline with ICC retention/conversion and `*.source.icc` cleanup.
-12. Add PNG pipeline with Magick temp resize, shared ICC retention/conversion logic, pngquant without `--strip`, and Oxipng output.
+11. Phase 11: Migrate resize/profile handling from ImageMagick to a custom minimal libvips build with PPM output, while keeping external MozJPEG as the final JPEG encoder.
+12. Add PNG pipeline with libvips temp resize/profile embedding, shared ICC retention/conversion logic, pngquant without `--strip`, and Oxipng output.
 13. Apply the updated PNG quality default: `png.pngquant_quality = "40-95"` across built-in defaults, config fallback behavior, distribution config, tests, and PNG command verification.
 14. Replace flat console log-style output with the structured console UI: banner, app settings block, input block, discovery block, progress block, and summary block.
 15. Add temp file cleanup and size comparison.
@@ -863,7 +865,7 @@ Phase 10B replaces duplicate shell-specific automation with registered Odin scri
 20. Add worker pool and auto worker heuristic.
 21. Add progress output and final summary, including original size, optimized size, and percentage size reduction in success rows, without final/slugified output path detail rows.
 22. Add optional debug logging.
-23. Phase 8A: Harden JPEG Unicode-path handling with a per-run temp workspace, `ppm:-` ImageMagick-to-MozJPEG piping, and graceful ICC omission when MozJPEG cannot open temp ICC paths.
+23. Phase 8A: Harden JPEG Unicode-path handling with a per-run temp workspace, PPM stdout producer-to-MozJPEG piping, and graceful ICC omission when MozJPEG cannot open temp ICC paths.
 24. Phase 9: Add dry-run approval mode, defaulting to preview-first and requiring explicit approval before final writes.
 25. Phase 10: Change default output behavior to `output_mode = "dir"` with target-relative `out_dir = "~/imgoptz-output"`.
 26. Phase 10A: Add pinned dependency setup and bundling scripts, including checksum verification, required notices/source records, version checks, and vendor submodule removal where reproducible.
@@ -878,6 +880,6 @@ Phase 10B replaces duplicate shell-specific automation with registered Odin scri
 35. Test uppercase extensions.
 36. Test corrupt images.
 37. Test missing tools and missing third-party notices/source records.
-38. Test PNG ICC retention through ImageMagick, pngquant, and Oxipng.
+38. Test PNG ICC retention through libvips, pngquant, and Oxipng.
 39. Test progress success rows include before/after sizes and percentage reduction, and do not print final/slugified output path detail rows.
 40. Test repeated prompt loop and `exit`.

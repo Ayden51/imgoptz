@@ -289,16 +289,26 @@ Goal: replace shell-specific script implementations with a registered Odin CLI l
 - [x] Verify launcher behavior with repo paths containing spaces and special characters.
 - [x] Update command documentation to point contributors at `scripts.exe` and the Odin bootstrap command.
 
-## Phase 11: Release Hardening
+## Phase 11: libvips Migration
 
-Goal: run the broad manual and build matrix before release.
+Goal: replace ImageMagick with a custom minimal libvips runtime while preserving the current JPEG and PNG optimization behavior.
 
-- [ ] Run full manual matrix from `PLAN.md` implementation phases 27-39.
-- [ ] Re-run `./scripts.exe build` with warnings as errors.
-- [ ] Document any remaining operational constraints.
+- [ ] Update the pinned dependency manifest to download exact libvips `v8.18.5` and `build-win64-mxe` `v8.18.5` source archives, verify SHA-256, and avoid moving git clones for libvips build inputs.
+- [ ] Build a custom minimal libvips runtime with JPEG decode, PNG load/save, LCMS, EXIF, raw output, and PPM load/save enabled.
+- [ ] Build libvips without MozJPEG; keep `tools\mozjpeg\mozjpeg.exe` as the external final JPEG encoder.
+- [ ] Disable unwanted libvips features and formats: ImageMagick/MagickCore, Ghostscript/gslib, Poppler/PDFium, PDF/PS/EPS/XPS, SVG, HEIF/AVIF, WebP, TIFF, RAW camera, OpenEXR, JPEG XL, OpenJPEG, FFTW, text/font rendering stacks, dynamic modules, and other non-JPEG/PNG loaders/savers.
+- [ ] Replace runtime validation for `tools\imagemagick\magick.exe` with validation for `tools\libvips\vips.exe`, `tools\libvips\vipsheader.exe`, libvips notices, and `versions.json`.
+- [ ] Verify `vips --vips-config`, `vips -l foreign`, and `vips ppmsave --help-operation` prove the minimal expected feature set before packaging.
+- [ ] Replace ImageMagick ICC identification/extraction with `vipsheader -f icc-profile-data`, decode the base64 ICC bytes, and write temp workspace `.icc` sidecars like the current pipeline.
+- [ ] Replace JPEG resize/orient with libvips PPM stdout output piped directly into external MozJPEG stdin, preserving current MozJPEG flags and ICC embedding behavior.
+- [ ] Replace PNG resize/orient with libvips temp PNG output, keep pngquant unchanged, then embed the selected ICC into the quantized PNG with libvips before Oxipng.
+- [ ] Treat the legacy `gpu` config as a no-op compatibility setting in the libvips pipeline; remove ImageMagick OpenCL probing and `MAGICK_*` environment handling.
+- [ ] Update command construction tests and processing tests for libvips JPEG/PNG resize, ICC extraction/embedding, PPM piping, temp cleanup, Unicode paths, and PNG ICC verification.
+- [ ] Run the mixed demo comparison against the current baseline and verify dimensions, ICC retention, and output-size behavior remain acceptable.
+- [ ] Remove ImageMagick from setup, packaging, distribution layout, docs, and required notice validation after libvips replacement tests pass.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/odin-script-launcher`.
-- Scope: Phase 10B Odin script launcher foundation.
-- Reason: Phase 10B replaces shell-specific automation with registered Odin scripts that contributors can launch from any common Windows developer shell after bootstrapping `scripts.exe`.
+- Current feature branch: `feat/libvips-migration-plan`.
+- Scope: Phase 11 libvips migration planning.
+- Reason: ImageMagick's broad built-in delegate and format surface creates distribution risk; Phase 11 replaces it with a custom minimal libvips runtime while keeping external MozJPEG/pngquant/Oxipng optimization behavior.
