@@ -7,11 +7,8 @@ import win "core:sys/windows"
 
 Runtime_GPU_Status :: enum {
 	Disabled_By_Config,
-	Enabled,
-	Probe_Failed,
+	No_Op_Compatibility,
 }
-
-Runtime_GPU_Probe :: proc(magick_path: string) -> bool
 
 Output_Root_Kind :: enum {
 	None,
@@ -34,10 +31,10 @@ Runtime_Environment :: struct {
 	mozjpeg_path:     string,
 	oxipng_path:      string,
 	pngquant_path:    string,
-	magick_path:      string,
+	vips_path:        string,
+	vipsheader_path:  string,
 	srgb_profile:     string,
 	gpu_status:       Runtime_GPU_Status,
-	magick_use_gpu:   bool,
 	warnings:         [dynamic]string,
 	errors:           [dynamic]string,
 }
@@ -60,7 +57,8 @@ RUNTIME_TARGET_RELATIVE_OUTPUT_PREFIX :: "~/"
 RUNTIME_MOZJPEG_PATH :: "tools/mozjpeg/mozjpeg.exe"
 RUNTIME_OXIPNG_PATH :: "tools/oxipng/oxipng.exe"
 RUNTIME_PNGQUANT_PATH :: "tools/pngquant/pngquant.exe"
-RUNTIME_MAGICK_PATH :: "tools/imagemagick/magick.exe"
+RUNTIME_VIPS_PATH :: "tools/libvips/vips.exe"
+RUNTIME_VIPSHEADER_PATH :: "tools/libvips/vipsheader.exe"
 RUNTIME_SRGB_PROFILE_PATH :: "profiles/sRGB2014.icc"
 
 RUNTIME_REQUIRED_FILES :: [?]Runtime_Required_File {
@@ -72,24 +70,17 @@ RUNTIME_REQUIRED_FILES :: [?]Runtime_Required_File {
 	{relative_path = "tools/oxipng/LICENSE", label = "Oxipng license"},
 	{relative_path = RUNTIME_PNGQUANT_PATH, label = "pngquant executable"},
 	{relative_path = "tools/pngquant/COPYRIGHT", label = "pngquant copyright notice"},
-	{relative_path = RUNTIME_MAGICK_PATH, label = "ImageMagick executable"},
-	{relative_path = "tools/imagemagick/LICENSE.txt", label = "ImageMagick license"},
-	{relative_path = "tools/imagemagick/NOTICE.txt", label = "ImageMagick notice"},
-	{relative_path = "tools/imagemagick/colors.xml", label = "ImageMagick color config"},
-	{relative_path = "tools/imagemagick/policy.xml", label = "ImageMagick policy"},
+	{relative_path = RUNTIME_VIPS_PATH, label = "libvips executable"},
+	{relative_path = RUNTIME_VIPSHEADER_PATH, label = "libvips header executable"},
+	{relative_path = "tools/libvips/libvips-42.dll", label = "libvips runtime DLL"},
+	{relative_path = "tools/libvips/LICENSE", label = "libvips license"},
+	{relative_path = "tools/libvips/README.md", label = "libvips README"},
+	{relative_path = "tools/libvips/versions.json", label = "libvips dependency versions"},
 	{relative_path = RUNTIME_SRGB_PROFILE_PATH, label = "sRGB ICC profile"},
 	{relative_path = "profiles/sRGB2014.LICENSE.txt", label = "sRGB ICC profile license"},
 }
 
 load_runtime_environment :: proc(app_root: string, config: App_Config) -> Runtime_Environment {
-	return load_runtime_environment_with_probe(app_root, config, probe_imagemagick_opencl)
-}
-
-load_runtime_environment_with_probe :: proc(
-	app_root: string,
-	config: App_Config,
-	probe: Runtime_GPU_Probe,
-) -> Runtime_Environment {
 	debug_log_section("RUNTIME")
 	debug_log_infof("load runtime environment: app_root=\"%s\"", app_root)
 	env := Runtime_Environment {
@@ -116,22 +107,10 @@ load_runtime_environment_with_probe :: proc(
 	}
 
 	if config.gpu {
-		debug_log_info("gpu requested: probing ImageMagick OpenCL")
-		if os.is_file(env.magick_path) {
-			if probe(env.magick_path) {
-				env.gpu_status = .Enabled
-				env.magick_use_gpu = true
-				debug_log_info(
-					"gpu probe succeeded: MAGICK_OCL_DEVICE=GPU enabled for ImageMagick",
-				)
-			} else {
-				env.gpu_status = .Probe_Failed
-				debug_log_warnf("gpu probe failed for magick_path=\"%s\"", env.magick_path)
-				add_runtime_warning(&env, "GPU acceleration is unavailable. Continuing with CPU.")
-			}
-		}
+		env.gpu_status = .No_Op_Compatibility
+		debug_log_info("gpu requested: ignored by libvips pipeline compatibility setting")
 	} else {
-		debug_log_info("gpu disabled by config: skipping ImageMagick OpenCL probe")
+		debug_log_info("gpu disabled by config")
 	}
 
 	env.ok = len(env.errors) == 0
@@ -201,7 +180,8 @@ destroy_runtime_environment :: proc(env: ^Runtime_Environment) {
 	delete(env.mozjpeg_path)
 	delete(env.oxipng_path)
 	delete(env.pngquant_path)
-	delete(env.magick_path)
+	delete(env.vips_path)
+	delete(env.vipsheader_path)
 	delete(env.srgb_profile)
 	for warning in env.warnings {
 		delete(warning)
@@ -218,12 +198,14 @@ resolve_runtime_tool_paths :: proc(env: ^Runtime_Environment, app_root: string) 
 	env.mozjpeg_path = resolve_app_relative_path(app_root, RUNTIME_MOZJPEG_PATH)
 	env.oxipng_path = resolve_app_relative_path(app_root, RUNTIME_OXIPNG_PATH)
 	env.pngquant_path = resolve_app_relative_path(app_root, RUNTIME_PNGQUANT_PATH)
-	env.magick_path = resolve_app_relative_path(app_root, RUNTIME_MAGICK_PATH)
+	env.vips_path = resolve_app_relative_path(app_root, RUNTIME_VIPS_PATH)
+	env.vipsheader_path = resolve_app_relative_path(app_root, RUNTIME_VIPSHEADER_PATH)
 	env.srgb_profile = resolve_app_relative_path(app_root, RUNTIME_SRGB_PROFILE_PATH)
 	debug_log_debugf("resolved MozJPEG path: \"%s\"", env.mozjpeg_path)
 	debug_log_debugf("resolved Oxipng path: \"%s\"", env.oxipng_path)
 	debug_log_debugf("resolved pngquant path: \"%s\"", env.pngquant_path)
-	debug_log_debugf("resolved ImageMagick path: \"%s\"", env.magick_path)
+	debug_log_debugf("resolved libvips path: \"%s\"", env.vips_path)
+	debug_log_debugf("resolved vipsheader path: \"%s\"", env.vipsheader_path)
 	debug_log_debugf("resolved sRGB profile path: \"%s\"", env.srgb_profile)
 }
 
@@ -401,78 +383,6 @@ path_without_leading_separators :: proc(path: string) -> string {
 		result = result[1:]
 	}
 	return result
-}
-
-probe_imagemagick_opencl :: proc(magick_path: string) -> bool {
-	command := [?]string{magick_path, "-version"}
-	state, stdout, stderr, err := process_exec_logged(
-		command[:],
-		nil,
-		"ImageMagick OpenCL version probe",
-	)
-	defer delete(stdout)
-	defer delete(stderr)
-
-	if err != nil || !state.exited || state.exit_code != 0 {
-		return false
-	}
-
-	if !(version_output_has_opencl(string(stdout)) || version_output_has_opencl(string(stderr))) {
-		return false
-	}
-
-	return probe_imagemagick_gpu_resize(magick_path)
-}
-
-probe_imagemagick_gpu_resize :: proc(magick_path: string) -> bool {
-	command := [?]string {
-		magick_path,
-		"-size",
-		"8x8",
-		"xc:white",
-		"-filter",
-		"Lanczos",
-		"-resize",
-		"4x4",
-		"null:",
-	}
-	environment, environment_ok := probe_imagemagick_gpu_environment(context.temp_allocator)
-	if !environment_ok {
-		return false
-	}
-
-	state, stdout, stderr, err := process_exec_logged(
-		command[:],
-		environment,
-		"ImageMagick OpenCL resize probe",
-	)
-	defer delete(stdout)
-	defer delete(stderr)
-
-	return err == nil && state.exited && state.exit_code == 0
-}
-
-probe_imagemagick_gpu_environment :: proc(allocator := context.allocator) -> ([]string, bool) {
-	inherited, inherited_err := os.environ(allocator)
-	if inherited_err != nil {
-		return nil, false
-	}
-
-	environment: [dynamic]string
-	environment.allocator = allocator
-	for entry in inherited {
-		append(&environment, entry)
-	}
-	append(&environment, "MAGICK_OCL_DEVICE=GPU")
-	return environment[:], true
-}
-
-version_output_has_opencl :: proc(text: string) -> bool {
-	lower, lower_err := strings.to_lower(text, context.temp_allocator)
-	if lower_err != nil {
-		return false
-	}
-	return strings.contains(lower, "opencl")
 }
 
 output_root_error_summary :: proc(err: Output_Root_Error) -> string {
