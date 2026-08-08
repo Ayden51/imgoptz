@@ -92,7 +92,7 @@ run_setup_script :: proc(args: []string, ctx: ^Script_Context) -> int {
 		return 1
 	}
 
-	if !install_imagemagick(&state, get_dependency(&state, "imagemagick")) {
+	if !install_libvips(&state, get_dependency(&state, "libvips")) {
 		return 1
 	}
 	if !install_mozjpeg(&state, get_dependency(&state, "mozjpeg")) {
@@ -113,6 +113,9 @@ run_setup_script :: proc(args: []string, ctx: ^Script_Context) -> int {
 			return 1
 		}
 		if !invoke_version_check(&state, &dependency) {
+			return 1
+		}
+		if dependency.name == "libvips" && !invoke_libvips_surface_checks(&state, &dependency) {
 			return 1
 		}
 	}
@@ -164,13 +167,10 @@ initialize_setup_paths :: proc(state: ^Setup_State) -> bool {
 
 assert_setup_prerequisites :: proc() -> bool {
 	fmt.println("Checking dependency setup prerequisites")
-	if !assert_any_command_available({"7z", "tar"}, "extracting ImageMagick's pinned 7z archive") {
-		return false
-	}
 	if !assert_command_available("curl", "downloading pinned dependency files") {
 		return false
 	}
-	if !assert_command_available("tar", "extracting pngquant's crates.io source package") {
+	if !assert_command_available("tar", "extracting pinned dependency archives") {
 		return false
 	}
 	if !assert_command_available("cmake", "building MozJPEG from source") {
@@ -197,7 +197,7 @@ assert_setup_prerequisites :: proc() -> bool {
 	return true
 }
 
-install_imagemagick :: proc(state: ^Setup_State, dependency: ^Setup_Dependency) -> bool {
+install_libvips :: proc(state: ^Setup_State, dependency: ^Setup_Dependency) -> bool {
 	archive_path := download_pinned_file(state, dependency) or_return
 	defer delete(archive_path)
 	extract_path := join_path_or_report({state.extract_dir, dependency.name}) or_return
@@ -206,22 +206,41 @@ install_imagemagick :: proc(state: ^Setup_State, dependency: ^Setup_Dependency) 
 		return false
 	}
 
-	destination := join_dist_path(state, "tools/imagemagick") or_return
+	source_path := get_top_extract_directory(extract_path) or_return
+	defer delete(source_path)
+	destination := join_dist_path(state, "tools/libvips") or_return
 	defer delete(destination)
 	if !reset_runtime_directory(destination) {
 		return false
 	}
+	bin_path := join_temp_path(source_path, "bin")
 
 	return(
-		copy_from_extract(extract_path, "magick.exe", join_temp_path(destination, "magick.exe")) &&
-		copy_from_extract(
-			extract_path,
-			"LICENSE.txt",
-			join_temp_path(destination, "LICENSE.txt"),
+		copy_required_file(
+			join_temp_path(bin_path, "vips.exe"),
+			join_temp_path(destination, "vips.exe"),
 		) &&
-		copy_from_extract(extract_path, "NOTICE.txt", join_temp_path(destination, "NOTICE.txt")) &&
-		copy_from_extract(extract_path, "colors.xml", join_temp_path(destination, "colors.xml")) &&
-		copy_from_extract(extract_path, "policy.xml", join_temp_path(destination, "policy.xml")) \
+		copy_required_file(
+			join_temp_path(bin_path, "vipsheader.exe"),
+			join_temp_path(destination, "vipsheader.exe"),
+		) &&
+		copy_required_file(
+			join_temp_path(bin_path, "libvips-42.dll"),
+			join_temp_path(destination, "libvips-42.dll"),
+		) &&
+		copy_libvips_runtime_dlls(bin_path, destination) &&
+		copy_required_file(
+			join_temp_path(source_path, "LICENSE"),
+			join_temp_path(destination, "LICENSE"),
+		) &&
+		copy_required_file(
+			join_temp_path(source_path, "README.md"),
+			join_temp_path(destination, "README.md"),
+		) &&
+		copy_required_file(
+			join_temp_path(source_path, "versions.json"),
+			join_temp_path(destination, "versions.json"),
+		) \
 	)
 }
 
@@ -512,8 +531,10 @@ invoke_version_check :: proc(state: ^Setup_State, dependency: ^Setup_Dependency)
 
 	version_args: []string
 	switch dependency.name {
-	case "imagemagick", "mozjpeg":
+	case "mozjpeg":
 		version_args = {"-version"}
+	case "libvips":
+		version_args = {"--version"}
 	case "oxipng", "pngquant":
 		version_args = {"--version"}
 	case:
@@ -554,11 +575,8 @@ invoke_version_check :: proc(state: ^Setup_State, dependency: ^Setup_Dependency)
 
 version_output_matches :: proc(name, text: string) -> bool {
 	switch name {
-	case "imagemagick":
-		return(
-			strings.contains(text, "ImageMagick 7.1.2-29") &&
-			strings.contains(text, "Q16-HDRI x64") \
-		)
+	case "libvips":
+		return strings.contains(text, "vips-8.18.5")
 	case "mozjpeg":
 		return strings.contains(text, "mozjpeg version 4.1.5")
 	case "oxipng":
@@ -566,6 +584,87 @@ version_output_matches :: proc(name, text: string) -> bool {
 	case "pngquant":
 		return strings.has_prefix(text, "3.0.3")
 	}
+	return true
+}
+
+invoke_libvips_surface_checks :: proc(state: ^Setup_State, dependency: ^Setup_Dependency) -> bool {
+	vips_path := join_dist_path(state, dependency.dist_exe_path) or_return
+	defer delete(vips_path)
+	if !run_libvips_surface_command(
+		{vips_path, "--vips-config"},
+		"libvips configuration",
+		libvips_config_surface_is_allowed,
+	) {
+		return false
+	}
+	if !run_libvips_surface_command(
+		{vips_path, "-l", "foreign"},
+		"libvips foreign loader list",
+		libvips_foreign_surface_is_allowed,
+	) {
+		return false
+	}
+	return run_libvips_surface_command(
+		{vips_path, "rawsave", "--help-operation"},
+		"libvips rawsave operation",
+		libvips_rawsave_surface_is_allowed,
+	)
+}
+
+run_libvips_surface_command :: proc(
+	command: []string,
+	label: string,
+	validate: proc(text: string) -> bool,
+) -> bool {
+	state, stdout, stderr, err := os.process_exec(
+		os.Process_Desc{command = command},
+		context.allocator,
+	)
+	defer delete(stdout)
+	defer delete(stderr)
+	text := fmt.tprintf("%s%s", string(stdout), string(stderr))
+	if err != nil || !state.exited || state.exit_code != 0 {
+		fmt.eprintf("%s check failed with exit code %d.\n%s", label, state.exit_code, text)
+		return false
+	}
+	if !validate(text) {
+		fmt.eprintf("%s check reported an unsupported runtime surface.\n%s\n", label, text)
+		return false
+	}
+	fmt.printf("Verified %s\n", label)
+	return true
+}
+
+libvips_config_surface_is_allowed :: proc(text: string) -> bool {
+	lower, lower_err := strings.to_lower(text, context.temp_allocator)
+	if lower_err != nil {
+		return false
+	}
+	return(
+		strings.contains(lower, "jpeg") &&
+		strings.contains(lower, "png") &&
+		strings.contains(lower, "lcms") &&
+		strings.contains(lower, "exif") &&
+		strings.contains(lower, "raw") \
+	)
+}
+
+libvips_foreign_surface_is_allowed :: proc(text: string) -> bool {
+	lower, lower_err := strings.to_lower(text, context.temp_allocator)
+	if lower_err != nil {
+		return false
+	}
+	blocked := [?]string{"magick", "poppler", "pdf", "openexr", "openjpeg", "jpegxl"}
+	for value in blocked {
+		if strings.contains(lower, value) {
+			return false
+		}
+	}
+	return true
+}
+
+libvips_rawsave_surface_is_allowed :: proc(text: string) -> bool {
+	_ = text
 	return true
 }
 
@@ -784,6 +883,38 @@ copy_from_extract :: proc(extract_root, file_name, destination_path: string) -> 
 	source_path := find_required_file(extract_root, file_name) or_return
 	defer delete(source_path)
 	return copy_required_file(source_path, destination_path)
+}
+
+copy_libvips_runtime_dlls :: proc(bin_path, destination_path: string) -> bool {
+	walker := os.walker_create(bin_path)
+	defer os.walker_destroy(&walker)
+	copied := 0
+	for info in os.walker_walk(&walker) {
+		if _, err := os.walker_error(&walker); err != nil {
+			continue
+		}
+		file_name := filepath.base(info.fullpath)
+		lower_name, lower_err := strings.to_lower(file_name, context.temp_allocator)
+		if lower_err != nil {
+			return false
+		}
+		if info.type != .Regular || !strings.has_suffix(lower_name, ".dll") {
+			continue
+		}
+		if !copy_required_file(info.fullpath, join_temp_path(destination_path, file_name)) {
+			return false
+		}
+		copied += 1
+	}
+	if path, err := os.walker_error(&walker); err != nil {
+		fmt.eprintf("Failed to search libvips runtime DLLs under %s: %v\n", path, err)
+		return false
+	}
+	if copied == 0 {
+		fmt.eprintf("No libvips runtime DLLs were found under %s.\n", bin_path)
+		return false
+	}
+	return true
 }
 
 copy_required_file :: proc(source_path, destination_path: string) -> bool {
