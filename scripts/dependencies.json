@@ -3,26 +3,26 @@
     "cache_dir": "dist/.deps",
     "dependencies": [
         {
-            "name": "imagemagick",
-            "version": "7.1.2-29",
-            "download_url": "https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-29/ImageMagick-7.1.2-29-portable-Q16-HDRI-x64.7z",
-            "download_file": "ImageMagick-7.1.2-29-portable-Q16-HDRI-x64.7z",
-            "sha256": "b68e312b21556ae8872704e37df3c69cbdc0ea7100366bf823e7e3a1b69405bc",
-            "archive_type": "7z",
-            "expected_version_regex": "ImageMagick 7\\.1\\.2-29\\b.*Q16-HDRI x64",
-            "source_url": "https://github.com/ImageMagick/ImageMagick/archive/refs/tags/7.1.2-29.tar.gz",
-            "source_sha256": "b05924ad73c6932ba62c9b32f338f0619b90b767162c8b767f3566556187a284",
+            "name": "libvips",
+            "version": "8.18.5",
+            "download_url": "https://github.com/libvips/build-win64-mxe/releases/download/v8.18.5/vips-dev-x64-web-8.18.5-static.zip",
+            "download_file": "vips-dev-x64-web-8.18.5-static.zip",
+            "sha256": "109c23d6a71328d821ab5b08cb0212242ef7b7e038739f4e1f706b00bf990e10",
+            "archive_type": "zip",
+            "expected_version_regex": "vips-8\\.18\\.5\\b",
+            "source_url": "https://github.com/libvips/build-win64-mxe/releases/tag/v8.18.5",
+            "source_sha256": "109c23d6a71328d821ab5b08cb0212242ef7b7e038739f4e1f706b00bf990e10",
             "license_urls": [
-                "https://imagemagick.org/script/license.php",
-                "https://imagemagick.org/script/resources.php"
+                "https://github.com/libvips/build-win64-mxe/releases/download/v8.18.5/vips-dev-x64-web-8.18.5-static.zip"
             ],
-            "install_exe_name": "magick.exe",
-            "dist_exe_path": "tools/imagemagick/magick.exe",
+            "install_exe_name": "vips.exe",
+            "dist_exe_path": "tools/libvips/vips.exe",
             "dist_license_paths": [
-                "tools/imagemagick/LICENSE.txt",
-                "tools/imagemagick/NOTICE.txt",
-                "tools/imagemagick/colors.xml",
-                "tools/imagemagick/policy.xml"
+                "tools/libvips/vipsheader.exe",
+                "tools/libvips/libvips-42.dll",
+                "tools/libvips/LICENSE",
+                "tools/libvips/README.md",
+                "tools/libvips/versions.json"
             ]
         },
         {

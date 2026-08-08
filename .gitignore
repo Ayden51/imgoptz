@@ -16,9 +16,9 @@ dist/profiles/*
 !dist/tools/
 dist/tools/*
 !dist/tools/.gitkeep
-!dist/tools/imagemagick/
-dist/tools/imagemagick/*
-!dist/tools/imagemagick/.gitkeep
+!dist/tools/libvips/
+dist/tools/libvips/*
+!dist/tools/libvips/.gitkeep
 !dist/tools/mozjpeg/
 dist/tools/mozjpeg/*
 !dist/tools/mozjpeg/.gitkeep
