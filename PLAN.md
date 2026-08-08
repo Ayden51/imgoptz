@@ -36,6 +36,7 @@ The distributed app root should use this layout:
     libvips/
       vips.exe
       vipsheader.exe
+      libvips-42.dll
       LICENSE
       README.md
       versions.json
@@ -51,6 +52,7 @@ tools\oxipng\oxipng.exe
 tools\pngquant\pngquant.exe
 tools\libvips\vips.exe
 tools\libvips\vipsheader.exe
+tools\libvips\libvips-42.dll
 profiles\sRGB2014.icc
 ```
 
@@ -93,7 +95,7 @@ tools\libvips\README.md
 tools\libvips\versions.json
 ```
 
-libvips is LGPL-2.1-or-later. Bundle a custom minimal Windows build, not the broad `vips-all` distribution and not ImageMagick. Keep libvips license, README, and generated dependency version metadata beside the runtime executables. The bundled libvips build must not include ImageMagick/MagickCore, Ghostscript/gslib, Poppler/PDFium, PDF/PS/EPS/XPS support, SVG, HEIF/AVIF, WebP, TIFF, RAW camera, OpenEXR, JPEG XL, OpenJPEG, FFTW, text/font rendering stacks, or other loaders/savers outside imgoptz's JPEG/PNG needs.
+libvips is LGPL-2.1-or-later. Bundle the official `vips-web` static prebuilt release, not the broad `vips-all` distribution and not ImageMagick. Keep libvips license, README, and generated dependency version metadata beside the runtime executables. The `vips-web` static prebuilt includes web-oriented dependencies and loaders such as SVG, HEIF/AVIF, WebP, TIFF, UHDR, text/font rendering, and MozJPEG, but upstream separates it from `vips-all` and it does not include ImageMagick/MagickCore, Ghostscript/gslib, Poppler/PDFium, PDF/PS/EPS/XPS support, FFTW GPL, OpenEXR, JPEG XL, OpenJPEG, RAW camera, or other `vips-all` additions. This is acceptable for imgoptz because the app still accepts only JPEG and PNG paths, verifies the runtime feature surface, and uses libvips only as an external child process for resize/profile handling. Bundle only the runtime files needed by `vips.exe` and `vipsheader.exe`; do not ship headers, pkg-config files, import libraries, or unused tools from the development zip.
 
 ICC sRGB profile:
 
@@ -139,7 +141,7 @@ Every setup run must verify these version commands after install:
 tools\libvips\vips.exe --version
 tools\libvips\vips.exe --vips-config
 tools\libvips\vips.exe -l foreign
-tools\libvips\vips.exe ppmsave --help-operation
+tools\libvips\vips.exe rawsave --help-operation
 tools\mozjpeg\mozjpeg.exe -version
 tools\oxipng\oxipng.exe --version
 tools\pngquant\pngquant.exe --version
@@ -148,7 +150,7 @@ tools\pngquant\pngquant.exe --version
 Initial pinned dependency targets:
 
 ```text
-libvips      8.18.5 custom minimal Windows build from pinned source archive
+libvips      8.18.5 official x64 vips-web static prebuilt, SHA-256 109C23D6A71328D821AB5B08CB0212242EF7B7E038739F4E1F706B00BF990E10
 MozJPEG      v4.1.5 official source tag, built locally to cjpeg-static.exe
 Oxipng       10.1.1 x86_64-pc-windows-msvc
 pngquant     3.0.3 built from crates.io source, with corresponding source recorded for GPL compliance
@@ -158,8 +160,7 @@ sRGB ICC     ICC sRGB2014.icc, SHA-256 384B832DE3412066743B52A75EE906B6FB9FB8D9E
 Recommended pinned sources from the dependency research:
 
 ```text
-libvips      https://github.com/libvips/libvips/releases/download/v8.18.5/vips-8.18.5.tar.xz
-libvips build recipe  https://github.com/libvips/build-win64-mxe/archive/refs/tags/v8.18.5.tar.gz
+libvips      https://github.com/libvips/build-win64-mxe/releases/download/v8.18.5/vips-dev-x64-web-8.18.5-static.zip
 MozJPEG      https://github.com/mozilla/mozjpeg/archive/refs/tags/v4.1.5.zip
 Oxipng       https://github.com/oxipng/oxipng/releases/download/v10.1.1/oxipng-10.1.1-x86_64-pc-windows-msvc.zip
 pngquant     https://crates.io/api/v1/crates/pngquant/3.0.3/download
@@ -168,7 +169,7 @@ sRGB ICC     https://registry.color.org/rgb-registry/profiles/sRGB2014.icc
 
 Do not vendor `mozjpeg/` or `oxipng/` submodules once setup can reproduce the required binaries from pinned official inputs. Oxipng can use the official Windows binary. MozJPEG must use the official `v4.1.5` source tag, built locally by the setup script. Copy the resulting `cjpeg-static.exe` as `tools\mozjpeg\mozjpeg.exe`, then bundle `LICENSE.md`, `README.ijg`, and `README-mozilla.txt` from the same source. Do not use the older official `v4.0.3` Windows binary.
 
-Build libvips from exact pinned release archives, not a moving git clone. Download and verify both the libvips `v8.18.5` source archive and the `build-win64-mxe` `v8.18.5` build recipe archive. Prefer the `.tar.gz`/`.tar.xz` archives for Docker/Linux build execution, verify SHA-256 before extraction, and patch or wrap build metadata that otherwise expects a `.git` checkout. The custom libvips build must use libjpeg-turbo for JPEG decode and must not build libvips against MozJPEG; external `tools\mozjpeg\mozjpeg.exe` remains the final JPEG encoder. Enable only JPEG decode, PNG load/save, LCMS, EXIF, raw output, and PPM load/save. Disable all other optional libvips loaders/savers and dynamic modules. Verify the resulting `vips --vips-config` reports PPM enabled, JPEG/PNG/LCMS/EXIF enabled, and Magick/PDF/Poppler/PDFium plus unwanted formats disabled.
+Do not build libvips locally for normal setup. The upstream `build-win64-mxe` build requires Docker/WSL and adds too much local setup complexity. Instead, download the exact `vips-dev-x64-web-8.18.5-static.zip` release asset, verify SHA-256, and copy only `bin\vips.exe`, `bin\vipsheader.exe`, the required runtime DLLs such as `bin\libvips-42.dll`, `LICENSE`, `README.md`, and `versions.json` into `tools\libvips`. The prebuilt reports PPM disabled, so JPEG handoff must use libvips raw RGB stdout plus an app-written PPM header before MozJPEG stdin. Verify `vips --vips-config` reports JPEG/PNG/LCMS/EXIF/raw enabled and Magick/PDF/Poppler/PDFium disabled. Verify `versions.json` and `vips -l foreign` do not show `vips-all`-only dependencies such as ImageMagick, Poppler, FFTW, OpenEXR, OpenJPEG, JPEG XL, or RAW camera support.
 
 Dependency version updates are release work. Updating any pinned tool or profile version requires a maintainer, checksum refresh, compatibility testing of JPEG and PNG command lines, license/source documentation review, `PLAN.md`/`TASKS.md` updates, and an app version update.
 
@@ -853,7 +854,7 @@ Phase 10B replaces duplicate shell-specific automation with registered Odin scri
 8. Validate runtime libvips availability and treat `gpu` as a no-op compatibility setting.
 9. Add supported file discovery with optional recursion.
 10. Add relative path preservation for recursive `dir` output mode.
-11. Phase 11: Migrate resize/profile handling from ImageMagick to a custom minimal libvips build with PPM output, while keeping external MozJPEG as the final JPEG encoder.
+11. Phase 11: Migrate resize/profile handling from ImageMagick to the official `vips-web` static prebuilt, using libvips raw RGB output plus an app-written PPM header for external MozJPEG stdin.
 12. Add PNG pipeline with libvips temp resize/profile embedding, shared ICC retention/conversion logic, pngquant without `--strip`, and Oxipng output.
 13. Apply the updated PNG quality default: `png.pngquant_quality = "40-95"` across built-in defaults, config fallback behavior, distribution config, tests, and PNG command verification.
 14. Replace flat console log-style output with the structured console UI: banner, app settings block, input block, discovery block, progress block, and summary block.
