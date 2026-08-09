@@ -1444,9 +1444,13 @@ read_libvips_resized_dimensions :: proc(
 	if max_source_dimension <= max_dimension {
 		return Image_Dimensions{width = width, height = height}, true
 	}
-	resized_width := max((width * max_dimension) / max_source_dimension, 1)
-	resized_height := max((height * max_dimension) / max_source_dimension, 1)
+	resized_width := resize_dimension_down(width, max_dimension, max_source_dimension)
+	resized_height := resize_dimension_down(height, max_dimension, max_source_dimension)
 	return Image_Dimensions{width = resized_width, height = resized_height}, true
+}
+
+resize_dimension_down :: proc(dimension, max_dimension, max_source_dimension: int) -> int {
+	return max((dimension * max_dimension + max_source_dimension / 2) / max_source_dimension, 1)
 }
 
 read_vipsheader_int :: proc(

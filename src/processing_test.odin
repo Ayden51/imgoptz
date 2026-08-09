@@ -151,6 +151,14 @@ test_png_resize_command_converts_to_profile_when_requested :: proc(t: ^testing.T
 }
 
 @(test, require)
+test_resize_dimension_down_matches_libvips_thumbnail_rounding :: proc(t: ^testing.T) {
+	testing.expect_value(t, resize_dimension_down(2831, 1920, 3539), 1536)
+	testing.expect_value(t, resize_dimension_down(2252, 1920, 4000), 1081)
+	testing.expect_value(t, resize_dimension_down(4648, 1920, 6198), 1440)
+	testing.expect_value(t, resize_dimension_down(6000, 1920, 6000), 1920)
+}
+
+@(test, require)
 test_shared_icc_profile_family_detection_covers_srgb_and_p3 :: proc(t: ^testing.T) {
 	testing.expect(t, icc_profile_family_is_retained("IEC 61966-2-1 default RGB profile"))
 	testing.expect(t, icc_profile_family_is_retained("Display P3 color profile"))
