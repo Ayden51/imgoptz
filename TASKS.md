@@ -293,23 +293,23 @@ Goal: replace shell-specific script implementations with a registered Odin CLI l
 
 Goal: replace ImageMagick with the official `vips-web` static prebuilt while preserving the current JPEG and PNG optimization behavior.
 
-- [ ] Update the pinned dependency manifest to download `vips-dev-x64-web-8.18.5-static.zip` from the official `build-win64-mxe` `v8.18.5` release and verify SHA-256 `109C23D6A71328D821AB5B08CB0212242EF7B7E038739F4E1F706B00BF990E10`.
-- [ ] Copy only required libvips runtime files into `dist/tools/libvips`: `vips.exe`, `vipsheader.exe`, required DLLs such as `libvips-42.dll`, `LICENSE`, `README.md`, and `versions.json`.
-- [ ] Keep using `tools\mozjpeg\mozjpeg.exe` as the external final JPEG encoder even though the upstream `vips-web` prebuilt includes MozJPEG internally.
-- [ ] Reject `vips-all` and any libvips package that includes ImageMagick/MagickCore, Ghostscript/gslib, Poppler/PDFium, PDF/PS/EPS/XPS, FFTW GPL, OpenEXR, JPEG XL, OpenJPEG, or RAW camera support.
-- [ ] Accept that the official `vips-web` prebuilt includes web-oriented features such as SVG, HEIF/AVIF, WebP, TIFF, UHDR, text/font rendering, and MozJPEG, because the app still discovers only JPEG/PNG and uses libvips only as a child process for resize/profile handling.
-- [ ] Replace runtime validation for `tools\imagemagick\magick.exe` with validation for `tools\libvips\vips.exe`, `tools\libvips\vipsheader.exe`, libvips runtime DLLs, libvips notices, and `versions.json`.
-- [ ] Verify `vips --vips-config`, `vips -l foreign`, and `vips rawsave --help-operation` prove the expected runtime surface before packaging; do not require PPM save support because the selected prebuilt reports PPM disabled.
-- [ ] Replace ImageMagick ICC identification/extraction with `vipsheader -f icc-profile-data`, decode the base64 ICC bytes, and write temp workspace `.icc` sidecars like the current pipeline.
-- [ ] Replace JPEG resize/orient with libvips raw RGB stdout output, prepend the PPM header in the app, and pipe the resulting PPM stream directly into external MozJPEG stdin while preserving current MozJPEG flags and ICC embedding behavior.
-- [ ] Replace PNG resize/orient with libvips temp PNG output, keep pngquant unchanged, then embed the selected ICC into the quantized PNG with libvips before Oxipng.
-- [ ] Treat the legacy `gpu` config as a no-op compatibility setting in the libvips pipeline; remove ImageMagick OpenCL probing and `MAGICK_*` environment handling.
-- [ ] Update command construction tests and processing tests for libvips JPEG/PNG resize, ICC extraction/embedding, raw-to-PPM piping, temp cleanup, Unicode paths, and PNG ICC verification.
-- [ ] Run the mixed demo comparison against the current baseline and verify dimensions, ICC retention, and output-size behavior remain acceptable.
-- [ ] Remove ImageMagick from setup, packaging, distribution layout, docs, and required notice validation after libvips replacement tests pass.
+- [x] Update the pinned dependency manifest to download `vips-dev-x64-web-8.18.5-static.zip` from the official `build-win64-mxe` `v8.18.5` release and verify SHA-256 `109C23D6A71328D821AB5B08CB0212242EF7B7E038739F4E1F706B00BF990E10`.
+- [x] Copy only required libvips runtime files into `dist/tools/libvips`: `vips.exe`, `vipsheader.exe`, required DLLs such as `libvips-42.dll`, `LICENSE`, `README.md`, and `versions.json`.
+- [x] Keep using `tools\mozjpeg\mozjpeg.exe` as the external final JPEG encoder even though the upstream `vips-web` prebuilt includes MozJPEG internally.
+- [x] Reject `vips-all` and any libvips package that includes ImageMagick/MagickCore, Ghostscript/gslib, Poppler/PDFium, PDF/PS/EPS/XPS, FFTW GPL, OpenEXR, JPEG XL, OpenJPEG, or RAW camera support.
+- [x] Accept that the official `vips-web` prebuilt includes web-oriented features such as SVG, HEIF/AVIF, WebP, TIFF, UHDR, text/font rendering, and MozJPEG, because the app still discovers only JPEG/PNG and uses libvips only as a child process for resize/profile handling.
+- [x] Replace runtime validation for `tools\imagemagick\magick.exe` with validation for `tools\libvips\vips.exe`, `tools\libvips\vipsheader.exe`, libvips runtime DLLs, libvips notices, and `versions.json`.
+- [x] Verify `vips --vips-config`, `vips -l foreign`, and `vips rawsave --help-operation` prove the expected runtime surface before packaging; do not require PPM save support because the selected prebuilt reports PPM disabled.
+- [x] Replace ImageMagick ICC identification/extraction with `vipsheader -f icc-profile-data`, decode the base64 ICC bytes, and write temp workspace `.icc` sidecars like the current pipeline.
+- [x] Replace JPEG resize/orient with libvips raw RGB stdout output, prepend the PPM header in the app, and pipe the resulting PPM stream directly into external MozJPEG stdin while preserving current MozJPEG flags and ICC embedding behavior.
+- [x] Replace PNG resize/orient with libvips temp PNG output, keep pngquant unchanged, then embed the selected ICC into the quantized PNG with libvips before Oxipng.
+- [x] Treat the legacy `gpu` config as a no-op compatibility setting in the libvips pipeline; remove ImageMagick OpenCL probing and `MAGICK_*` environment handling.
+- [x] Update command construction tests and processing tests for libvips JPEG/PNG resize, ICC extraction/embedding, raw-to-PPM piping, temp cleanup, Unicode paths, and PNG ICC verification.
+- [x] Run the mixed demo comparison against the current baseline and verify dimensions, ICC retention, and output-size behavior remain acceptable.
+- [x] Remove ImageMagick from setup, packaging, distribution layout, docs, and required notice validation after libvips replacement tests pass.
 
 ## Current Feature Selection
 
-- Current feature branch: `feat/libvips-migration-plan`.
-- Scope: Phase 11 libvips migration planning.
+- Current feature branch: `feat/phase-11-libvips`.
+- Scope: Phase 11 libvips migration implementation.
 - Reason: ImageMagick's broad built-in delegate and format surface creates distribution risk; Phase 11 replaces it with the official `vips-web` static prebuilt while keeping external MozJPEG/pngquant/Oxipng optimization behavior.

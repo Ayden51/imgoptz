@@ -24,7 +24,7 @@ The app keeps the workflow conservative by default. It writes smaller optimized 
 - Dual workflow goal: direct terminal CLI usage for developers, plus a double-click console TUI for non-technical users.
 - JPEG and PNG support: accepts `.jpg`, `.jpeg`, and `.png` case-insensitively.
 - Smaller web-ready images: resizes large images to a configurable maximum dimension without enlarging smaller images.
-- High-quality compression stack: ImageMagick handles resize/orientation, MozJPEG compresses JPEG, and pngquant plus Oxipng optimize PNG.
+- High-quality compression stack: libvips handles resize/orientation/profile work, MozJPEG compresses JPEG, and pngquant plus Oxipng optimize PNG.
 - Color-aware output: preserves supported sRGB and P3 profiles, or converts unknown/missing profiles to the bundled `sRGB2014.icc` profile.
 - Flexible discovery: scan the selected folder only, or include subfolders with `recursive` mode.
 - Safe output modes: save to an output folder or replace originals in-place after approval.
@@ -38,7 +38,7 @@ The v0.1.0 goal is a real-life MVP centered on the current console TUI flow. Pla
 - Direct terminal CLI mode for developers and automation-friendly workflows.
 - Continued TUI mode for non-technical users who prefer double-click usage.
 - A setup script that downloads and installs local runtime dependencies into `dist/`.
-- Optional support for using ImageMagick, MozJPEG, pngquant, and Oxipng from the local machine `PATH`, so contributors can skip manual dependency preparation.
+- Optional support for using libvips, MozJPEG, pngquant, and Oxipng from the local machine `PATH`, so contributors can skip manual dependency preparation.
 
 ## Installation
 
@@ -65,12 +65,13 @@ dist/
 │  ├─ sRGB2014.icc
 │  └─ sRGB2014.LICENSE.txt
 └─ tools/
-   ├─ imagemagick/
-   │  ├─ magick.exe
-   │  ├─ LICENSE.txt
-   │  ├─ NOTICE.txt
-   │  ├─ colors.xml
-   │  └─ policy.xml
+   ├─ libvips/
+   │  ├─ vips.exe
+   │  ├─ vipsheader.exe
+   │  ├─ libvips-42.dll
+   │  ├─ LICENSE
+   │  ├─ README.md
+   │  └─ versions.json
    ├─ mozjpeg/
    │  ├─ mozjpeg.exe
    │  ├─ LICENSE.md
@@ -85,7 +86,7 @@ dist/
       └─ SOURCE.txt
 ```
 
-The build script compiles only the `imgoptz` executable. Run the setup script when ImageMagick, MozJPEG, pngquant, Oxipng, or the ICC profile are missing from `dist/`.
+The build script compiles only the `imgoptz` executable. Run the setup script when libvips, MozJPEG, pngquant, Oxipng, or the ICC profile are missing from `dist/`.
 
 Bootstrap the local Odin script launcher:
 
@@ -232,7 +233,7 @@ Important settings:
 | `recursive` | `false` | Search subfolders when true. |
 | `max_dimension` | `1920` | Maximum width or height after resizing. Smaller images are not enlarged. |
 | `workers` | `"auto"` | Balanced worker count, or a positive integer. |
-| `gpu` | `true` | Probe ImageMagick OpenCL GPU support before enabling GPU resize work. |
+| `gpu` | `true` | Compatibility setting parsed from config; currently ignored by the libvips pipeline. |
 | `dry_run` | `true` | Preview results and ask before saving files. |
 | `output_mode` | `"dir"` | Use `"dir"` for output-folder mode or `"in-place"` to replace originals after approval. |
 | `out_dir` | `"~/imgoptz-output"` | Output folder for `output_mode = "dir"`. `~/` means relative to the selected image folder. |
@@ -315,7 +316,7 @@ imgoptz/
 │  ├─ schema/            JSON schema for config editors
 │  ├─ profiles/          Runtime ICC profile and license
 │  └─ tools/             Runtime image tools
-│     ├─ imagemagick/
+│     ├─ libvips/
 │     ├─ mozjpeg/
 │     ├─ oxipng/
 │     └─ pngquant/
@@ -365,12 +366,13 @@ imgoptz/
 │  ├─ sRGB2014.icc
 │  └─ sRGB2014.LICENSE.txt
 └─ tools/
-   ├─ imagemagick/
-   │  ├─ magick.exe
-   │  ├─ LICENSE.txt
-   │  ├─ NOTICE.txt
-   │  ├─ colors.xml
-   │  └─ policy.xml
+   ├─ libvips/
+   │  ├─ vips.exe
+   │  ├─ vipsheader.exe
+   │  ├─ libvips-42.dll
+   │  ├─ LICENSE
+   │  ├─ README.md
+   │  └─ versions.json
    ├─ mozjpeg/
    │  ├─ mozjpeg.exe
    │  ├─ LICENSE.md

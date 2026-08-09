@@ -231,9 +231,10 @@ debug_log_runtime_environment :: proc(env: Runtime_Environment) {
 	debug_log_debugf("mozjpeg_path=\"%s\"", env.mozjpeg_path)
 	debug_log_debugf("oxipng_path=\"%s\"", env.oxipng_path)
 	debug_log_debugf("pngquant_path=\"%s\"", env.pngquant_path)
-	debug_log_debugf("magick_path=\"%s\"", env.magick_path)
+	debug_log_debugf("vips_path=\"%s\"", env.vips_path)
+	debug_log_debugf("vipsheader_path=\"%s\"", env.vipsheader_path)
 	debug_log_debugf("srgb_profile=\"%s\"", env.srgb_profile)
-	debug_log_debugf("gpu_status=%v magick_use_gpu=%v", env.gpu_status, env.magick_use_gpu)
+	debug_log_debugf("gpu_status=%v", env.gpu_status)
 	for warning in env.warnings {
 		debug_log_warnf("runtime warning: %s", warning)
 	}
@@ -310,10 +311,7 @@ process_exec_logged :: proc(
 }
 
 debug_log_environment_entry_is_relevant :: proc(entry: string) -> bool {
-	return(
-		environment_entry_name_equals(entry, "MAGICK_THREAD_LIMIT") ||
-		environment_entry_name_equals(entry, "MAGICK_OCL_DEVICE") \
-	)
+	return environment_entry_name_equals(entry, "VIPS_CONCURRENCY")
 }
 
 debug_log_workers :: proc(workers: Config_Workers) -> string {

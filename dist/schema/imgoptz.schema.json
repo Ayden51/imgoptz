@@ -40,7 +40,7 @@
         "gpu": {
             "type": "boolean",
             "default": true,
-            "description": "Probe ImageMagick OpenCL GPU support and enable it only if the probe succeeds."
+            "description": "Compatibility setting. Currently ignored by the libvips pipeline."
         },
         "debug_log": {
             "type": "boolean",

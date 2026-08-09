@@ -80,6 +80,10 @@ run_package_script :: proc(args: []string, ctx: ^Script_Context) -> int {
 		if !invoke_version_check(&state.setup, &dependency) {
 			return 1
 		}
+		if dependency.name == "libvips" &&
+		   !invoke_libvips_surface_checks(&state.setup, &dependency) {
+			return 1
+		}
 	}
 
 	if !write_app_package(&state) {

@@ -1,16 +1,18 @@
 package main
 
+import "core:encoding/base64"
 import "core:fmt"
+import "core:io"
 import "core:mem"
 import "core:os"
+import "core:strconv"
 import "core:strings"
 import "core:sync"
 import "core:thread"
 import "core:time"
 
-IMAGE_PROCESS_MAGICK_THREAD_LIMIT_SINGLE_WORKER :: "2"
-IMAGE_PROCESS_MAGICK_THREAD_LIMIT_MULTI_WORKER :: "1"
-JPEG_PIPE_PRODUCER_SHUTDOWN_TIMEOUT :: 250 * time.Millisecond
+IMAGE_PROCESS_VIPS_CONCURRENCY_SINGLE_WORKER :: "2"
+IMAGE_PROCESS_VIPS_CONCURRENCY_MULTI_WORKER :: "1"
 
 Image_Process_Error :: enum {
 	None,
@@ -20,7 +22,7 @@ Image_Process_Error :: enum {
 	Icc_Extract_Failed,
 	Icc_Embed_Failed,
 	Icc_Verify_Failed,
-	Magick_Failed,
+	Vips_Failed,
 	Mozjpeg_Failed,
 	Pngquant_Failed,
 	Oxipng_Failed,
@@ -36,6 +38,11 @@ Icc_Profile_Mode :: enum {
 	None,
 	Embed_Source,
 	Convert_To_Srgb,
+}
+
+Image_Dimensions :: struct {
+	width:  int,
+	height: int,
 }
 
 Process_Image_Result :: struct {
@@ -1105,15 +1112,11 @@ process_jpeg_to_temp :: proc(
 			}
 			debug_log_debugf("jpeg source ICC temp: \"%s\"", source_icc_path)
 
-			command := build_icc_extract_command(
-				runtime_env.magick_path,
+			if detail, ok := extract_vips_icc_profile_to_file(
+				runtime_env.vipsheader_path,
 				item.source_path,
 				source_icc_path,
-			)
-			if detail, ok := run_tool(
-				command,
-				imagemagick_process_environment(runtime_env),
-				"ImageMagick ICC extract",
+				runtime_env,
 			); !ok {
 				_ = os.remove_all(workspace_path)
 				delete(output_path)
@@ -1156,21 +1159,37 @@ process_jpeg_to_temp :: proc(
 		}
 	}
 
-	resize_command := build_jpeg_magick_resize_command(
-		runtime_env.magick_path,
+	resized_dimensions, dimensions_ok := read_libvips_resized_dimensions(
+		runtime_env,
+		item.source_path,
+		config.max_dimension,
+	)
+	if !dimensions_ok {
+		_ = os.remove_all(workspace_path)
+		delete(output_path)
+		delete(owned_icc_path)
+		delete(workspace_path)
+		return Process_Image_Result {
+			err = .Identify_Failed,
+			detail = strings.clone("Could not read resized JPEG dimensions."),
+		}
+	}
+
+	resize_command := build_jpeg_libvips_raw_resize_command(
+		runtime_env.vips_path,
 		item.source_path,
 		config.max_dimension,
 		convert_icc_path,
-		"-",
 	)
 	if pipe_err, detail, ok := run_jpeg_pipe_to_mozjpeg(
 		resize_command,
+		resized_dimensions,
 		runtime_env.mozjpeg_path,
 		config.jpeg,
 		output_path,
 		embed_icc_path,
 		workspace_path,
-		imagemagick_process_environment(runtime_env),
+		libvips_process_environment(runtime_env),
 	); !ok {
 		_ = os.remove_all(workspace_path)
 		delete(output_path)
@@ -1207,10 +1226,11 @@ process_workspace_path :: proc(workspace_path, filename: string) -> (string, boo
 
 run_jpeg_pipe_to_mozjpeg :: proc(
 	resize_command: []string,
+	resized_dimensions: Image_Dimensions,
 	mozjpeg_path: string,
 	jpeg: Jpeg_Config,
 	output_path, icc_path, workspace_path: string,
-	magick_environment: []string,
+	producer_environment: []string,
 ) -> (
 	Image_Process_Error,
 	string,
@@ -1219,10 +1239,11 @@ run_jpeg_pipe_to_mozjpeg :: proc(
 	mozjpeg_command := build_mozjpeg_command(mozjpeg_path, jpeg, "", "", icc_path)
 	err, detail, ok := run_jpeg_pipe_once(
 		resize_command,
+		resized_dimensions,
 		mozjpeg_command,
 		output_path,
 		workspace_path,
-		magick_environment,
+		producer_environment,
 	)
 	if !jpeg_pipe_should_retry_without_icc(err, ok, icc_path) {
 		return err, detail, ok
@@ -1239,10 +1260,11 @@ run_jpeg_pipe_to_mozjpeg :: proc(
 	mozjpeg_no_icc_command := build_mozjpeg_command(mozjpeg_path, jpeg, "", "", "")
 	return run_jpeg_pipe_once(
 		resize_command,
+		resized_dimensions,
 		mozjpeg_no_icc_command,
 		output_path,
 		workspace_path,
-		magick_environment,
+		producer_environment,
 	)
 }
 
@@ -1255,73 +1277,45 @@ jpeg_pipe_should_retry_without_icc :: proc(
 }
 
 run_jpeg_pipe_once :: proc(
-	resize_command, mozjpeg_command: []string,
+	resize_command: []string,
+	resized_dimensions: Image_Dimensions,
+	mozjpeg_command: []string,
 	output_path, workspace_path: string,
-	magick_environment: []string,
+	producer_environment: []string,
 ) -> (
 	Image_Process_Error,
 	string,
 	bool,
 ) {
-	pipe_r, pipe_w, pipe_err := os.pipe()
-	if pipe_err != nil {
-		return .Magick_Failed,
-			fmt.aprintf("Failed to create JPEG pipeline pipe: %v", pipe_err),
+	resize_state, raw_data, resize_stderr, resize_err := process_exec_logged(
+		resize_command,
+		producer_environment,
+		"libvips JPEG resize",
+	)
+	defer delete(raw_data)
+	defer delete(resize_stderr)
+	if resize_err != nil || !resize_state.exited || resize_state.exit_code != 0 {
+		return .Vips_Failed,
+			tool_failure_detail("libvips JPEG resize", resize_state, resize_stderr, resize_err),
 			false
 	}
-	pipe_r_open := true
-	pipe_w_open := true
-
-	magick_stderr_path, magick_stderr_ok := process_workspace_path(
-		workspace_path,
-		"magick.stderr.txt",
-	)
-	if !magick_stderr_ok {
-		_ = os.close(pipe_r)
-		_ = os.close(pipe_w)
-		return .Temp_Path_Failed, strings.clone("Failed to create ImageMagick stderr path."), false
-	}
-	defer delete(magick_stderr_path)
-	magick_stderr_file, magick_stderr_err := os.open(
-		magick_stderr_path,
-		{.Read, .Write, .Create, .Trunc, .Inheritable},
-		os.Permissions_Default_File,
-	)
-	if magick_stderr_err != nil {
-		_ = os.close(pipe_r)
-		_ = os.close(pipe_w)
-		return .Temp_Path_Failed,
-			fmt.aprintf("Failed to open ImageMagick stderr file: %v", magick_stderr_err),
+	expected_raw_bytes := resized_dimensions.width * resized_dimensions.height * 3
+	if len(raw_data) < expected_raw_bytes {
+		return .Vips_Failed,
+			fmt.aprintf(
+				"libvips produced %d raw bytes; expected at least %d.",
+				len(raw_data),
+				expected_raw_bytes,
+			),
 			false
 	}
-
-	debug_log_process_start("ImageMagick JPEG resize", resize_command, magick_environment)
-	magick_process, magick_start_err := os.process_start(
-		os.Process_Desc {
-			command = resize_command,
-			env = magick_environment,
-			stdout = pipe_w,
-			stderr = magick_stderr_file,
-		},
-	)
-	_ = os.close(pipe_w)
-	pipe_w_open = false
-	if magick_start_err != nil {
-		_ = os.close(pipe_r)
-		pipe_r_open = false
-		_ = os.close(magick_stderr_file)
-		magick_stderr := read_optional_process_file(magick_stderr_path)
-		defer delete(magick_stderr)
-		debug_log_process_finish(
-			"ImageMagick JPEG resize",
-			{},
-			nil,
-			magick_stderr,
-			magick_start_err,
+	if len(raw_data) > expected_raw_bytes {
+		debug_log_warnf(
+			"libvips JPEG raw output has extra bytes: actual=%d expected=%d",
+			len(raw_data),
+			expected_raw_bytes,
 		)
-		return .Magick_Failed,
-			tool_failure_detail("ImageMagick JPEG resize", {}, magick_stderr, magick_start_err),
-			false
+		raw_data = raw_data[:expected_raw_bytes]
 	}
 
 	output_file, output_err := os.open(
@@ -1330,19 +1324,6 @@ run_jpeg_pipe_once :: proc(
 		os.Permissions_Default_File,
 	)
 	if output_err != nil {
-		_ = os.close(pipe_r)
-		pipe_r_open = false
-		magick_state, magick_wait_err := wait_process_or_kill(magick_process)
-		_ = os.close(magick_stderr_file)
-		magick_stderr := read_optional_process_file(magick_stderr_path)
-		defer delete(magick_stderr)
-		debug_log_process_finish(
-			"ImageMagick JPEG resize",
-			magick_state,
-			nil,
-			magick_stderr,
-			magick_wait_err,
-		)
 		return .Temp_Path_Failed,
 			fmt.aprintf("Failed to open JPEG output file: %v", output_err),
 			false
@@ -1353,20 +1334,7 @@ run_jpeg_pipe_once :: proc(
 		"mozjpeg.stderr.txt",
 	)
 	if !mozjpeg_stderr_ok {
-		_ = os.close(pipe_r)
-		pipe_r_open = false
 		_ = os.close(output_file)
-		magick_state, magick_wait_err := wait_process_or_kill(magick_process)
-		_ = os.close(magick_stderr_file)
-		magick_stderr := read_optional_process_file(magick_stderr_path)
-		defer delete(magick_stderr)
-		debug_log_process_finish(
-			"ImageMagick JPEG resize",
-			magick_state,
-			nil,
-			magick_stderr,
-			magick_wait_err,
-		)
 		return .Temp_Path_Failed, strings.clone("Failed to create MozJPEG stderr path."), false
 	}
 	defer delete(mozjpeg_stderr_path)
@@ -1376,22 +1344,18 @@ run_jpeg_pipe_once :: proc(
 		os.Permissions_Default_File,
 	)
 	if mozjpeg_stderr_err != nil {
-		_ = os.close(pipe_r)
-		pipe_r_open = false
 		_ = os.close(output_file)
-		magick_state, magick_wait_err := wait_process_or_kill(magick_process)
-		_ = os.close(magick_stderr_file)
-		magick_stderr := read_optional_process_file(magick_stderr_path)
-		defer delete(magick_stderr)
-		debug_log_process_finish(
-			"ImageMagick JPEG resize",
-			magick_state,
-			nil,
-			magick_stderr,
-			magick_wait_err,
-		)
 		return .Temp_Path_Failed,
 			fmt.aprintf("Failed to open MozJPEG stderr file: %v", mozjpeg_stderr_err),
+			false
+	}
+
+	mozjpeg_pipe_r, mozjpeg_pipe_w, mozjpeg_pipe_err := os.pipe()
+	if mozjpeg_pipe_err != nil {
+		_ = os.close(output_file)
+		_ = os.close(mozjpeg_stderr_file)
+		return .Temp_Path_Failed,
+			fmt.aprintf("Failed to create MozJPEG stdin pipe: %v", mozjpeg_pipe_err),
 			false
 	}
 
@@ -1399,71 +1363,40 @@ run_jpeg_pipe_once :: proc(
 	mozjpeg_process, mozjpeg_start_err := os.process_start(
 		os.Process_Desc {
 			command = mozjpeg_command,
-			stdin = pipe_r,
+			stdin = mozjpeg_pipe_r,
 			stdout = output_file,
 			stderr = mozjpeg_stderr_file,
 		},
 	)
-	_ = os.close(pipe_r)
-	pipe_r_open = false
+	_ = os.close(mozjpeg_pipe_r)
 	if mozjpeg_start_err != nil {
-		magick_state, magick_wait_err := wait_process_or_kill(magick_process)
+		_ = os.close(mozjpeg_pipe_w)
 		_ = os.close(output_file)
-		_ = os.close(magick_stderr_file)
 		_ = os.close(mozjpeg_stderr_file)
-		magick_stderr := read_optional_process_file(magick_stderr_path)
 		mozjpeg_stderr := read_optional_process_file(mozjpeg_stderr_path)
-		defer delete(magick_stderr)
 		defer delete(mozjpeg_stderr)
-		debug_log_process_finish(
-			"ImageMagick JPEG resize",
-			magick_state,
-			nil,
-			magick_stderr,
-			magick_wait_err,
-		)
 		debug_log_process_finish("MozJPEG", {}, nil, mozjpeg_stderr, mozjpeg_start_err)
 		return .Mozjpeg_Failed,
 			tool_failure_detail("MozJPEG", {}, mozjpeg_stderr, mozjpeg_start_err),
 			false
 	}
 
+	stream_err := write_ppm_bytes_to_mozjpeg(mozjpeg_pipe_w, resized_dimensions, raw_data)
+	_ = os.close(mozjpeg_pipe_w)
+
 	mozjpeg_state, mozjpeg_wait_err := os.process_wait(mozjpeg_process)
-	magick_state: os.Process_State
-	magick_wait_err: os.Error
-	if mozjpeg_wait_err != nil || !mozjpeg_state.exited || mozjpeg_state.exit_code != 0 {
-		magick_state, magick_wait_err = wait_process_or_kill(magick_process)
-	} else {
-		magick_state, magick_wait_err = os.process_wait(magick_process)
-	}
 	_ = os.close(output_file)
-	_ = os.close(magick_stderr_file)
 	_ = os.close(mozjpeg_stderr_file)
 
-	magick_stderr := read_optional_process_file(magick_stderr_path)
 	mozjpeg_stderr := read_optional_process_file(mozjpeg_stderr_path)
-	defer delete(magick_stderr)
 	defer delete(mozjpeg_stderr)
-	debug_log_process_finish(
-		"ImageMagick JPEG resize",
-		magick_state,
-		nil,
-		magick_stderr,
-		magick_wait_err,
-	)
 	debug_log_process_finish("MozJPEG", mozjpeg_state, nil, mozjpeg_stderr, mozjpeg_wait_err)
 
-	magick_failed := magick_wait_err != nil || !magick_state.exited || magick_state.exit_code != 0
 	mozjpeg_failed :=
 		mozjpeg_wait_err != nil || !mozjpeg_state.exited || mozjpeg_state.exit_code != 0
-	if magick_failed && !(mozjpeg_failed && magick_state.exited && magick_state.exit_code == 9) {
-		return .Magick_Failed,
-			tool_failure_detail(
-				"ImageMagick JPEG resize",
-				magick_state,
-				magick_stderr,
-				magick_wait_err,
-			),
+	if stream_err != nil && !mozjpeg_failed {
+		return .Mozjpeg_Failed,
+			fmt.aprintf("JPEG PPM stream to MozJPEG failed: %v", stream_err),
 			false
 	}
 	if mozjpeg_failed {
@@ -1472,13 +1405,151 @@ run_jpeg_pipe_once :: proc(
 			false
 	}
 
-	if pipe_r_open {
-		_ = os.close(pipe_r)
-	}
-	if pipe_w_open {
-		_ = os.close(pipe_w)
-	}
 	return .None, "", true
+}
+
+write_ppm_bytes_to_mozjpeg :: proc(
+	mozjpeg_pipe_w: ^os.File,
+	dimensions: Image_Dimensions,
+	raw_data: []byte,
+) -> io.Error {
+	header := fmt.tprintf("P6\n%d %d\n255\n", dimensions.width, dimensions.height)
+	_, header_err := io.write_full(os.to_writer(mozjpeg_pipe_w), transmute([]byte)header)
+	if header_err != nil {
+		return header_err
+	}
+	_, raw_err := io.write_full(os.to_writer(mozjpeg_pipe_w), raw_data)
+	return raw_err
+}
+
+read_libvips_resized_dimensions :: proc(
+	runtime_env: Runtime_Environment,
+	source_path: string,
+	max_dimension: int,
+) -> (
+	Image_Dimensions,
+	bool,
+) {
+	width, width_ok := read_vipsheader_int(runtime_env, source_path, "width")
+	height, height_ok := read_vipsheader_int(runtime_env, source_path, "height")
+	if !width_ok || !height_ok || width <= 0 || height <= 0 {
+		return {}, false
+	}
+	orientation, orientation_ok := read_vipsheader_int(runtime_env, source_path, "orientation")
+	if orientation_ok && orientation >= 5 && orientation <= 8 {
+		width, height = height, width
+	}
+
+	max_source_dimension := max(width, height)
+	if max_source_dimension <= max_dimension {
+		return Image_Dimensions{width = width, height = height}, true
+	}
+	resized_width := resize_dimension_down(width, max_dimension, max_source_dimension)
+	resized_height := resize_dimension_down(height, max_dimension, max_source_dimension)
+	return Image_Dimensions{width = resized_width, height = resized_height}, true
+}
+
+resize_dimension_down :: proc(dimension, max_dimension, max_source_dimension: int) -> int {
+	return max((dimension * max_dimension + max_source_dimension / 2) / max_source_dimension, 1)
+}
+
+read_vipsheader_int :: proc(
+	runtime_env: Runtime_Environment,
+	source_path, field: string,
+) -> (
+	int,
+	bool,
+) {
+	command := build_vipsheader_field_command(runtime_env.vipsheader_path, field, source_path)
+	state, stdout, stderr, err := process_exec_logged(
+		command,
+		libvips_process_environment(runtime_env),
+		fmt.tprintf("libvips header %s", field),
+	)
+	defer delete(stdout)
+	defer delete(stderr)
+	if err != nil || !state.exited || state.exit_code != 0 {
+		return 0, false
+	}
+	value, ok := strconv.parse_int(strings.trim_space(string(stdout)))
+	return value, ok
+}
+
+extract_vips_icc_profile_to_file :: proc(
+	vipsheader_path, source_path, output_path: string,
+	runtime_env: Runtime_Environment,
+) -> (
+	string,
+	bool,
+) {
+	icc_data, has_profile, detail, ok := read_vips_icc_profile(
+		vipsheader_path,
+		source_path,
+		runtime_env,
+		"libvips ICC extract",
+	)
+	defer delete(icc_data)
+	defer delete(detail)
+	if !ok {
+		return strings.clone(detail), false
+	}
+	if !has_profile {
+		return strings.clone("Source image does not contain an ICC profile."), false
+	}
+	if write_err := os.write_entire_file(output_path, icc_data); write_err != nil {
+		return fmt.aprintf("Failed to write ICC profile: %v", write_err), false
+	}
+	return "", true
+}
+
+read_vips_icc_profile :: proc(
+	vipsheader_path, source_path: string,
+	runtime_env: Runtime_Environment,
+	label: string,
+) -> (
+	[]byte,
+	bool,
+	string,
+	bool,
+) {
+	command := build_vipsheader_field_command(vipsheader_path, "icc-profile-data", source_path)
+	state, stdout, stderr, err := process_exec_logged(
+		command,
+		libvips_process_environment(runtime_env),
+		label,
+	)
+	defer delete(stdout)
+	defer delete(stderr)
+
+	if err != nil || !state.exited || state.exit_code != 0 {
+		if vipsheader_reports_missing_icc(stderr) {
+			return nil, false, "", true
+		}
+		return nil, false, tool_failure_detail(label, state, stderr, err), false
+	}
+
+	encoded := strings.trim_space(string(stdout))
+	if len(encoded) == 0 {
+		return nil, false, "", true
+	}
+	decoded, decode_err := base64.decode(encoded, allocator = context.allocator)
+	if decode_err != nil {
+		return nil, false, fmt.aprintf("Failed to decode ICC profile data: %v", decode_err), false
+	}
+	return decoded, true, "", true
+}
+
+vipsheader_reports_missing_icc :: proc(stderr: []byte) -> bool {
+	text, text_err := strings.to_lower(string(stderr), context.temp_allocator)
+	if text_err != nil {
+		return false
+	}
+	return(
+		strings.contains(text, "icc-profile-data") &&
+		(strings.contains(text, "not found") ||
+				strings.contains(text, "not present") ||
+				strings.contains(text, "no property")) \
+	)
 }
 
 read_optional_process_file :: proc(path: string) -> []byte {
@@ -1490,19 +1561,6 @@ read_optional_process_file :: proc(path: string) -> []byte {
 		return nil
 	}
 	return data
-}
-
-wait_process_or_kill :: proc(process: os.Process) -> (os.Process_State, os.Error) {
-	state, err := os.process_wait(process, JPEG_PIPE_PRODUCER_SHUTDOWN_TIMEOUT)
-	if err != .Timeout {
-		return state, err
-	}
-	debug_log_warnf(
-		"child process timed out while pipeline consumer was unavailable; killing pid=%d",
-		process.pid,
-	)
-	_ = os.process_kill(process)
-	return os.process_wait(process)
 }
 
 process_png_to_temp :: proc(
@@ -1599,15 +1657,11 @@ process_png_to_temp :: proc(
 			}
 			debug_log_debugf("png source ICC temp: \"%s\"", source_icc_path)
 
-			command := build_icc_extract_command(
-				runtime_env.magick_path,
+			if detail, ok := extract_vips_icc_profile_to_file(
+				runtime_env.vipsheader_path,
 				item.source_path,
 				source_icc_path,
-			)
-			if detail, ok := run_tool(
-				command,
-				imagemagick_process_environment(runtime_env),
-				"ImageMagick ICC extract",
+				runtime_env,
 			); !ok {
 				return Process_Image_Result{err = .Icc_Extract_Failed, detail = detail}
 			}
@@ -1622,8 +1676,8 @@ process_png_to_temp :: proc(
 		}
 	}
 
-	resize_command := build_png_magick_resize_command(
-		runtime_env.magick_path,
+	resize_command := build_png_libvips_resize_command(
+		runtime_env.vips_path,
 		item.source_path,
 		config.max_dimension,
 		convert_icc_path,
@@ -1631,16 +1685,16 @@ process_png_to_temp :: proc(
 	)
 	if detail, ok := run_tool(
 		resize_command,
-		imagemagick_process_environment(runtime_env),
-		"ImageMagick PNG resize",
+		libvips_process_environment(runtime_env),
+		"libvips PNG resize",
 	); !ok {
-		return Process_Image_Result{err = .Magick_Failed, detail = detail}
+		return Process_Image_Result{err = .Vips_Failed, detail = detail}
 	}
 	if !file_is_non_empty(resized_path) {
 		debug_log_errorf("png resized output missing or empty: \"%s\"", resized_path)
 		return Process_Image_Result {
 			err = .Empty_Output,
-			detail = strings.clone("ImageMagick did not produce a resized PNG."),
+			detail = strings.clone("libvips did not produce a resized PNG."),
 		}
 	}
 
@@ -1678,15 +1732,15 @@ process_png_to_temp :: proc(
 		debug_log_debugf("png profiled quant temp: \"%s\"", profiled_quant_path)
 
 		profile_command := build_png_profile_command(
-			runtime_env.magick_path,
+			runtime_env.vips_path,
 			quant_path,
 			embed_icc_path,
 			profiled_quant_path,
 		)
 		if detail, ok := run_tool(
 			profile_command,
-			imagemagick_process_environment(runtime_env),
-			"ImageMagick PNG ICC embed",
+			libvips_process_environment(runtime_env),
+			"libvips PNG ICC embed",
 		); !ok {
 			return Process_Image_Result{err = .Icc_Embed_Failed, detail = detail}
 		}
@@ -1694,7 +1748,7 @@ process_png_to_temp :: proc(
 			debug_log_errorf("png profiled output missing or empty: \"%s\"", profiled_quant_path)
 			return Process_Image_Result {
 				err = .Empty_Output,
-				detail = strings.clone("ImageMagick did not produce a profiled PNG."),
+				detail = strings.clone("libvips did not produce a profiled PNG."),
 			}
 		}
 		oxipng_input_path = profiled_quant_path
@@ -1720,7 +1774,7 @@ process_png_to_temp :: proc(
 
 	if config.png.preserve_profiles {
 		if detail, ok := verify_png_icc_profile(
-			runtime_env.magick_path,
+			runtime_env.vipsheader_path,
 			output_path,
 			expected_icc_profile,
 			expected_icc_exact,
@@ -1756,23 +1810,26 @@ determine_icc_profile_mode :: proc(
 	source_path: string,
 	runtime_env: Runtime_Environment,
 ) -> Icc_Profile_Result {
-	command := build_icc_identify_command(runtime_env.magick_path, source_path)
-	state, stdout, stderr, err := process_exec_logged(
-		command,
-		imagemagick_process_environment(runtime_env),
-		"ImageMagick ICC identify",
+	icc_data, has_profile, detail, ok := read_vips_icc_profile(
+		runtime_env.vipsheader_path,
+		source_path,
+		runtime_env,
+		"libvips ICC identify",
 	)
-	defer delete(stdout)
-	defer delete(stderr)
-
-	if err != nil || !state.exited || state.exit_code != 0 {
-		return Icc_Profile_Result {
-			err = .Identify_Failed,
-			detail = tool_failure_detail("ImageMagick ICC identify", state, stderr, err),
-		}
+	defer delete(icc_data)
+	defer delete(detail)
+	if !ok {
+		return Icc_Profile_Result{err = .Identify_Failed, detail = strings.clone(detail)}
+	}
+	if !has_profile {
+		debug_log_infof(
+			"ICC profile missing; sRGB conversion required: source=\"%s\"",
+			source_path,
+		)
+		return Icc_Profile_Result{mode = .Convert_To_Srgb}
 	}
 
-	if len(stdout) > 0 && icc_profile_family_is_retained(string(stdout)) {
+	if icc_profile_family_is_retained(string(icc_data)) {
 		debug_log_infof("ICC profile retained: source=\"%s\"", source_path)
 		return Icc_Profile_Result{mode = .Embed_Source}
 	}
@@ -1802,74 +1859,62 @@ make_process_temp_path :: proc(source_path, suffix: string) -> (string, bool) {
 	return "", false
 }
 
-build_icc_identify_command :: proc(magick_path, source_path: string) -> []string {
+build_vipsheader_field_command :: proc(vipsheader_path, field, source_path: string) -> []string {
 	command: [dynamic]string
 	command.allocator = context.temp_allocator
-	append(&command, magick_path)
-	append(&command, "identify")
-	append(&command, "-quiet")
-	append(&command, "-format")
-	append(&command, "%[profile:icc]")
+	append(&command, vipsheader_path)
+	append(&command, "-f")
+	append(&command, field)
 	append(&command, source_path)
 	return command[:]
 }
 
-build_icc_extract_command :: proc(magick_path, source_path, output_path: string) -> []string {
-	command: [dynamic]string
-	command.allocator = context.temp_allocator
-	append(&command, magick_path)
-	append(&command, source_path)
-	append(&command, fmt.tprintf("icc:%s", output_path))
-	return command[:]
-}
-
-build_jpeg_magick_resize_command :: proc(
-	magick_path, source_path: string,
+build_jpeg_libvips_raw_resize_command :: proc(
+	vips_path, source_path: string,
 	max_dimension: int,
-	convert_profile_path, output_path: string,
+	convert_profile_path: string,
 ) -> []string {
 	command: [dynamic]string
 	command.allocator = context.temp_allocator
-	append(&command, magick_path)
+	append(&command, vips_path)
+	append(&command, "thumbnail")
 	append(&command, source_path)
-	append_magick_resize_args(&command, max_dimension)
+	append(&command, ".raw")
+	append(&command, fmt.tprintf("%d", max_dimension))
+	append_libvips_thumbnail_args(&command, max_dimension)
 	if len(convert_profile_path) > 0 {
-		append(&command, "-profile")
+		append(&command, "--output-profile")
 		append(&command, convert_profile_path)
-	}
-	if output_path == "-" {
-		append(&command, "ppm:-")
-	} else {
-		append(&command, fmt.tprintf("ppm:%s", output_path))
 	}
 	return command[:]
 }
 
-build_png_magick_resize_command :: proc(
-	magick_path, source_path: string,
+build_png_libvips_resize_command :: proc(
+	vips_path, source_path: string,
 	max_dimension: int,
 	convert_profile_path: string,
 	output_path: string,
 ) -> []string {
 	command: [dynamic]string
 	command.allocator = context.temp_allocator
-	append(&command, magick_path)
+	append(&command, vips_path)
+	append(&command, "thumbnail")
 	append(&command, source_path)
-	append_magick_resize_args(&command, max_dimension)
+	append(&command, output_path)
+	append(&command, fmt.tprintf("%d", max_dimension))
+	append_libvips_thumbnail_args(&command, max_dimension)
 	if len(convert_profile_path) > 0 {
-		append(&command, "-profile")
+		append(&command, "--output-profile")
 		append(&command, convert_profile_path)
 	}
-	append(&command, output_path)
 	return command[:]
 }
 
-append_magick_resize_args :: proc(command: ^[dynamic]string, max_dimension: int) {
-	append(command, "-auto-orient")
-	append(command, "-filter")
-	append(command, "Lanczos")
-	append(command, "-resize")
-	append(command, fmt.tprintf("%dx%d>", max_dimension, max_dimension))
+append_libvips_thumbnail_args :: proc(command: ^[dynamic]string, max_dimension: int) {
+	append(command, "--height")
+	append(command, fmt.tprintf("%d", max_dimension))
+	append(command, "--size")
+	append(command, "down")
 }
 
 build_mozjpeg_command :: proc(
@@ -1933,77 +1978,57 @@ build_pngquant_command :: proc(
 }
 
 build_png_profile_command :: proc(
-	magick_path, input_path, icc_path, output_path: string,
+	vips_path, input_path, icc_path, output_path: string,
 ) -> []string {
 	command: [dynamic]string
 	command.allocator = context.temp_allocator
-	append(&command, magick_path)
+	append(&command, vips_path)
+	append(&command, "pngsave")
 	append(&command, input_path)
-	append(&command, "-profile")
-	append(&command, icc_path)
 	append(&command, output_path)
+	append(&command, "--profile")
+	append(&command, icc_path)
 	return command[:]
 }
 
 verify_png_icc_profile :: proc(
-	magick_path, output_path, expected_profile: string,
+	vipsheader_path, output_path, expected_profile: string,
 	exact_match: bool,
 	runtime_env: Runtime_Environment,
 ) -> (
 	string,
 	bool,
 ) {
-	command := build_icc_identify_command(magick_path, output_path)
-	state, stdout, stderr, err := process_exec_logged(
-		command,
-		imagemagick_process_environment(runtime_env),
-		"ImageMagick PNG ICC verify",
+	icc_data, has_profile, detail, ok := read_vips_icc_profile(
+		vipsheader_path,
+		output_path,
+		runtime_env,
+		"libvips PNG ICC verify",
 	)
-	defer delete(stdout)
-	defer delete(stderr)
-
-	if err != nil || !state.exited || state.exit_code != 0 {
-		return tool_failure_detail("ImageMagick PNG ICC verify", state, stderr, err), false
+	defer delete(icc_data)
+	defer delete(detail)
+	if !ok {
+		return strings.clone(detail), false
 	}
-	if len(stdout) == 0 {
+	if !has_profile {
 		return strings.clone("Optimized PNG is missing the expected ICC profile."), false
 	}
 
-	profile_text := string(stdout)
 	if exact_match {
 		if len(expected_profile) == 0 {
 			return strings.clone("Optimized PNG did not preserve the source ICC profile."), false
 		}
-
-		actual_profile_path, actual_profile_ok := make_process_temp_path(output_path, "verify.icc")
-		if !actual_profile_ok {
-			return strings.clone("Failed to create temporary ICC verification path."), false
+		expected_data, expected_err := os.read_entire_file(expected_profile, context.allocator)
+		if expected_err != nil {
+			return strings.clone("Failed to read source ICC profile for verification."), false
 		}
-		defer cleanup_temp_path_slot(&actual_profile_path)
-
-		extract_command := build_icc_extract_command(magick_path, output_path, actual_profile_path)
-		extract_state, extract_stdout, extract_stderr, extract_err := process_exec_logged(
-			extract_command,
-			imagemagick_process_environment(runtime_env),
-			"ImageMagick PNG ICC extract",
-		)
-		defer delete(extract_stdout)
-		defer delete(extract_stderr)
-		if extract_err != nil || !extract_state.exited || extract_state.exit_code != 0 {
-			return tool_failure_detail(
-					"ImageMagick PNG ICC extract",
-					extract_state,
-					extract_stderr,
-					extract_err,
-				),
-				false
-		}
-		if !files_have_same_contents(expected_profile, actual_profile_path) {
+		defer delete(expected_data)
+		if !bytes_have_same_contents(expected_data, icc_data) {
 			return strings.clone("Optimized PNG did not preserve the source ICC profile."), false
 		}
 		return "", true
 	}
-	if !icc_profile_family_is_retained(profile_text) {
+	if !icc_profile_family_is_retained(string(icc_data)) {
 		return strings.clone("Optimized PNG does not contain an sRGB/P3 ICC profile."), false
 	}
 	return "", true
@@ -2044,7 +2069,7 @@ build_oxipng_command :: proc(
 	return command[:]
 }
 
-imagemagick_process_environment :: proc(runtime_env: Runtime_Environment) -> []string {
+libvips_process_environment :: proc(runtime_env: Runtime_Environment) -> []string {
 	inherited, inherited_err := os.environ(context.temp_allocator)
 	if inherited_err != nil {
 		return nil
@@ -2053,33 +2078,24 @@ imagemagick_process_environment :: proc(runtime_env: Runtime_Environment) -> []s
 	environment: [dynamic]string
 	environment.allocator = context.temp_allocator
 	for entry in inherited {
-		if imagemagick_environment_entry_is_managed(entry) {
+		if libvips_environment_entry_is_managed(entry) {
 			continue
 		}
 		append(&environment, entry)
 	}
-	append(
-		&environment,
-		fmt.tprintf("MAGICK_THREAD_LIMIT=%s", imagemagick_thread_limit(runtime_env)),
-	)
-	if runtime_env.magick_use_gpu {
-		append(&environment, "MAGICK_OCL_DEVICE=GPU")
-	}
+	append(&environment, fmt.tprintf("VIPS_CONCURRENCY=%s", libvips_concurrency(runtime_env)))
 	return environment[:]
 }
 
-imagemagick_thread_limit :: proc(runtime_env: Runtime_Environment) -> string {
+libvips_concurrency :: proc(runtime_env: Runtime_Environment) -> string {
 	if runtime_env.worker_count > 1 {
-		return IMAGE_PROCESS_MAGICK_THREAD_LIMIT_MULTI_WORKER
+		return IMAGE_PROCESS_VIPS_CONCURRENCY_MULTI_WORKER
 	}
-	return IMAGE_PROCESS_MAGICK_THREAD_LIMIT_SINGLE_WORKER
+	return IMAGE_PROCESS_VIPS_CONCURRENCY_SINGLE_WORKER
 }
 
-imagemagick_environment_entry_is_managed :: proc(entry: string) -> bool {
-	return(
-		environment_entry_name_equals(entry, "MAGICK_THREAD_LIMIT") ||
-		environment_entry_name_equals(entry, "MAGICK_OCL_DEVICE") \
-	)
+libvips_environment_entry_is_managed :: proc(entry: string) -> bool {
+	return environment_entry_name_equals(entry, "VIPS_CONCURRENCY")
 }
 
 environment_entry_name_equals :: proc(entry, name: string) -> bool {
@@ -2167,19 +2183,7 @@ file_size_by_path :: proc(path: string) -> (i64, bool) {
 	return size, true
 }
 
-files_have_same_contents :: proc(a_path, b_path: string) -> bool {
-	a, a_err := os.read_entire_file(a_path, context.allocator)
-	if a_err != nil {
-		return false
-	}
-	defer delete(a)
-
-	b, b_err := os.read_entire_file(b_path, context.allocator)
-	if b_err != nil {
-		return false
-	}
-	defer delete(b)
-
+bytes_have_same_contents :: proc(a, b: []byte) -> bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -2213,7 +2217,7 @@ image_process_error_summary :: proc(err: Image_Process_Error) -> string {
 		return "Could not write the color profile into the optimized PNG."
 	case .Icc_Verify_Failed:
 		return "Could not verify the optimized PNG color profile."
-	case .Magick_Failed:
+	case .Vips_Failed:
 		return "Could not resize or rotate this image."
 	case .Mozjpeg_Failed:
 		return "Could not compress this JPEG."

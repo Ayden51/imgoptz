@@ -72,17 +72,24 @@ test_jpeg_pipe_commands_use_stdout_and_stdin :: proc(t: ^testing.T) {
 	config := default_config()
 	defer destroy_config(&config)
 
-	resize_command := build_jpeg_magick_resize_command(
-		"magick.exe",
+	resize_command := build_jpeg_libvips_raw_resize_command(
+		"vips.exe",
 		"source.jpg",
 		1920,
 		"srgb.icc",
-		"-",
 	)
 	mozjpeg_command := build_mozjpeg_command("mozjpeg.exe", config.jpeg, "", "", "profile.icc")
 
-	testing.expect(t, command_has_sequence(resize_command, []string{"-profile", "srgb.icc"}))
-	testing.expect_value(t, resize_command[len(resize_command) - 1], "ppm:-")
+	testing.expect(
+		t,
+		command_has_sequence(resize_command, []string{"thumbnail", "source.jpg", ".raw", "1920"}),
+	)
+	testing.expect(t, command_has_sequence(resize_command, []string{"--height", "1920"}))
+	testing.expect(t, command_has_sequence(resize_command, []string{"--size", "down"}))
+	testing.expect(
+		t,
+		command_has_sequence(resize_command, []string{"--output-profile", "srgb.icc"}),
+	)
 	testing.expect(t, command_has_sequence(mozjpeg_command, []string{"-icc", "profile.icc"}))
 	testing.expect(t, !command_contains(mozjpeg_command, "-outfile"))
 	testing.expect(t, !command_contains(mozjpeg_command, "in.ppm"))
@@ -128,16 +135,27 @@ test_oxipng_command_limits_threads_when_app_workers_are_parallel :: proc(t: ^tes
 
 @(test, require)
 test_png_resize_command_converts_to_profile_when_requested :: proc(t: ^testing.T) {
-	command := build_png_magick_resize_command(
-		"magick.exe",
+	command := build_png_libvips_resize_command(
+		"vips.exe",
 		"source.png",
 		1920,
 		"srgb.icc",
 		"resized.png",
 	)
 
-	testing.expect(t, command_has_sequence(command, []string{"-profile", "srgb.icc"}))
-	testing.expect_value(t, command[len(command) - 1], "resized.png")
+	testing.expect(
+		t,
+		command_has_sequence(command, []string{"thumbnail", "source.png", "resized.png", "1920"}),
+	)
+	testing.expect(t, command_has_sequence(command, []string{"--output-profile", "srgb.icc"}))
+}
+
+@(test, require)
+test_resize_dimension_down_matches_libvips_thumbnail_rounding :: proc(t: ^testing.T) {
+	testing.expect_value(t, resize_dimension_down(2831, 1920, 3539), 1536)
+	testing.expect_value(t, resize_dimension_down(2252, 1920, 4000), 1081)
+	testing.expect_value(t, resize_dimension_down(4648, 1920, 6198), 1440)
+	testing.expect_value(t, resize_dimension_down(6000, 1920, 6000), 1920)
 }
 
 @(test, require)
@@ -178,11 +196,13 @@ test_corrupt_png_failure_cleans_intermediate_temps :: proc(t: ^testing.T) {
 	config := default_config()
 	defer destroy_config(&config)
 	runtime_env := Runtime_Environment {
-		magick_path   = processing_join(t, "dist/tools/imagemagick", "magick.exe"),
-		pngquant_path = processing_join(t, "dist/tools/pngquant", "pngquant.exe"),
-		oxipng_path   = processing_join(t, "dist/tools/oxipng", "oxipng.exe"),
+		vips_path       = processing_join(t, "dist/tools/libvips", "vips.exe"),
+		vipsheader_path = processing_join(t, "dist/tools/libvips", "vipsheader.exe"),
+		pngquant_path   = processing_join(t, "dist/tools/pngquant", "pngquant.exe"),
+		oxipng_path     = processing_join(t, "dist/tools/oxipng", "oxipng.exe"),
 	}
-	if len(runtime_env.magick_path) == 0 ||
+	if len(runtime_env.vips_path) == 0 ||
+	   len(runtime_env.vipsheader_path) == 0 ||
 	   len(runtime_env.pngquant_path) == 0 ||
 	   len(runtime_env.oxipng_path) == 0 {
 		return
@@ -214,24 +234,33 @@ test_process_png_preserves_source_srgb_icc_profile :: proc(t: ^testing.T) {
 	defer cleanup_test_directory(temp_dir)
 
 	source_path := processing_join(t, temp_dir, "srgb.png")
-	if len(source_path) == 0 {
+	unprofiled_path := processing_join(t, temp_dir, "unprofiled.png")
+	if len(source_path) == 0 || len(unprofiled_path) == 0 {
 		return
 	}
 	create_detail, create_ok := run_tool(
-		[]string {
-			runtime_env.magick_path,
-			"-size",
-			"64x64",
-			"gradient:red-blue",
-			"-profile",
-			runtime_env.srgb_profile,
-			source_path,
-		},
-		imagemagick_process_environment(runtime_env),
-		"ImageMagick test PNG create",
+		[]string{runtime_env.vips_path, "black", unprofiled_path, "64", "64", "--bands", "3"},
+		libvips_process_environment(runtime_env),
+		"libvips test PNG create",
 	)
 	defer delete(create_detail)
 	if !testing.expect_value(t, create_ok, true) {
+		return
+	}
+	profile_detail, profile_ok := run_tool(
+		[]string {
+			runtime_env.vips_path,
+			"pngsave",
+			unprofiled_path,
+			source_path,
+			"--profile",
+			runtime_env.srgb_profile,
+		},
+		libvips_process_environment(runtime_env),
+		"libvips test PNG profile",
+	)
+	defer delete(profile_detail)
+	if !testing.expect_value(t, profile_ok, true) {
 		return
 	}
 
@@ -283,9 +312,9 @@ test_process_png_converts_missing_icc_profile_to_srgb :: proc(t: ^testing.T) {
 		return
 	}
 	create_detail, create_ok := run_tool(
-		[]string{runtime_env.magick_path, "-size", "64x64", "gradient:red-blue", source_path},
-		imagemagick_process_environment(runtime_env),
-		"ImageMagick test PNG create",
+		[]string{runtime_env.vips_path, "black", source_path, "64", "64", "--bands", "3"},
+		libvips_process_environment(runtime_env),
+		"libvips test PNG create",
 	)
 	defer delete(create_detail)
 	if !testing.expect_value(t, create_ok, true) {
@@ -319,7 +348,7 @@ test_process_png_converts_missing_icc_profile_to_srgb :: proc(t: ^testing.T) {
 		return
 	}
 	verify_detail, verify_ok := verify_png_icc_profile(
-		runtime_env.magick_path,
+		runtime_env.vipsheader_path,
 		result.output_path,
 		"",
 		false,
@@ -351,17 +380,9 @@ test_process_jpeg_unicode_source_uses_workspace_and_cleans_artifacts :: proc(t: 
 		return
 	}
 	create_detail, create_ok := run_tool(
-		[]string {
-			runtime_env.magick_path,
-			"-size",
-			"128x128",
-			"gradient:red-blue",
-			"-profile",
-			runtime_env.srgb_profile,
-			source_path,
-		},
-		imagemagick_process_environment(runtime_env),
-		"ImageMagick test JPEG create",
+		[]string{runtime_env.vips_path, "black", source_path, "128", "128", "--bands", "3"},
+		libvips_process_environment(runtime_env),
+		"libvips test JPEG create",
 	)
 	defer delete(create_detail)
 	if !testing.expect_value(t, create_ok, true) {
@@ -425,17 +446,9 @@ test_process_png_unicode_source_uses_workspace_and_cleans_artifacts :: proc(t: ^
 		return
 	}
 	create_detail, create_ok := run_tool(
-		[]string {
-			runtime_env.magick_path,
-			"-size",
-			"128x128",
-			"gradient:red-blue",
-			"-profile",
-			runtime_env.srgb_profile,
-			source_path,
-		},
-		imagemagick_process_environment(runtime_env),
-		"ImageMagick test PNG create",
+		[]string{runtime_env.vips_path, "black", source_path, "128", "128", "--bands", "3"},
+		libvips_process_environment(runtime_env),
+		"libvips test PNG create",
 	)
 	defer delete(create_detail)
 	if !testing.expect_value(t, create_ok, true) {
@@ -481,7 +494,7 @@ test_process_png_unicode_source_uses_workspace_and_cleans_artifacts :: proc(t: ^
 test_jpeg_pipe_retries_without_icc_when_mozjpeg_rejects_profile_path :: proc(t: ^testing.T) {
 	testing.expect(t, jpeg_pipe_should_retry_without_icc(.Mozjpeg_Failed, false, "profile.icc"))
 	testing.expect(t, !jpeg_pipe_should_retry_without_icc(.None, true, "profile.icc"))
-	testing.expect(t, !jpeg_pipe_should_retry_without_icc(.Magick_Failed, false, "profile.icc"))
+	testing.expect(t, !jpeg_pipe_should_retry_without_icc(.Vips_Failed, false, "profile.icc"))
 	testing.expect(t, !jpeg_pipe_should_retry_without_icc(.Mozjpeg_Failed, false, ""))
 }
 
@@ -961,25 +974,25 @@ test_finalize_dir_prechecked_root_missing_fails_without_recreating_root :: proc(
 }
 
 @(test, require)
-test_imagemagick_environment_filters_managed_entries :: proc(t: ^testing.T) {
-	testing.expect(t, imagemagick_environment_entry_is_managed("MAGICK_THREAD_LIMIT=8"))
-	testing.expect(t, imagemagick_environment_entry_is_managed("magick_ocl_device=CPU"))
-	testing.expect(t, !imagemagick_environment_entry_is_managed("PATH=C:/Tools"))
-	testing.expect(t, !imagemagick_environment_entry_is_managed("MAGICK_OCL_DEVICE_EXTRA=GPU"))
-	testing.expect(t, !imagemagick_environment_entry_is_managed("MAGICK_OCL_DEVICE"))
+test_libvips_environment_filters_managed_entries :: proc(t: ^testing.T) {
+	testing.expect(t, libvips_environment_entry_is_managed("VIPS_CONCURRENCY=8"))
+	testing.expect(t, libvips_environment_entry_is_managed("vips_concurrency=2"))
+	testing.expect(t, !libvips_environment_entry_is_managed("PATH=C:/Tools"))
+	testing.expect(t, !libvips_environment_entry_is_managed("VIPS_CONCURRENCY_EXTRA=1"))
+	testing.expect(t, !libvips_environment_entry_is_managed("VIPS_CONCURRENCY"))
 }
 
 @(test, require)
-test_imagemagick_thread_limit_tracks_app_worker_count :: proc(t: ^testing.T) {
+test_libvips_concurrency_tracks_app_worker_count :: proc(t: ^testing.T) {
 	testing.expect_value(
 		t,
-		imagemagick_thread_limit(Runtime_Environment{worker_count = 1}),
-		IMAGE_PROCESS_MAGICK_THREAD_LIMIT_SINGLE_WORKER,
+		libvips_concurrency(Runtime_Environment{worker_count = 1}),
+		IMAGE_PROCESS_VIPS_CONCURRENCY_SINGLE_WORKER,
 	)
 	testing.expect_value(
 		t,
-		imagemagick_thread_limit(Runtime_Environment{worker_count = 4}),
-		IMAGE_PROCESS_MAGICK_THREAD_LIMIT_MULTI_WORKER,
+		libvips_concurrency(Runtime_Environment{worker_count = 4}),
+		IMAGE_PROCESS_VIPS_CONCURRENCY_MULTI_WORKER,
 	)
 }
 
@@ -994,7 +1007,8 @@ processing_join :: proc(t: ^testing.T, first, second: string) -> string {
 
 processing_test_runtime_environment :: proc(t: ^testing.T) -> Runtime_Environment {
 	return Runtime_Environment {
-		magick_path = processing_join(t, "dist/tools/imagemagick", "magick.exe"),
+		vips_path = processing_join(t, "dist/tools/libvips", "vips.exe"),
+		vipsheader_path = processing_join(t, "dist/tools/libvips", "vipsheader.exe"),
 		mozjpeg_path = processing_join(t, "dist/tools/mozjpeg", "mozjpeg.exe"),
 		pngquant_path = processing_join(t, "dist/tools/pngquant", "pngquant.exe"),
 		oxipng_path = processing_join(t, "dist/tools/oxipng", "oxipng.exe"),
@@ -1004,12 +1018,14 @@ processing_test_runtime_environment :: proc(t: ^testing.T) -> Runtime_Environmen
 
 processing_runtime_tools_exist :: proc(runtime_env: Runtime_Environment) -> bool {
 	return(
-		len(runtime_env.magick_path) > 0 &&
+		len(runtime_env.vips_path) > 0 &&
+		len(runtime_env.vipsheader_path) > 0 &&
 		len(runtime_env.mozjpeg_path) > 0 &&
 		len(runtime_env.pngquant_path) > 0 &&
 		len(runtime_env.oxipng_path) > 0 &&
 		len(runtime_env.srgb_profile) > 0 &&
-		os.exists(runtime_env.magick_path) &&
+		os.exists(runtime_env.vips_path) &&
+		os.exists(runtime_env.vipsheader_path) &&
 		os.exists(runtime_env.mozjpeg_path) &&
 		os.exists(runtime_env.pngquant_path) &&
 		os.exists(runtime_env.oxipng_path) &&

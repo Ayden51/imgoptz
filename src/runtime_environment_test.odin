@@ -252,13 +252,6 @@ test_resolve_runtime_output_root_for_input_uses_target_directory :: proc(t: ^tes
 }
 
 @(test, require)
-test_version_output_has_opencl_case_insensitive :: proc(t: ^testing.T) {
-	testing.expect(t, version_output_has_opencl("Features: Cipher DPC HDRI OpenCL OpenMP"))
-	testing.expect(t, version_output_has_opencl("features: opencl"))
-	testing.expect(t, !version_output_has_opencl("Features: Cipher DPC HDRI OpenMP"))
-}
-
-@(test, require)
 test_load_runtime_environment_skips_gpu_probe_when_disabled :: proc(t: ^testing.T) {
 	temp_dir := make_temp_runtime_root(t)
 	if len(temp_dir) == 0 {
@@ -279,35 +272,10 @@ test_load_runtime_environment_skips_gpu_probe_when_disabled :: proc(t: ^testing.
 
 	testing.expect_value(t, env.ok, true)
 	testing.expect_value(t, env.gpu_status, Runtime_GPU_Status.Disabled_By_Config)
-	testing.expect_value(t, env.magick_use_gpu, false)
 }
 
 @(test, require)
-test_load_runtime_environment_enables_gpu_after_successful_probe :: proc(t: ^testing.T) {
-	temp_dir := make_temp_runtime_root(t)
-	if len(temp_dir) == 0 {
-		return
-	}
-	defer cleanup_test_directory(temp_dir)
-
-	if !write_required_runtime_tree(t, temp_dir) {
-		return
-	}
-
-	config := default_config()
-	defer destroy_config(&config)
-
-	env := load_runtime_environment_with_probe(temp_dir, config, test_gpu_probe_success)
-	defer destroy_runtime_environment(&env)
-
-	testing.expect_value(t, env.ok, true)
-	testing.expect_value(t, env.gpu_status, Runtime_GPU_Status.Enabled)
-	testing.expect_value(t, env.magick_use_gpu, true)
-	testing.expect_value(t, len(env.warnings), 0)
-}
-
-@(test, require)
-test_load_runtime_environment_warns_when_gpu_probe_fails :: proc(t: ^testing.T) {
+test_load_runtime_environment_treats_gpu_as_no_op_compatibility_setting :: proc(t: ^testing.T) {
 	temp_dir := make_temp_runtime_root(t)
 	if len(temp_dir) == 0 {
 		return
@@ -325,10 +293,8 @@ test_load_runtime_environment_warns_when_gpu_probe_fails :: proc(t: ^testing.T) 
 	defer destroy_runtime_environment(&env)
 
 	testing.expect_value(t, env.ok, true)
-	testing.expect_value(t, env.gpu_status, Runtime_GPU_Status.Probe_Failed)
-	testing.expect_value(t, env.magick_use_gpu, false)
-	testing.expect_value(t, len(env.warnings), 1)
-	testing.expect(t, strings.contains(env.warnings[0], "GPU acceleration is unavailable"))
+	testing.expect_value(t, env.gpu_status, Runtime_GPU_Status.No_Op_Compatibility)
+	testing.expect_value(t, len(env.warnings), 0)
 }
 
 @(test, require)
@@ -386,8 +352,4 @@ write_required_runtime_tree :: proc(t: ^testing.T, app_root: string) -> bool {
 		}
 	}
 	return true
-}
-
-test_gpu_probe_success :: proc(magick_path: string) -> bool {
-	return len(magick_path) > 0
 }
