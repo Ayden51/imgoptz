@@ -38,8 +38,8 @@
 - This is Windows-only; keep the `when ODIN_OS != .Windows` guard and console-subsystem, double-click flow.
 - Preserve the prompt loop UI: users paste one directory path, processing finishes, then the app prompts again; `exit` closes it.
 - At startup, change cwd to the executable directory. All relative paths, config, logs, tools, and default output resolve against that app root.
-- Required runtime tool paths are `tools\mozjpeg\mozjpeg.exe`, `tools\oxipng\oxipng.exe`, and `tools\imagemagick\magick.exe` under the app root.
-- Keep third-party notices and runtime config beside tools: MozJPEG `LICENSE.md`, `README.ijg`, `README-mozilla.txt`; Oxipng `LICENSE`; ImageMagick `LICENSE.txt`, `NOTICE.txt`, `colors.xml`, `policy.xml`.
+- Required runtime tool paths are `tools\mozjpeg\mozjpeg.exe`, `tools\oxipng\oxipng.exe`, `tools\pngquant\pngquant.exe`, `tools\libvips\vips.exe`, and `tools\libvips\vipsheader.exe` under the app root.
+- Keep third-party notices and runtime config beside tools: MozJPEG `LICENSE.md`, `README.ijg`, `README-mozilla.txt`; Oxipng `LICENSE`; pngquant `COPYRIGHT`, `SOURCE.txt`; libvips `LICENSE`, `README.md`, `versions.json`.
 - Accept only JPEG/PNG extensions case-insensitively: `.jpg`, `.jpeg`, `.png`; default discovery is non-recursive.
 
 ## Implementation Pitfalls
@@ -47,12 +47,12 @@
 - Do not replace the stdin console workflow with a GUI, command-line batch mode, watcher, or multi-directory interface.
 - Strip surrounding quotes from pasted paths and handle whitespace, Unicode, `&`, parentheses, and other Windows shell-special characters.
 - Start child tools with argument arrays where possible; avoid shell-concatenated commands. If `cmd.exe` is unavoidable, quote Windows paths deliberately.
-- JPEG pipeline: ImageMagick should resize/orient to `ppm:-` and pipe stdout into MozJPEG stdin; MozJPEG writes a temp `.jpg` first.
-- PNG pipeline: ImageMagick writes a temp resized PNG, then Oxipng writes a temp optimized PNG.
+- JPEG pipeline: libvips should resize/orient to raw RGB stdout; the app writes the PPM header and streams that into MozJPEG stdin; MozJPEG writes a temp `.jpg` first.
+- PNG pipeline: libvips writes a temp resized/profiled PNG, pngquant quantizes it, then Oxipng writes a temp optimized PNG.
 - Never overwrite originals directly. Compare temp output size first; replace/copy only when smaller, then slugify successful final names.
 - `output_mode` accepts only `in-place` and `dir`; do not normalize `inplace` or other spellings.
-- `gpu` accepts only JSON booleans. If true, probe ImageMagick OpenCL first, then set `MAGICK_OCL_DEVICE=GPU` only for child processes after a successful probe.
-- Avoid oversubscription when worker pool is added: limit ImageMagick threads and pass `oxipng --threads 1` when app-level workers are greater than 1.
+- `gpu` accepts only JSON booleans. It is currently a no-op compatibility setting in the libvips pipeline.
+- Avoid oversubscription when worker pool is added: set `VIPS_CONCURRENCY` and pass `oxipng --threads 1` when app-level workers are greater than 1.
 
 ## Odin Conventions For This Repo
 
