@@ -54,30 +54,20 @@ Output_Root_Result :: struct {
 
 RUNTIME_DEFAULT_OUTPUT_DIR :: "~/imgoptz-output"
 RUNTIME_TARGET_RELATIVE_OUTPUT_PREFIX :: "~/"
-RUNTIME_MOZJPEG_PATH :: "tools/mozjpeg/mozjpeg.exe"
-RUNTIME_OXIPNG_PATH :: "tools/oxipng/oxipng.exe"
+RUNTIME_MOZJPEG_PATH :: "tools/mozjpeg/static/Release/cjpeg-static.exe"
+RUNTIME_OXIPNG_PATH :: "tools/oxipng-10.1.1-x86_64-pc-windows-msvc/oxipng.exe"
 RUNTIME_PNGQUANT_PATH :: "tools/pngquant/pngquant.exe"
-RUNTIME_VIPS_PATH :: "tools/libvips/vips.exe"
-RUNTIME_VIPSHEADER_PATH :: "tools/libvips/vipsheader.exe"
+RUNTIME_VIPS_PATH :: "tools/vips-dev-8.18/bin/vips.exe"
+RUNTIME_VIPSHEADER_PATH :: "tools/vips-dev-8.18/bin/vipsheader.exe"
 RUNTIME_SRGB_PROFILE_PATH :: "profiles/sRGB2014.icc"
 
 RUNTIME_REQUIRED_FILES :: [?]Runtime_Required_File {
 	{relative_path = RUNTIME_MOZJPEG_PATH, label = "MozJPEG executable"},
-	{relative_path = "tools/mozjpeg/LICENSE.md", label = "MozJPEG license"},
-	{relative_path = "tools/mozjpeg/README.ijg", label = "MozJPEG IJG notice"},
-	{relative_path = "tools/mozjpeg/README-mozilla.txt", label = "MozJPEG Mozilla notice"},
 	{relative_path = RUNTIME_OXIPNG_PATH, label = "Oxipng executable"},
-	{relative_path = "tools/oxipng/LICENSE", label = "Oxipng license"},
 	{relative_path = RUNTIME_PNGQUANT_PATH, label = "pngquant executable"},
-	{relative_path = "tools/pngquant/COPYRIGHT", label = "pngquant copyright notice"},
 	{relative_path = RUNTIME_VIPS_PATH, label = "libvips executable"},
 	{relative_path = RUNTIME_VIPSHEADER_PATH, label = "libvips header executable"},
-	{relative_path = "tools/libvips/libvips-42.dll", label = "libvips runtime DLL"},
-	{relative_path = "tools/libvips/LICENSE", label = "libvips license"},
-	{relative_path = "tools/libvips/README.md", label = "libvips README"},
-	{relative_path = "tools/libvips/versions.json", label = "libvips dependency versions"},
 	{relative_path = RUNTIME_SRGB_PROFILE_PATH, label = "sRGB ICC profile"},
-	{relative_path = "profiles/sRGB2014.LICENSE.txt", label = "sRGB ICC profile license"},
 }
 
 load_runtime_environment :: proc(app_root: string, config: App_Config) -> Runtime_Environment {
