@@ -63,7 +63,11 @@ test_parse_approval_input_rejects_unlisted_values :: proc(t: ^testing.T) {
 
 @(test, require)
 test_parse_runtime_recovery_input :: proc(t: ^testing.T) {
-	testing.expect_value(t, parse_runtime_recovery_input(""), Runtime_Recovery_Input_Kind.Other_Input)
+	testing.expect_value(
+		t,
+		parse_runtime_recovery_input(""),
+		Runtime_Recovery_Input_Kind.Other_Input,
+	)
 	testing.expect_value(
 		t,
 		parse_runtime_recovery_input("  exit  "),
