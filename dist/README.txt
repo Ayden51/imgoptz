@@ -14,28 +14,70 @@ First run
 
    Do not run imgoptz.exe from inside the zip preview window.
 
-2. Keep the extracted files together.
+2. Download the helper script from the imgoptz source repository.
 
-   imgoptz.exe needs imgoptz.json, profiles, schema, tools, README.txt, and
-   LICENSE.txt beside it.
+   Open this file in your browser, then use Download raw:
 
-3. Double-click imgoptz.exe.
+     https://github.com/Ayden51/imgoptz/blob/main/scripts/setup-imgoptz-deps.ps1
 
-4. Paste one folder path when the console asks for it.
+   The helper script is not included in this zip and is not distributed as a
+   release asset.
+
+3. Place setup-imgoptz-deps.ps1 directly inside the extracted imgoptz folder,
+   beside imgoptz.exe.
+
+4. Run setup-imgoptz-deps.ps1 with PowerShell.
+
+   The script downloads official prebuilt dependency packages, verifies their
+   checksums, extracts them as-is, and downloads the sRGB ICC profile. It does
+   not build tools and does not license those dependencies for you.
+
+5. Keep the extracted files together.
+
+   imgoptz.exe needs imgoptz.json, schema, README.txt, LICENSE.txt, and the
+   dependency files installed beside it.
+
+6. Double-click imgoptz.exe.
+
+7. Paste one folder path when the console asks for it.
 
    Example:
 
      C:\Users\YourName\Pictures\Trip
 
-5. Press Enter and wait for the preview.
+8. Press Enter and wait for the preview.
 
-6. Save or discard the optimized files.
+9. Save or discard the optimized files.
 
    Type y or yes to save.
 
    Press Enter, type N, or type no to discard.
 
-7. Paste another folder path, or type exit to close the app.
+10. Paste another folder path, or type exit to close the app.
+
+
+Runtime dependencies
+--------------------
+
+The helper downloads these exact dependency versions:
+
+  libvips   8.18.5
+  MozJPEG   4.0.3
+  pngquant  2.17.0
+  Oxipng    10.1.1
+  sRGB ICC  2014
+
+imgoptz requires these files after dependency setup:
+
+  tools\vips-dev-8.18\bin\vips.exe
+  tools\vips-dev-8.18\bin\vipsheader.exe
+  tools\mozjpeg\static\Release\cjpeg-static.exe
+  tools\pngquant\pngquant.exe
+  tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe
+  profiles\sRGB2014.icc
+
+These dependency files are not licensed by imgoptz. You are responsible for
+acquiring them and confirming you have the right to use them.
 
 
 Closing the app
@@ -187,11 +229,11 @@ Images fail to process:
   imgoptz.json if you need a detailed log file.
 
 
-Files to keep
--------------
+Files in the app zip
+--------------------
 
 Every file bundled in the release zip is mandatory. Do not delete or move any of
-these files from the app folder:
+these app files from the app folder:
 
   imgoptz\
   ├─ imgoptz.exe
@@ -200,53 +242,11 @@ these files from the app folder:
   ├─ imgoptz.json
   ├─ schema\
   │  └─ imgoptz.schema.json
-  ├─ profiles\
-  │  ├─ sRGB2014.icc
-  │  └─ sRGB2014.LICENSE.txt
-  └─ tools\
-     ├─ imagemagick\
-     │  ├─ magick.exe
-     │  ├─ LICENSE.txt
-     │  ├─ NOTICE.txt
-     │  └─ policy.xml
-     ├─ mozjpeg\
-     │  ├─ mozjpeg.exe
-     │  ├─ LICENSE.md
-     │  ├─ README.ijg
-     │  └─ README-mozilla.txt
-     ├─ oxipng\
-     │  ├─ oxipng.exe
-     │  └─ LICENSE
-     └─ pngquant\
-        ├─ pngquant.exe
-        ├─ COPYRIGHT
-        └─ SOURCE.txt
 
 
-License and notices
--------------------
+License
+-------
 
-imgoptz uses third-party tools to optimize images. Their license and notice
-files are included in the tools and profiles folders.
-
-This software is based in part on the work of the Independent JPEG Group.
-
-See LICENSE.txt for the imgoptz license. See these files for third-party license
-details:
-
-  imgoptz\
-  ├─ profiles\
-  │  └─ sRGB2014.LICENSE.txt
-  └─ tools\
-     ├─ imagemagick\
-     │  ├─ LICENSE.txt
-     │  └─ NOTICE.txt
-     ├─ mozjpeg\
-     │  ├─ LICENSE.md
-     │  ├─ README.ijg
-     │  └─ README-mozilla.txt
-     ├─ oxipng\
-     │  └─ LICENSE
-     └─ pngquant\
-        ├─ COPYRIGHT
-        └─ SOURCE.txt
+See LICENSE.txt for the imgoptz license. The imgoptz license covers only the
+imgoptz app files in the release zip. Dependency tools and profiles are acquired
+separately by you and are governed by their own licenses.
