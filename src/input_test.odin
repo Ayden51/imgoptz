@@ -60,3 +60,18 @@ test_parse_approval_input_rejects_unlisted_values :: proc(t: ^testing.T) {
 	testing.expect_value(t, parse_approval_input("n"), Approval_Input_Kind.Invalid)
 	testing.expect_value(t, parse_approval_input(" y"), Approval_Input_Kind.Invalid)
 }
+
+@(test, require)
+test_parse_runtime_recovery_input :: proc(t: ^testing.T) {
+	testing.expect_value(t, parse_runtime_recovery_input(""), Runtime_Recovery_Input_Kind.Retry)
+	testing.expect_value(
+		t,
+		parse_runtime_recovery_input("  exit  "),
+		Runtime_Recovery_Input_Kind.Exit,
+	)
+	testing.expect_value(
+		t,
+		parse_runtime_recovery_input("C:\\Users\\You\\Pictures"),
+		Runtime_Recovery_Input_Kind.Other_Input,
+	)
+}

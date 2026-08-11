@@ -31,6 +31,8 @@ run_imgoptz :: proc() {
 	print_runtime_warnings(runtime_env)
 	if !runtime_env.ok {
 		print_runtime_errors(runtime_env)
+		print_runtime_setup_guidance()
+		run_runtime_error_loop(app_root.path, config_result.config)
 		return
 	}
 	run_prompt_loop(runtime_env, config_result.config)

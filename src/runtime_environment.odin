@@ -505,6 +505,19 @@ add_runtime_error :: proc(env: ^Runtime_Environment, err: string) {
 	append(&env.errors, strings.clone(err))
 }
 
+print_runtime_setup_guidance :: proc() {
+	print_ui_blank()
+	print_ui_linef("%s imgoptz could not find all required runtime dependencies.", UI_WARN)
+	print_ui_line(
+		"Install libvips, MozJPEG, pngquant, Oxipng, and the sRGB ICC profile before processing images.",
+	)
+	print_ui_line(
+		"Power users can install the tools on PATH. Other users can download setup.ps1 from the imgoptz source repository, place it beside imgoptz.exe, and run it from this folder.",
+	)
+	print_ui_line("For step-by-step setup, open README.txt in this app folder or see:")
+	print_ui_line("https://github.com/Ayden51/imgoptz#installation")
+}
+
 print_runtime_warnings :: proc(env: Runtime_Environment) {
 	for warning in env.warnings {
 		print_ui_warning(warning)

@@ -6,6 +6,84 @@ import "core:strings"
 import win "core:sys/windows"
 import "core:unicode/utf16"
 
+run_runtime_error_loop :: proc(app_root: string, config: App_Config) {
+	when ODIN_OS == .Windows {
+		if stdin_is_windows_console() {
+			for {
+				if !runtime_error_prompt_once_windows_console(app_root, config) {
+					break
+				}
+			}
+			return
+		}
+	}
+
+	sc: bufio.Scanner
+	bufio.scanner_init(&sc, os.to_stream(os.stdin))
+	defer bufio.scanner_destroy(&sc)
+	sc.split = bufio.scan_lines
+
+	for {
+		if !runtime_error_prompt_once(&sc, app_root, config) {
+			break
+		}
+	}
+}
+
+runtime_error_prompt_once :: proc(
+	sc: ^bufio.Scanner,
+	app_root: string,
+	config: App_Config,
+) -> bool {
+	print_runtime_recovery_prompt()
+
+	if !bufio.scan(sc) {
+		return false
+	}
+
+	return handle_runtime_recovery_input(bufio.scanner_text(sc), app_root, config)
+}
+
+runtime_error_prompt_once_windows_console :: proc(app_root: string, config: App_Config) -> bool {
+	print_runtime_recovery_prompt()
+
+	raw, ok := read_windows_console_line_utf8()
+	if !ok {
+		return false
+	}
+	defer delete(raw)
+
+	return handle_runtime_recovery_input(raw, app_root, config)
+}
+
+handle_runtime_recovery_input :: proc(raw, app_root: string, config: App_Config) -> bool {
+	switch parse_runtime_recovery_input(raw) {
+	case .Exit:
+		return false
+	case .Other_Input:
+		print_ui_warning(
+			"Image folders cannot be processed until required dependencies are installed. Press Enter to check again, or type exit to close.",
+		)
+		return true
+	case .Retry:
+	}
+
+	runtime_env := load_runtime_environment(app_root, config)
+	defer destroy_runtime_environment(&runtime_env)
+	debug_log_runtime_environment(runtime_env)
+	print_runtime_warnings(runtime_env)
+	if !runtime_env.ok {
+		print_runtime_errors(runtime_env)
+		print_runtime_setup_guidance()
+		return true
+	}
+
+	print_ui_blank()
+	print_ui_linef("%s Runtime dependencies found. You can process images now.", UI_OK)
+	run_prompt_loop(runtime_env, config)
+	return false
+}
+
 run_prompt_loop :: proc(runtime_env: Runtime_Environment, config: App_Config) {
 	when ODIN_OS == .Windows {
 		if stdin_is_windows_console() {
