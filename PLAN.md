@@ -419,11 +419,8 @@ PPM cannot carry ICC profiles, so the pixel stream and ICC profile must be handl
 
 Profile decision rules:
 
-1. If the source JPEG has an sRGB-family or P3-family ICC profile, extract that exact source profile to a temporary `*.source.icc` sidecar and embed it in the MozJPEG output.
-2. If the source JPEG has any other ICC profile, convert pixels to sRGB with `profiles\sRGB2014.icc` during the libvips step, then embed `profiles\sRGB2014.icc` in the MozJPEG output.
-3. If the source JPEG has no ICC profile, treat it as unsupported/unknown, convert pixels to sRGB with `profiles\sRGB2014.icc`, then embed `profiles\sRGB2014.icc` in the MozJPEG output.
-
-Retained profile families include at minimum profiles identified as `sRGB`, `IEC 61966-2-1`, `IEC61966-2.1`, `IEC61966-2-1`, `Display P3`, `DCI-P3 D65 Gamut with sRGB Transfer`, or other descriptions containing `P3`.
+1. If the source JPEG has any ICC profile, extract that exact source profile to a temporary `*.source.icc` sidecar and embed it in the MozJPEG output.
+2. If the source JPEG has no ICC profile, convert pixels to sRGB with `profiles\sRGB2014.icc` during the libvips step, then embed `profiles\sRGB2014.icc` in the MozJPEG output.
 
 Retained-profile command shape:
 
@@ -435,7 +432,7 @@ prepend PPM header: P6\n<resized-width> <resized-height>\n255\n
 tools\mozjpeg\static\Release\cjpeg-static.exe -quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim -icc temp.source.icc -outfile temp.jpg
 ```
 
-Unsupported/no-profile command shape:
+No-profile command shape:
 
 ```text
 tools\vips-dev-8.18\bin\vips.exe thumbnail input.jpg .raw 1920 --height 1920 --size down --output-profile profiles\sRGB2014.icc
@@ -472,13 +469,10 @@ PNG files use the pipeline: libvips resize/orient with ICC profile decision, png
 
 PNG profile decision rules mirror the JPEG pipeline when `png.preserve_profiles = true`:
 
-1. If the source PNG has an sRGB-family or P3-family ICC profile, preserve that exact source profile through the optimized PNG.
-2. If the source PNG has any other ICC profile, convert pixels to sRGB with `profiles\sRGB2014.icc` during the libvips step, then keep the sRGB ICC profile in the optimized PNG.
-3. If the source PNG has no ICC profile, treat it as unsupported/unknown, convert pixels to sRGB with `profiles\sRGB2014.icc`, then keep the sRGB ICC profile in the optimized PNG.
+1. If the source PNG has any ICC profile, preserve that exact source profile through the optimized PNG.
+2. If the source PNG has no ICC profile, convert pixels to sRGB with `profiles\sRGB2014.icc` during the libvips step, then keep the sRGB ICC profile in the optimized PNG.
 
-Retained profile families use the same checks as JPEG: at minimum profiles identified as `sRGB`, `IEC 61966-2-1`, `IEC61966-2.1`, `IEC61966-2-1`, `Display P3`, `DCI-P3 D65 Gamut with sRGB Transfer`, or other descriptions containing `P3`.
-
-The PNG ICC implementation should not duplicate the JPEG-only ICC decision logic. Extract shared profile-family detection and preserve-vs-convert decision helpers that both JPEG and PNG pipelines call, while keeping format-specific extraction, embedding, and output verification in the relevant pipeline code.
+The PNG ICC implementation should not duplicate the JPEG-only ICC decision logic. Extract shared profile-presence decision helpers that both JPEG and PNG pipelines call, while keeping format-specific extraction, embedding, and output verification in the relevant pipeline code.
 
 Do not pass `pngquant --strip` in the default pipeline. Do not rely on pngquant to preserve ICC data; attach the selected ICC profile to `temp.quant.png` with libvips before Oxipng. Let Oxipng own final stripping behavior after profile embedding.
 
@@ -495,7 +489,7 @@ tools\vips-dev-8.18\bin\vips.exe pngsave temp.quant.png temp.profiled.png --prof
 tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.profiled.png
 ```
 
-Unsupported/no-profile command shape:
+No-profile command shape:
 
 ```text
 tools\vips-dev-8.18\bin\vips.exe thumbnail input.png temp.resized.png 1920 --height 1920 --size down --output-profile profiles\sRGB2014.icc

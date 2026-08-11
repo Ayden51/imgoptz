@@ -1672,6 +1672,8 @@ process_png_to_temp :: proc(
 		case .Convert_To_Srgb:
 			convert_icc_path = runtime_env.srgb_profile
 			embed_icc_path = runtime_env.srgb_profile
+			expected_icc_profile = runtime_env.srgb_profile
+			expected_icc_exact = true
 		case .None:
 		}
 	}
@@ -1823,18 +1825,14 @@ determine_icc_profile_mode :: proc(
 	}
 	if !has_profile {
 		debug_log_infof(
-			"ICC profile missing; sRGB conversion required: source=\"%s\"",
+			"ICC profile missing; bundled sRGB profile required: source=\"%s\"",
 			source_path,
 		)
 		return Icc_Profile_Result{mode = .Convert_To_Srgb}
 	}
 
-	if icc_profile_family_is_retained(string(icc_data)) {
-		debug_log_infof("ICC profile retained: source=\"%s\"", source_path)
-		return Icc_Profile_Result{mode = .Embed_Source}
-	}
-	debug_log_infof("ICC profile requires sRGB conversion: source=\"%s\"", source_path)
-	return Icc_Profile_Result{mode = .Convert_To_Srgb}
+	debug_log_infof("ICC profile retained: source=\"%s\"", source_path)
+	return Icc_Profile_Result{mode = .Embed_Source}
 }
 
 make_process_temp_path :: proc(source_path, suffix: string) -> (string, bool) {
@@ -2028,8 +2026,8 @@ verify_png_icc_profile :: proc(
 		}
 		return "", true
 	}
-	if !icc_profile_family_is_retained(string(icc_data)) {
-		return strings.clone("Optimized PNG does not contain an sRGB/P3 ICC profile."), false
+	if !icc_profile_is_srgb_family(string(icc_data)) {
+		return strings.clone("Optimized PNG does not contain the bundled sRGB ICC profile."), false
 	}
 	return "", true
 }
@@ -2140,16 +2138,8 @@ tool_failure_detail :: proc(
 	return fmt.aprintf("%s exited with code %d.", label, state.exit_code)
 }
 
-icc_profile_family_is_retained :: proc(profile_text: string) -> bool {
-	checks := [?]string {
-		"sRGB",
-		"IEC 61966-2-1",
-		"IEC61966-2.1",
-		"IEC61966-2-1",
-		"Display P3",
-		"DCI-P3 D65 Gamut with sRGB Transfer",
-		"P3",
-	}
+icc_profile_is_srgb_family :: proc(profile_text: string) -> bool {
+	checks := [?]string{"sRGB", "IEC 61966-2-1", "IEC61966-2.1", "IEC61966-2-1"}
 	for check in checks {
 		if strings.contains(profile_text, check) {
 			return true
