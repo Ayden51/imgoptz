@@ -82,14 +82,15 @@ function Assert-File {
 $Root = Resolve-InstallRoot $InstallRoot
 $ToolsDir = Join-Path $Root "tools"
 $ProfilesDir = Join-Path $Root "profiles"
+$srgbPath = Join-Path $ProfilesDir "sRGB2014.icc"
 $script:DownloadDir = Join-Path $Root ".imgoptz-deps"
 
+Assert-File $srgbPath
 Ensure-Directory $ToolsDir
-Ensure-Directory $ProfilesDir
 Ensure-Directory $script:DownloadDir
 
-Write-Host "Installing imgoptz runtime dependencies into $Root"
-Write-Host "You are responsible for reviewing and accepting each dependency license."
+Write-Host "Installing imgoptz runtime tools into $Root"
+Write-Host "You are responsible for reviewing and accepting each tool license."
 
 Expand-Dependency `
     -Name "libvips 8.18.5" `
@@ -122,13 +123,6 @@ Expand-Dependency `
     -ArchiveName "oxipng-10.1.1-x86_64-pc-windows-msvc.zip" `
     -Destination $ToolsDir `
     -CleanPaths @((Join-Path $ToolsDir "oxipng-10.1.1-x86_64-pc-windows-msvc"))
-
-$srgbPath = Join-Path $ProfilesDir "sRGB2014.icc"
-Get-Download `
-    -Name "ICC sRGB2014 profile" `
-    -Url "https://registry.color.org/rgb-registry/profiles/sRGB2014.icc" `
-    -Sha256 "384B832DE3412066743B52A75EE906B6FB9FB8D9E09E936FC2C43223815C6E0A" `
-    -OutputPath $srgbPath
 
 $vips = Join-Path $ToolsDir "vips-dev-8.18\bin\vips.exe"
 $vipsheader = Join-Path $ToolsDir "vips-dev-8.18\bin\vipsheader.exe"
