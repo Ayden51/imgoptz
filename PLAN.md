@@ -18,15 +18,18 @@ The release app package must contain only the imgoptz app files:
   README.txt
   LICENSE.txt
   imgoptz.json
+  profiles/
+    sRGB2014.icc
+    sRGB2014.LICENSE.txt
   schema/
     imgoptz.schema.json
 ```
 
-Do not include dependency tools, dependency notices, source packages, or the sRGB ICC profile in the app package. That means no `tools/`, no `profiles/`, no pngquant source-compliance archive, and no third-party license aggregation inside the imgoptz release zip.
+Do not include dependency tools, dependency notices, source packages, or dependency setup helpers in the app package. The only redistributed third-party runtime asset is `profiles/sRGB2014.icc`, with its license in `profiles/sRGB2014.LICENSE.txt`. That means no `tools/`, no pngquant source-compliance archive, and no third-party tool license aggregation inside the imgoptz release zip.
 
 The app changes cwd to the executable directory at startup, so all relative paths resolve against `<app-root>/`.
 
-After users acquire/install dependencies, the runtime app root should have this dependency layout. These paths intentionally follow official archive extraction layouts instead of a curated redistributed layout:
+After users acquire/install dependency tools, the runtime app root should have this layout. Tool paths intentionally follow official archive extraction layouts instead of a curated redistributed layout. The ICC profile is part of the release package:
 
 ```text
 tools\mozjpeg\static\Release\cjpeg-static.exe
@@ -39,21 +42,21 @@ profiles\sRGB2014.icc
 
 ## License Files
 
-The imgoptz release package includes only the imgoptz app license in `LICENSE.txt`. The imgoptz license does not cover libvips, MozJPEG, pngquant, Oxipng, the sRGB ICC profile, or their transitive dependencies.
+The imgoptz release package includes the imgoptz app license in `LICENSE.txt` and the redistributed ICC profile license in `profiles/sRGB2014.LICENSE.txt`. The imgoptz license does not cover libvips, MozJPEG, pngquant, Oxipng, the sRGB ICC profile, or their transitive dependencies.
 
-Users and developers are responsible for acquiring the dependency tools/profile themselves and confirming they have the right to use them. The optional dependency setup helper downloads official upstream files and extracts them without removing upstream notices, but those files are not distributed as part of imgoptz.
+Users and developers are responsible for acquiring dependency tools themselves and confirming they have the right to use them. The optional dependency setup helper downloads official upstream tool files and extracts them without removing upstream notices, but those tool files are not distributed as part of imgoptz.
 
 ## Dependency Setup And Bundling
 
-Runtime dependencies are not app source and are not release package contents. The release process must not download, build, copy, or validate third-party runtime dependencies before creating the app package.
+Runtime tools are not app source and are not release package contents. The tracked release assets `imgoptz.json`, `schema/imgoptz.schema.json`, `profiles/sRGB2014.icc`, and `profiles/sRGB2014.LICENSE.txt` must already be present in git. The release process builds only the exe, then validates and packages the required release files.
 
 Use the Odin script launcher only for app build and packaging:
 
-1. `scripts.exe package` builds `dist/imgoptz.exe`, validates only the app package files, and creates the dependency-free app zip.
-2. Packaging must fail if any required app file is missing: `imgoptz.exe`, `README.txt`, `LICENSE.txt`, `imgoptz.json`, or `schema/imgoptz.schema.json`.
+1. `scripts.exe package` builds `dist/imgoptz.exe`, validates the release package files, and creates the app zip.
+2. Packaging must fail if any required release file is missing: `imgoptz.exe`, `README.txt`, `LICENSE.txt`, `imgoptz.json`, `profiles/sRGB2014.icc`, `profiles/sRGB2014.LICENSE.txt`, or `schema/imgoptz.schema.json`.
 3. Packaging must not call a dependency setup script and must not create pngquant source-compliance archives, because imgoptz no longer distributes pngquant binaries.
 
-The end-user helper is `scripts/setup-imgoptz-deps.ps1` in the source repository. It is not part of the app zip and is not distributed as a GitHub Release asset. Users who choose the helper should download the source file from GitHub, place it in the extracted app folder, then run it there. It downloads official upstream files, verifies SHA-256 checksums, extracts archives as-is, and downloads the official ICC `sRGB2014.icc` profile. It performs no build step and does not curate or relicense dependency contents.
+The end-user helper is `scripts/setup.ps1` in the source repository. It is not part of the app zip and is not distributed as a GitHub Release asset. Users who choose the helper should download the source file from GitHub, place it in the extracted app folder, then run it there. It downloads official upstream tool files, verifies SHA-256 checksums, and extracts archives as-is. It does not download the ICC profile because that profile is already included in the app zip. It performs no build step and does not curate or relicense dependency tool contents.
 
 The helper should verify these version commands after install:
 
@@ -71,7 +74,7 @@ libvips      8.18.5 official x64 vips-web static prebuilt, SHA-256 109C23D6A7132
 MozJPEG      v4.0.3 official Windows x64 prebuilt, SHA-256 C8DB69B2BBF9CFF05447E60454B55317F719D9793B9100597BFCD4682836F7EE
 Oxipng       10.1.1 x86_64-pc-windows-msvc
 pngquant     2.17.0 official Windows binary from pngquant.org, SHA-256 BD0257AEECCFE446A4CD764927E26F8AF6051796F28ABED104307284107B120D
-sRGB ICC     ICC sRGB2014.icc, SHA-256 384B832DE3412066743B52A75EE906B6FB9FB8D9E09E936FC2C43223815C6E0A
+sRGB ICC     Redistributed ICC sRGB2014.icc, SHA-256 384B832DE3412066743B52A75EE906B6FB9FB8D9E09E936FC2C43223815C6E0A
 ```
 
 Recommended pinned sources from the dependency research:
@@ -756,7 +759,7 @@ odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o
 ./dist/imgoptz.exe
 ```
 
-Phase 10B replaces duplicate shell-specific development automation with registered Odin scripts. There is no developer dependency setup script. `scripts/setup-imgoptz-deps.ps1` is a source-hosted end-user helper, not a contributor bootstrap path, not part of the app zip, and not a GitHub Release asset.
+Phase 10B replaces duplicate shell-specific development automation with registered Odin scripts. There is no developer dependency setup script. `scripts/setup.ps1` is a source-hosted end-user helper, not a contributor bootstrap path, not part of the app zip, and not a GitHub Release asset.
 
 ## Implementation Phases
 
@@ -785,9 +788,9 @@ Phase 10B replaces duplicate shell-specific development automation with register
 23. Phase 8A: Harden JPEG Unicode-path handling with a per-run temp workspace, PPM stdout producer-to-MozJPEG piping, and graceful ICC omission when MozJPEG cannot open temp ICC paths.
 24. Phase 9: Add dry-run approval mode, defaulting to preview-first and requiring explicit approval before final writes.
 25. Phase 10: Change default output behavior to `output_mode = "dir"` with target-relative `out_dir = "~/imgoptz-output"`.
-26. Phase 10A: Remove dependency bundling from the release package and package only app-owned files.
+26. Phase 10A: Remove dependency tool bundling from the release package and package only app-owned files plus the redistributed ICC profile and license.
 27. Phase 10B: Add the Odin `scripts.exe` launcher, move development automation into registered `.odin` files under `scripts/`, and remove developer dependency setup automation.
-28. Add `scripts/setup-imgoptz-deps.ps1` as a source-hosted end-user helper that downloads verified official prebuilt dependencies without build steps.
+28. Add `scripts/setup.ps1` as a source-hosted end-user helper that downloads verified official prebuilt dependency tools without build steps and leaves the bundled ICC profile untouched.
 29. Test with spaces, special characters, Unicode paths, and quoted paths.
 30. Test relative and absolute input directories.
 31. Test relative, absolute, and target-relative `out_dir`.

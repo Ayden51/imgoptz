@@ -308,19 +308,28 @@ Goal: replace ImageMagick with the official `vips-web` static prebuilt while pre
 - [x] Run the mixed demo comparison against the current baseline and verify dimensions, ICC retention, and output-size behavior remain acceptable.
 - [x] Remove ImageMagick from setup, packaging, distribution layout, docs, and required notice validation after libvips replacement tests pass.
 
-## Phase 12: Dependency-Free App Distribution
+## Phase 12: App Distribution Without Tool Bundling
 
-Goal: ship only imgoptz-owned files in the app package and require users/developers to acquire dependency tools and usage rights separately.
+Goal: ship imgoptz-owned files plus the redistributed ICC profile/license in the app package and require users/developers to acquire dependency tools and usage rights separately.
 
 - [x] Remove developer dependency setup automation and the pinned dependency manifest from `scripts/`.
-- [x] Change `scripts.exe package` to build a dependency-free app zip containing only `imgoptz.exe`, `README.txt`, `LICENSE.txt`, `imgoptz.json`, and `schema/imgoptz.schema.json`.
+- [x] Change `scripts.exe package` to build an app zip containing `imgoptz.exe`, `README.txt`, `LICENSE.txt`, `imgoptz.json`, `profiles/sRGB2014.icc`, `profiles/sRGB2014.LICENSE.txt`, and `schema/imgoptz.schema.json`.
 - [x] Stop creating pngquant source-compliance release archives because imgoptz no longer distributes pngquant binaries.
-- [x] Add `scripts/setup-imgoptz-deps.ps1` as a source-hosted end-user helper that downloads official prebuilt/static dependency packages, verifies SHA-256 checksums, and extracts them without build steps.
+- [x] Add `scripts/setup.ps1` as a source-hosted end-user helper that downloads official prebuilt/static dependency tool packages, verifies SHA-256 checksums, and extracts them without build steps.
 - [x] Switch runtime paths to official extracted dependency layouts, including MozJPEG `v4.0.3` `cjpeg-static.exe`, pngquant `2.17.0` from the official Windows zip, Oxipng's official Windows zip, and libvips `vips-dev-8.18`.
-- [x] Update docs and plan so imgoptz's license covers only imgoptz app files and dependency rights remain the user's responsibility.
+- [x] Update docs and plan so imgoptz's license covers only imgoptz app files, the ICC profile license is bundled with the profile, and dependency tool rights remain the user's responsibility.
+
+## Phase 13: Redistributed ICC Profile Release Package
+
+Goal: restore ICC profile redistribution while keeping dependency tools outside the app package.
+
+- [x] Track `dist/profiles/sRGB2014.icc` and `dist/profiles/sRGB2014.LICENSE.txt` in git.
+- [x] Stop `scripts/setup.ps1` from downloading `sRGB2014.icc`; the helper now verifies the bundled profile is present.
+- [x] Keep `scripts.exe package` responsible for building only `dist/imgoptz.exe` before validating tracked release files.
+- [x] Fail packaging when any required release file is missing, including the ICC profile, profile license, config, and config schema.
 
 ## Current Feature Selection
 
-- Current feature branch: `fix/distribution-legal-compliance`.
-- Scope: Phase 12 dependency-free distribution implementation.
-- Reason: imgoptz should not distribute dependency tools, dependency notices, source packages, or the sRGB ICC profile. Users and developers must acquire dependency tools and rights separately.
+- Current feature branch: `release/redistribute-icc-profile`.
+- Scope: Phase 13 redistributed ICC profile release package.
+- Reason: imgoptz should include the ICC profile and license in the release package while keeping dependency tools, dependency notices, and tool source packages outside the zip.
