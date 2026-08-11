@@ -39,7 +39,7 @@
 - Preserve the prompt loop UI: users paste one directory path, processing finishes, then the app prompts again; `exit` closes it.
 - At startup, change cwd to the executable directory. All relative paths, config, logs, tools, and default output resolve against that app root.
 - Required runtime tool paths under the app root are `tools\mozjpeg\static\Release\cjpeg-static.exe`, `tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe`, `tools\pngquant\pngquant.exe`, `tools\vips-dev-8.18\bin\vips.exe`, and `tools\vips-dev-8.18\bin\vipsheader.exe`.
-- Do not distribute third-party tools, notices, source packages, the sRGB ICC profile, or dependency setup helpers inside the app release package; users acquire dependency rights themselves. `scripts/setup-imgoptz-deps.ps1` is a source-hosted end-user helper, not a developer setup script or release asset.
+- Redistribute `profiles\sRGB2014.icc` and its license inside the app release package. Do not distribute third-party tools, tool notices, tool source packages, or dependency setup helpers inside the app release package; users acquire dependency tool rights themselves. `scripts/setup.ps1` is a source-hosted end-user helper, not a developer setup script or release asset.
 - Accept only JPEG/PNG extensions case-insensitively: `.jpg`, `.jpeg`, `.png`; default discovery is non-recursive.
 
 ## Implementation Pitfalls

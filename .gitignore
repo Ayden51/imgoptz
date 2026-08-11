@@ -11,8 +11,7 @@ dist/*
 !dist/schema/
 !dist/schema/**
 !dist/profiles/
-dist/profiles/*
-!dist/profiles/.gitkeep
+!dist/profiles/**
 !dist/tools/
 dist/tools/*
 !dist/tools/.gitkeep
