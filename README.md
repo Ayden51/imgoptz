@@ -25,7 +25,7 @@ The app keeps the workflow conservative by default. It writes smaller optimized 
 - JPEG and PNG support: accepts `.jpg`, `.jpeg`, and `.png` case-insensitively.
 - Smaller web-ready images: resizes large images to a configurable maximum dimension without enlarging smaller images.
 - High-quality compression stack: libvips handles resize/orientation/profile work, MozJPEG compresses JPEG, and pngquant plus Oxipng optimize PNG.
-- Color-aware output: preserves supported sRGB and P3 profiles, or converts unknown/missing profiles to the installed `sRGB2014.icc` profile.
+- Color-aware output: preserves any embedded source ICC profile, or embeds the bundled `sRGB2014.icc` profile when the source has no ICC profile.
 - Flexible discovery: scan the selected folder only, or include subfolders with `recursive` mode.
 - Safe output modes: save to an output folder or replace originals in-place after approval.
 - Clean names: successful output filenames are slugified and collision-safe.
@@ -287,7 +287,7 @@ Important settings:
 | `jpeg.sample` | `"2x2"` | MozJPEG chroma subsampling value. |
 | `jpeg.quant_table` | `2` | MozJPEG quantization table. |
 | `jpeg.tune` | `"ms-ssim"` | MozJPEG tuning mode. |
-| `jpeg.preserve_profiles` | `true` | Preserve supported source color profiles or convert to installed sRGB. |
+| `jpeg.preserve_profiles` | `true` | Preserve any embedded source ICC profile or use bundled sRGB when missing. |
 | `png.enabled` | `true` | Enable PNG processing. |
 | `png.pngquant_quality` | `"40-95"` | pngquant quality range. |
 | `png.pngquant_speed` | `1` | pngquant speed/compression tradeoff. |
@@ -296,7 +296,7 @@ Important settings:
 | `png.interlace` | `false` | Enable PNG interlacing. |
 | `png.strip` | `"safe"` | Oxipng metadata stripping mode. `safe` keeps color-management chunks. |
 | `png.alpha` | `true` | Enable Oxipng alpha optimization. |
-| `png.preserve_profiles` | `true` | Preserve supported source color profiles or convert to installed sRGB. |
+| `png.preserve_profiles` | `true` | Preserve any embedded source ICC profile or use bundled sRGB when missing. |
 
 Config validation is forgiving. Invalid JSON makes the app warn and use the full default config. Invalid option values warn and fall back per option. Unknown options warn and are ignored, except the editor-only `$schema` field.
 

@@ -142,7 +142,7 @@ Goal: preserve PNG color profiles through optimization without duplicating JPEG 
 - [x] Validate `png.preserve_profiles` as a JSON boolean.
 - [x] Update default config, `dist/imgoptz.json`, and config tests for `png.preserve_profiles`.
 - [x] Reject or fall back from PNG strip settings that remove color-management chunks while `png.preserve_profiles = true`.
-- [x] Extract shared ICC profile-family detection from the current JPEG-specific helper.
+- [x] Extract shared ICC profile-presence detection from the current JPEG-specific helper.
 - [x] Extract shared preserve-vs-convert ICC decision logic that both JPEG and PNG pipelines can call.
 - [x] Keep format-specific profile extraction, embedding, and verification in JPEG/PNG pipeline code.
 - [x] Remove `pngquant --strip` from the default PNG command path.
