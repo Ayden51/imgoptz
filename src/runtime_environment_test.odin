@@ -5,7 +5,7 @@ import "core:strings"
 import "core:testing"
 
 @(test, require)
-test_validate_required_runtime_files_accepts_complete_distribution :: proc(t: ^testing.T) {
+test_resolve_runtime_tool_paths_accepts_complete_tools_folder :: proc(t: ^testing.T) {
 	temp_dir := make_temp_runtime_root(t)
 	if len(temp_dir) == 0 {
 		return
@@ -18,13 +18,38 @@ test_validate_required_runtime_files_accepts_complete_distribution :: proc(t: ^t
 
 	env: Runtime_Environment
 	defer destroy_runtime_environment(&env)
-	validate_required_runtime_files(&env, temp_dir)
+	resolve_runtime_tool_paths_from_path_env(&env, temp_dir, "")
 
 	testing.expect_value(t, len(env.errors), 0)
+	testing.expect_value(
+		t,
+		env.mozjpeg_path,
+		resolve_app_relative_path(temp_dir, RUNTIME_MOZJPEG_PATH, context.temp_allocator),
+	)
+	testing.expect_value(
+		t,
+		env.oxipng_path,
+		resolve_app_relative_path(temp_dir, RUNTIME_OXIPNG_PATH, context.temp_allocator),
+	)
+	testing.expect_value(
+		t,
+		env.pngquant_path,
+		resolve_app_relative_path(temp_dir, RUNTIME_PNGQUANT_PATH, context.temp_allocator),
+	)
+	testing.expect_value(
+		t,
+		env.vips_path,
+		resolve_app_relative_path(temp_dir, RUNTIME_VIPS_PATH, context.temp_allocator),
+	)
+	testing.expect_value(
+		t,
+		env.vipsheader_path,
+		resolve_app_relative_path(temp_dir, RUNTIME_VIPSHEADER_PATH, context.temp_allocator),
+	)
 }
 
 @(test, require)
-test_validate_required_runtime_files_reports_missing_file :: proc(t: ^testing.T) {
+test_resolve_runtime_tool_paths_prefers_path_executable :: proc(t: ^testing.T) {
 	temp_dir := make_temp_runtime_root(t)
 	if len(temp_dir) == 0 {
 		return
@@ -35,26 +60,30 @@ test_validate_required_runtime_files_reports_missing_file :: proc(t: ^testing.T)
 		return
 	}
 
-	missing_path := resolve_app_relative_path(
-		temp_dir,
-		RUNTIME_PNGQUANT_PATH,
-		context.temp_allocator,
-	)
-	remove_err := os.remove(missing_path)
-	if !testing.expect_value(t, remove_err, nil) {
+	path_dir := resolve_app_relative_path(temp_dir, "path-tools", context.temp_allocator)
+	if !testing.expect_value(t, os.make_directory(path_dir), nil) {
+		return
+	}
+	path_mozjpeg := resolve_app_relative_path(path_dir, "cjpeg-static.exe", context.temp_allocator)
+	if !testing.expect_value(t, os.write_entire_file(path_mozjpeg, "test"), nil) {
 		return
 	}
 
 	env: Runtime_Environment
 	defer destroy_runtime_environment(&env)
-	validate_required_runtime_files(&env, temp_dir)
+	resolve_runtime_tool_paths_from_path_env(&env, temp_dir, path_dir)
 
-	testing.expect_value(t, len(env.errors), 1)
-	testing.expect(t, strings.contains(env.errors[0], RUNTIME_PNGQUANT_PATH))
+	testing.expect_value(t, len(env.errors), 0)
+	testing.expect_value(t, env.mozjpeg_path, path_mozjpeg)
+	testing.expect_value(
+		t,
+		env.pngquant_path,
+		resolve_app_relative_path(temp_dir, RUNTIME_PNGQUANT_PATH, context.temp_allocator),
+	)
 }
 
 @(test, require)
-test_validate_required_runtime_files_reports_missing_executable :: proc(t: ^testing.T) {
+test_resolve_runtime_tool_paths_reports_missing_tool :: proc(t: ^testing.T) {
 	temp_dir := make_temp_runtime_root(t)
 	if len(temp_dir) == 0 {
 		return
@@ -77,11 +106,44 @@ test_validate_required_runtime_files_reports_missing_executable :: proc(t: ^test
 
 	env: Runtime_Environment
 	defer destroy_runtime_environment(&env)
+	resolve_runtime_tool_paths_from_path_env(&env, temp_dir, "")
+
+	testing.expect_value(t, len(env.errors), 1)
+	testing.expect_value(t, env.mozjpeg_path, "")
+	testing.expect(t, strings.contains(env.errors[0], "MozJPEG"))
+	testing.expect(t, strings.contains(env.errors[0], "Install cjpeg-static.exe on PATH"))
+	testing.expect(t, strings.contains(env.errors[0], RUNTIME_MOZJPEG_PATH))
+}
+
+@(test, require)
+test_validate_required_runtime_files_reports_missing_profile :: proc(t: ^testing.T) {
+	temp_dir := make_temp_runtime_root(t)
+	if len(temp_dir) == 0 {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	if !write_required_runtime_tree(t, temp_dir) {
+		return
+	}
+
+	missing_path := resolve_app_relative_path(
+		temp_dir,
+		RUNTIME_SRGB_PROFILE_PATH,
+		context.temp_allocator,
+	)
+	remove_err := os.remove(missing_path)
+	if !testing.expect_value(t, remove_err, nil) {
+		return
+	}
+
+	env: Runtime_Environment
+	defer destroy_runtime_environment(&env)
 	validate_required_runtime_files(&env, temp_dir)
 
 	testing.expect_value(t, len(env.errors), 1)
-	testing.expect(t, strings.contains(env.errors[0], "MozJPEG executable"))
-	testing.expect(t, strings.contains(env.errors[0], RUNTIME_MOZJPEG_PATH))
+	testing.expect(t, strings.contains(env.errors[0], "sRGB ICC profile"))
+	testing.expect(t, strings.contains(env.errors[0], RUNTIME_SRGB_PROFILE_PATH))
 }
 
 @(test, require)
@@ -339,6 +401,19 @@ make_temp_runtime_root :: proc(t: ^testing.T) -> string {
 }
 
 write_required_runtime_tree :: proc(t: ^testing.T, app_root: string) -> bool {
+	for required in RUNTIME_REQUIRED_TOOLS {
+		path := resolve_app_relative_path(app_root, required.relative_path, context.temp_allocator)
+		dir, _ := os.split_path(path)
+		mkdir_err := os.make_directory_all(dir)
+		if !testing.expect_value(t, mkdir_err, nil) {
+			return false
+		}
+		write_err := os.write_entire_file(path, "test")
+		if !testing.expect_value(t, write_err, nil) {
+			return false
+		}
+	}
+
 	for required in RUNTIME_REQUIRED_FILES {
 		path := resolve_app_relative_path(app_root, required.relative_path, context.temp_allocator)
 		dir, _ := os.split_path(path)
