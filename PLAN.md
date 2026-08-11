@@ -10,140 +10,57 @@ The current `src/main.odin` demo already proves the intended UI shape: Windows-o
 
 The distributed app root is the directory containing `imgoptz.exe`. The folder can have any name. All runtime paths are relative to that app root.
 
-The distributed app root should use this layout:
+The release app package must contain only the imgoptz app files:
 
 ```text
 <app-root>/
   imgoptz.exe
-  imgoptz.json          optional
-  output/               required only when output_mode = "dir" and default out_dir is used
-  profiles/
-    sRGB2014.icc
-    sRGB2014.LICENSE.txt
-  tools/
-    mozjpeg/
-      mozjpeg.exe
-      LICENSE.md
-      README.ijg
-      README-mozilla.txt
-    oxipng/
-      oxipng.exe
-      LICENSE
-    pngquant/
-      pngquant.exe
-      COPYRIGHT
-      SOURCE.txt
-    libvips/
-      vips.exe
-      vipsheader.exe
-      libvips-42.dll
-      LICENSE
-      README.md
-      versions.json
+  README.txt
+  LICENSE.txt
+  imgoptz.json
+  schema/
+    imgoptz.schema.json
 ```
+
+Do not include dependency tools, dependency notices, source packages, or the sRGB ICC profile in the app package. That means no `tools/`, no `profiles/`, no pngquant source-compliance archive, and no third-party license aggregation inside the imgoptz release zip.
 
 The app changes cwd to the executable directory at startup, so all relative paths resolve against `<app-root>/`.
 
-Required executable paths:
+After users acquire/install dependencies, the runtime app root should have this dependency layout. These paths intentionally follow official archive extraction layouts instead of a curated redistributed layout:
 
 ```text
-tools\mozjpeg\mozjpeg.exe
-tools\oxipng\oxipng.exe
+tools\mozjpeg\static\Release\cjpeg-static.exe
+tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe
 tools\pngquant\pngquant.exe
-tools\libvips\vips.exe
-tools\libvips\vipsheader.exe
-tools\libvips\libvips-42.dll
+tools\vips-dev-8.18\bin\vips.exe
+tools\vips-dev-8.18\bin\vipsheader.exe
 profiles\sRGB2014.icc
 ```
 
 ## License Files
 
-Keep required third-party notices beside each tool.
+The imgoptz release package includes only the imgoptz app license in `LICENSE.txt`. The imgoptz license does not cover libvips, MozJPEG, pngquant, Oxipng, the sRGB ICC profile, or their transitive dependencies.
 
-MozJPEG/libjpeg-turbo:
-
-```text
-tools\mozjpeg\LICENSE.md
-tools\mozjpeg\README.ijg
-tools\mozjpeg\README-mozilla.txt
-```
-
-Local license guidance states binary distribution documentation must include: `This software is based in part on the work of the Independent JPEG Group.` Keeping `LICENSE.md` and `README.ijg` with the executable satisfies this requirement more clearly than shipping the binary alone.
-
-Oxipng:
-
-```text
-tools\oxipng\LICENSE
-```
-
-Oxipng is MIT licensed, so include its copyright and permission notice with the binary.
-
-pngquant/libimagequant:
-
-```text
-tools\pngquant\COPYRIGHT
-tools\pngquant\SOURCE.txt
-```
-
-Keep pngquant's copyright and license notice beside the binary. pngquant is GPL-3.0-or-later, so binary distribution must also identify the exact corresponding source. Keep `SOURCE.txt` beside the binary with the pinned source URL, version, checksum, and source-retrieval instructions used for the bundled executable.
-
-libvips:
-
-```text
-tools\libvips\LICENSE
-tools\libvips\README.md
-tools\libvips\versions.json
-```
-
-libvips is LGPL-2.1-or-later. Bundle the official `vips-web` static prebuilt release, not the broad `vips-all` distribution and not ImageMagick. Keep libvips license, README, and generated dependency version metadata beside the runtime executables. The `vips-web` static prebuilt includes web-oriented dependencies and loaders such as SVG, HEIF/AVIF, WebP, TIFF, UHDR, text/font rendering, and MozJPEG, but upstream separates it from `vips-all` and it does not include ImageMagick/MagickCore, Ghostscript/gslib, Poppler/PDFium, PDF/PS/EPS/XPS support, FFTW GPL, OpenEXR, JPEG XL, OpenJPEG, RAW camera, or other `vips-all` additions. This is acceptable for imgoptz because the app still accepts only JPEG and PNG paths, verifies the runtime feature surface, and uses libvips only as an external child process for resize/profile handling. Bundle only the runtime files needed by `vips.exe` and `vipsheader.exe`; do not ship headers, pkg-config files, import libraries, or unused tools from the development zip.
-
-ICC sRGB profile:
-
-```text
-profiles\sRGB2014.icc
-profiles\sRGB2014.LICENSE.txt
-```
-
-Use ICC's official `sRGB2014.icc`, not a copied Windows system `sRGB Color Space Profile.icm`, for distribution. The ICC profile may be copied, distributed, embedded, made, used, and sold without restriction when unaltered. Keep the profile copyright tag intact and include the ICC license text in `sRGB2014.LICENSE.txt`.
+Users and developers are responsible for acquiring the dependency tools/profile themselves and confirming they have the right to use them. The optional dependency setup helper downloads official upstream files and extracts them without removing upstream notices, but those files are not distributed as part of imgoptz.
 
 ## Dependency Setup And Bundling
 
-Runtime dependencies are pinned distribution inputs, not app source. The release process should download, verify, and install exact dependency versions into `dist/`, then bundle only the verified local `dist/` layout.
+Runtime dependencies are not app source and are not release package contents. The release process must not download, build, copy, or validate third-party runtime dependencies before creating the app package.
 
-Use the Odin script launcher for Windows setup and packaging after Phase 10B:
+Use the Odin script launcher only for app build and packaging:
 
-1. `scripts.exe setup` downloads pinned dependency archives or source packages, verifies SHA-256 checksums, extracts or builds them when required, copies only the required runtime files into `dist/`, and verifies each tool version.
-2. `scripts.exe package` builds `dist/imgoptz.exe`, validates the complete runtime layout, and creates the distributable package from local `dist/` files only.
-3. If packaging finds missing dependency files, it may call the registered setup script first. It must fail rather than package a partial runtime layout.
+1. `scripts.exe package` builds `dist/imgoptz.exe`, validates only the app package files, and creates the dependency-free app zip.
+2. Packaging must fail if any required app file is missing: `imgoptz.exe`, `README.txt`, `LICENSE.txt`, `imgoptz.json`, or `schema/imgoptz.schema.json`.
+3. Packaging must not call a dependency setup script and must not create pngquant source-compliance archives, because imgoptz no longer distributes pngquant binaries.
 
-Pinned dependency manifest entries should include:
+The end-user helper is `scripts/setup-imgoptz-deps.ps1` in the source repository. It is not part of the app zip and is not distributed as a GitHub Release asset. Users who choose the helper should download the source file from GitHub, place it in the extracted app folder, then run it there. It downloads official upstream files, verifies SHA-256 checksums, extracts archives as-is, and downloads the official ICC `sRGB2014.icc` profile. It performs no build step and does not curate or relicense dependency contents.
 
-```text
-name
-version
-download_url
-sha256
-archive_type
-expected_version_regex
-source_url
-source_sha256
-license_urls
-install_exe_name
-dist_exe_path
-dist_license_paths
-build_recipe_url
-build_recipe_sha256
-```
-
-Every setup run must verify these version commands after install:
+The helper should verify these version commands after install:
 
 ```text
-tools\libvips\vips.exe --version
-tools\libvips\vips.exe --vips-config
-tools\libvips\vips.exe -l foreign
-tools\libvips\vips.exe rawsave --help-operation
-tools\mozjpeg\mozjpeg.exe -version
-tools\oxipng\oxipng.exe --version
+tools\vips-dev-8.18\bin\vips.exe --version
+tools\mozjpeg\static\Release\cjpeg-static.exe -version
+tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe --version
 tools\pngquant\pngquant.exe --version
 ```
 
@@ -151,9 +68,9 @@ Initial pinned dependency targets:
 
 ```text
 libvips      8.18.5 official x64 vips-web static prebuilt, SHA-256 109C23D6A71328D821AB5B08CB0212242EF7B7E038739F4E1F706B00BF990E10
-MozJPEG      v4.1.5 official source tag, built locally to cjpeg-static.exe
+MozJPEG      v4.0.3 official Windows x64 prebuilt, SHA-256 C8DB69B2BBF9CFF05447E60454B55317F719D9793B9100597BFCD4682836F7EE
 Oxipng       10.1.1 x86_64-pc-windows-msvc
-pngquant     3.0.3 built from crates.io source, with corresponding source recorded for GPL compliance
+pngquant     2.17.0 official Windows binary from pngquant.org, SHA-256 BD0257AEECCFE446A4CD764927E26F8AF6051796F28ABED104307284107B120D
 sRGB ICC     ICC sRGB2014.icc, SHA-256 384B832DE3412066743B52A75EE906B6FB9FB8D9E09E936FC2C43223815C6E0A
 ```
 
@@ -161,17 +78,15 @@ Recommended pinned sources from the dependency research:
 
 ```text
 libvips      https://github.com/libvips/build-win64-mxe/releases/download/v8.18.5/vips-dev-x64-web-8.18.5-static.zip
-MozJPEG      https://github.com/mozilla/mozjpeg/archive/refs/tags/v4.1.5.zip
+MozJPEG      https://github.com/mozilla/mozjpeg/releases/download/v4.0.3/mozjpeg-v4.0.3-win-x64.zip
 Oxipng       https://github.com/oxipng/oxipng/releases/download/v10.1.1/oxipng-10.1.1-x86_64-pc-windows-msvc.zip
-pngquant     https://crates.io/api/v1/crates/pngquant/3.0.3/download
+pngquant     https://pngquant.org/pngquant-windows.zip
 sRGB ICC     https://registry.color.org/rgb-registry/profiles/sRGB2014.icc
 ```
 
-Do not vendor `mozjpeg/` or `oxipng/` submodules once setup can reproduce the required binaries from pinned official inputs. Oxipng can use the official Windows binary. MozJPEG must use the official `v4.1.5` source tag, built locally by the setup script. Copy the resulting `cjpeg-static.exe` as `tools\mozjpeg\mozjpeg.exe`, then bundle `LICENSE.md`, `README.ijg`, and `README-mozilla.txt` from the same source. Do not use the older official `v4.0.3` Windows binary.
+Do not vendor `mozjpeg/` or `oxipng/` submodules for app releases. The helper uses the older official MozJPEG `v4.0.3` Windows x64 prebuilt because later MozJPEG releases do not provide official Windows binaries. The app must call `cjpeg-static.exe` from the extracted archive instead of renaming it.
 
-Do not build libvips locally for normal setup. The upstream `build-win64-mxe` build requires Docker/WSL and adds too much local setup complexity. Instead, download the exact `vips-dev-x64-web-8.18.5-static.zip` release asset, verify SHA-256, and copy only `bin\vips.exe`, `bin\vipsheader.exe`, the required runtime DLLs such as `bin\libvips-42.dll`, `LICENSE`, `README.md`, and `versions.json` into `tools\libvips`. The prebuilt reports PPM disabled, so JPEG handoff must use libvips raw RGB stdout plus an app-written PPM header before MozJPEG stdin. Verify `vips --vips-config` reports JPEG/PNG/LCMS/EXIF/raw enabled and Magick/PDF/Poppler/PDFium disabled. Verify `versions.json` and `vips -l foreign` do not show `vips-all`-only dependencies such as ImageMagick, Poppler, FFTW, OpenEXR, OpenJPEG, JPEG XL, or RAW camera support.
-
-Dependency version updates are release work. Updating any pinned tool or profile version requires a maintainer, checksum refresh, compatibility testing of JPEG and PNG command lines, license/source documentation review, `PLAN.md`/`TASKS.md` updates, and an app version update.
+Do not build libvips, MozJPEG, pngquant, or Oxipng in the helper. Developers who need different versions must install or build those tools themselves into the runtime paths expected by the app. Dependency version updates are release work and require checksum refresh, compatibility testing of JPEG/PNG command lines, dependency-rights review, `PLAN.md`/`TASKS.md` updates, and an app version update.
 
 ## User Flow
 
@@ -510,26 +425,26 @@ Retained profile families include at minimum profiles identified as `sRGB`, `IEC
 Retained-profile command shape:
 
 ```text
-tools\libvips\vipsheader.exe -f icc-profile-data input.jpg
+tools\vips-dev-8.18\bin\vipsheader.exe -f icc-profile-data input.jpg
 decode base64 ICC stdout to temp.source.icc
-tools\libvips\vips.exe thumbnail input.jpg .raw 1920 --height 1920 --size down
+tools\vips-dev-8.18\bin\vips.exe thumbnail input.jpg .raw 1920 --height 1920 --size down
 prepend PPM header: P6\n<resized-width> <resized-height>\n255\n
-tools\mozjpeg\mozjpeg.exe -quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim -icc temp.source.icc -outfile temp.jpg
+tools\mozjpeg\static\Release\cjpeg-static.exe -quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim -icc temp.source.icc -outfile temp.jpg
 ```
 
 Unsupported/no-profile command shape:
 
 ```text
-tools\libvips\vips.exe thumbnail input.jpg .raw 1920 --height 1920 --size down --output-profile profiles\sRGB2014.icc
+tools\vips-dev-8.18\bin\vips.exe thumbnail input.jpg .raw 1920 --height 1920 --size down --output-profile profiles\sRGB2014.icc
 prepend PPM header: P6\n<resized-width> <resized-height>\n255\n
-tools\mozjpeg\mozjpeg.exe -quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim -icc profiles\sRGB2014.icc -outfile temp.jpg
+tools\mozjpeg\static\Release\cjpeg-static.exe -quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim -icc profiles\sRGB2014.icc -outfile temp.jpg
 ```
 
 Phase 8A JPEG Unicode-path hardening requirements:
 
 Implementation should pipe libvips raw RGB stdout into MozJPEG stdin after the app writes the PPM `P6` header. Avoid writing JPEG pixel intermediates to source-derived file paths, because MozJPEG's command-line tool may not open non-ASCII Windows paths reliably.
 
-JPEG processing should create one per-run temp workspace for JPEG-only artifacts. Use generated ASCII filenames inside that workspace for MozJPEG-visible files such as `source.icc`, `sRGB2014.icc`, and `optimized.jpg`. Copy the bundled `profiles\sRGB2014.icc` into that workspace before passing it to MozJPEG, and extract retained source ICC profiles into that workspace instead of beside the source image.
+JPEG processing should create one per-run temp workspace for JPEG-only artifacts. Use generated ASCII filenames inside that workspace for MozJPEG-visible files such as `source.icc`, `sRGB2014.icc`, and `optimized.jpg`. Copy the installed `profiles\sRGB2014.icc` into that workspace before passing it to MozJPEG, and extract retained source ICC profiles into that workspace instead of beside the source image.
 
 The JPEG resize/compress handoff must use libvips raw RGB stdout output, such as the CLI `.raw` stdout target. The app must determine the resized dimensions, write the PPM `P6` header to MozJPEG stdin, then stream the raw bytes from libvips into MozJPEG stdin. MozJPEG should not receive a PPM input filename. MozJPEG may write its JPEG output to an ASCII temp workspace file or to stdout captured by the app; in either case, the final output rules still operate on a temp `.jpg` first. Do not fall back to lossy libvips JPEG output for MozJPEG input.
 
@@ -569,21 +484,21 @@ Use Oxipng `--strip safe` by default. Oxipng safe stripping keeps PNG display/co
 Command shape:
 
 ```text
-tools\libvips\vipsheader.exe -f icc-profile-data input.png
+tools\vips-dev-8.18\bin\vipsheader.exe -f icc-profile-data input.png
 decode base64 ICC stdout to temp.source.icc when retaining a source profile
-tools\libvips\vips.exe thumbnail input.png temp.resized.png 1920 --height 1920 --size down
+tools\vips-dev-8.18\bin\vips.exe thumbnail input.png temp.resized.png 1920 --height 1920 --size down
 tools\pngquant\pngquant.exe --force --output temp.quant.png --quality 40-95 --speed 1 --nofs -- temp.resized.png
-tools\libvips\vips.exe pngsave temp.quant.png temp.profiled.png --profile temp.source.icc
-tools\oxipng\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.profiled.png
+tools\vips-dev-8.18\bin\vips.exe pngsave temp.quant.png temp.profiled.png --profile temp.source.icc
+tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.profiled.png
 ```
 
 Unsupported/no-profile command shape:
 
 ```text
-tools\libvips\vips.exe thumbnail input.png temp.resized.png 1920 --height 1920 --size down --output-profile profiles\sRGB2014.icc
+tools\vips-dev-8.18\bin\vips.exe thumbnail input.png temp.resized.png 1920 --height 1920 --size down --output-profile profiles\sRGB2014.icc
 tools\pngquant\pngquant.exe --force --output temp.quant.png --quality 40-95 --speed 1 --nofs -- temp.resized.png
-tools\libvips\vips.exe pngsave temp.quant.png temp.profiled.png --profile profiles\sRGB2014.icc
-tools\oxipng\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.profiled.png
+tools\vips-dev-8.18\bin\vips.exe pngsave temp.quant.png temp.profiled.png --profile profiles\sRGB2014.icc
+tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.profiled.png
 ```
 
 PNG config maps to tool flags:
@@ -820,7 +735,6 @@ The generated `scripts.exe` is local build output and must not be committed. Aft
 ./scripts.exe dev
 ./scripts.exe test
 ./scripts.exe preview
-./scripts.exe setup
 ./scripts.exe package
 ```
 
@@ -842,7 +756,7 @@ odin build src -out:dist/imgoptz.exe -target:windows_amd64 -subsystem:console -o
 ./dist/imgoptz.exe
 ```
 
-Phase 10B replaces duplicate shell-specific automation with registered Odin scripts. PowerShell and bash scripts are legacy implementation files after the launcher exists and should be removed only after their behavior has been fully ported and verified in Odin.
+Phase 10B replaces duplicate shell-specific development automation with registered Odin scripts. There is no developer dependency setup script. `scripts/setup-imgoptz-deps.ps1` is a source-hosted end-user helper, not a contributor bootstrap path, not part of the app zip, and not a GitHub Release asset.
 
 ## Implementation Phases
 
@@ -871,18 +785,19 @@ Phase 10B replaces duplicate shell-specific automation with registered Odin scri
 23. Phase 8A: Harden JPEG Unicode-path handling with a per-run temp workspace, PPM stdout producer-to-MozJPEG piping, and graceful ICC omission when MozJPEG cannot open temp ICC paths.
 24. Phase 9: Add dry-run approval mode, defaulting to preview-first and requiring explicit approval before final writes.
 25. Phase 10: Change default output behavior to `output_mode = "dir"` with target-relative `out_dir = "~/imgoptz-output"`.
-26. Phase 10A: Add pinned dependency setup and bundling scripts, including checksum verification, required notices/source records, version checks, and vendor submodule removal where reproducible.
-27. Phase 10B: Add the Odin `scripts.exe` launcher, move each automation script into one registered `.odin` file under `scripts/`, and remove legacy `.ps1`/`.sh` scripts only after their behavior is fully ported and verified.
-28. Test with spaces, special characters, Unicode paths, and quoted paths.
-29. Test relative and absolute input directories.
-30. Test relative, absolute, and target-relative `out_dir`.
-31. Test missing configured `out_dir` fallback to target-relative default output.
-32. Test delayed creation of target-relative output folders.
-33. Test recursive input with preserved output paths.
-34. Test slugify collisions.
-35. Test uppercase extensions.
-36. Test corrupt images.
-37. Test missing tools and missing third-party notices/source records.
-38. Test PNG ICC retention through libvips, pngquant, and Oxipng.
-39. Test progress success rows include before/after sizes and percentage reduction, and do not print final/slugified output path detail rows.
-40. Test repeated prompt loop and `exit`.
+26. Phase 10A: Remove dependency bundling from the release package and package only app-owned files.
+27. Phase 10B: Add the Odin `scripts.exe` launcher, move development automation into registered `.odin` files under `scripts/`, and remove developer dependency setup automation.
+28. Add `scripts/setup-imgoptz-deps.ps1` as a source-hosted end-user helper that downloads verified official prebuilt dependencies without build steps.
+29. Test with spaces, special characters, Unicode paths, and quoted paths.
+30. Test relative and absolute input directories.
+31. Test relative, absolute, and target-relative `out_dir`.
+32. Test missing configured `out_dir` fallback to target-relative default output.
+33. Test delayed creation of target-relative output folders.
+34. Test recursive input with preserved output paths.
+35. Test slugify collisions.
+36. Test uppercase extensions.
+37. Test corrupt images.
+38. Test missing tools/profile.
+39. Test PNG ICC retention through libvips, pngquant, and Oxipng.
+40. Test progress success rows include before/after sizes and percentage reduction, and do not print final/slugified output path detail rows.
+41. Test repeated prompt loop and `exit`.

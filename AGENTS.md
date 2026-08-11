@@ -4,7 +4,7 @@
 
 - Read `PLAN.md` before changing behavior; it is the product spec and implementation sequence.
 - Root app code is Odin in `src/`; `mozjpeg/` and `oxipng/` are git submodules/vendor sources, not the app implementation.
-- `dist/` is ignored but is the current development distribution root with `imgoptz.exe` and runtime tools.
+- `dist/` is ignored but is the current development distribution root with `imgoptz.exe` and locally acquired runtime tools.
 
 ## Commands
 
@@ -38,8 +38,8 @@
 - This is Windows-only; keep the `when ODIN_OS != .Windows` guard and console-subsystem, double-click flow.
 - Preserve the prompt loop UI: users paste one directory path, processing finishes, then the app prompts again; `exit` closes it.
 - At startup, change cwd to the executable directory. All relative paths, config, logs, tools, and default output resolve against that app root.
-- Required runtime tool paths are `tools\mozjpeg\mozjpeg.exe`, `tools\oxipng\oxipng.exe`, `tools\pngquant\pngquant.exe`, `tools\libvips\vips.exe`, and `tools\libvips\vipsheader.exe` under the app root.
-- Keep third-party notices and runtime config beside tools: MozJPEG `LICENSE.md`, `README.ijg`, `README-mozilla.txt`; Oxipng `LICENSE`; pngquant `COPYRIGHT`, `SOURCE.txt`; libvips `LICENSE`, `README.md`, `versions.json`.
+- Required runtime tool paths under the app root are `tools\mozjpeg\static\Release\cjpeg-static.exe`, `tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe`, `tools\pngquant\pngquant.exe`, `tools\vips-dev-8.18\bin\vips.exe`, and `tools\vips-dev-8.18\bin\vipsheader.exe`.
+- Do not distribute third-party tools, notices, source packages, the sRGB ICC profile, or dependency setup helpers inside the app release package; users acquire dependency rights themselves. `scripts/setup-imgoptz-deps.ps1` is a source-hosted end-user helper, not a developer setup script or release asset.
 - Accept only JPEG/PNG extensions case-insensitively: `.jpg`, `.jpeg`, `.png`; default discovery is non-recursive.
 
 ## Implementation Pitfalls
