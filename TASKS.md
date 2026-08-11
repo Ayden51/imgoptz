@@ -308,8 +308,19 @@ Goal: replace ImageMagick with the official `vips-web` static prebuilt while pre
 - [x] Run the mixed demo comparison against the current baseline and verify dimensions, ICC retention, and output-size behavior remain acceptable.
 - [x] Remove ImageMagick from setup, packaging, distribution layout, docs, and required notice validation after libvips replacement tests pass.
 
+## Phase 12: Dependency-Free App Distribution
+
+Goal: ship only imgoptz-owned files in the app package and require users/developers to acquire dependency tools and usage rights separately.
+
+- [x] Remove developer dependency setup automation and the pinned dependency manifest from `scripts/`.
+- [x] Change `scripts.exe package` to build a dependency-free app zip containing only `imgoptz.exe`, `README.txt`, `LICENSE.txt`, `imgoptz.json`, and `schema/imgoptz.schema.json`.
+- [x] Stop creating pngquant source-compliance release archives because imgoptz no longer distributes pngquant binaries.
+- [x] Add `scripts/setup-imgoptz-deps.ps1` as a source-hosted end-user helper that downloads official prebuilt/static dependency packages, verifies SHA-256 checksums, and extracts them without build steps.
+- [x] Switch runtime paths to official extracted dependency layouts, including MozJPEG `v4.0.3` `cjpeg-static.exe`, pngquant `2.17.0` from the official Windows zip, Oxipng's official Windows zip, and libvips `vips-dev-8.18`.
+- [x] Update docs and plan so imgoptz's license covers only imgoptz app files and dependency rights remain the user's responsibility.
+
 ## Current Feature Selection
 
-- Current feature branch: `feat/phase-11-libvips`.
-- Scope: Phase 11 libvips migration implementation.
-- Reason: ImageMagick's broad built-in delegate and format surface creates distribution risk; Phase 11 replaces it with the official `vips-web` static prebuilt while keeping external MozJPEG/pngquant/Oxipng optimization behavior.
+- Current feature branch: `fix/distribution-legal-compliance`.
+- Scope: Phase 12 dependency-free distribution implementation.
+- Reason: imgoptz should not distribute dependency tools, dependency notices, source packages, or the sRGB ICC profile. Users and developers must acquire dependency tools and rights separately.

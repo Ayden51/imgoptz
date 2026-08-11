@@ -196,10 +196,14 @@ test_corrupt_png_failure_cleans_intermediate_temps :: proc(t: ^testing.T) {
 	config := default_config()
 	defer destroy_config(&config)
 	runtime_env := Runtime_Environment {
-		vips_path       = processing_join(t, "dist/tools/libvips", "vips.exe"),
-		vipsheader_path = processing_join(t, "dist/tools/libvips", "vipsheader.exe"),
+		vips_path       = processing_join(t, "dist/tools/vips-dev-8.18/bin", "vips.exe"),
+		vipsheader_path = processing_join(t, "dist/tools/vips-dev-8.18/bin", "vipsheader.exe"),
 		pngquant_path   = processing_join(t, "dist/tools/pngquant", "pngquant.exe"),
-		oxipng_path     = processing_join(t, "dist/tools/oxipng", "oxipng.exe"),
+		oxipng_path     = processing_join(
+			t,
+			"dist/tools/oxipng-10.1.1-x86_64-pc-windows-msvc",
+			"oxipng.exe",
+		),
 	}
 	if len(runtime_env.vips_path) == 0 ||
 	   len(runtime_env.vipsheader_path) == 0 ||
@@ -1007,11 +1011,15 @@ processing_join :: proc(t: ^testing.T, first, second: string) -> string {
 
 processing_test_runtime_environment :: proc(t: ^testing.T) -> Runtime_Environment {
 	return Runtime_Environment {
-		vips_path = processing_join(t, "dist/tools/libvips", "vips.exe"),
-		vipsheader_path = processing_join(t, "dist/tools/libvips", "vipsheader.exe"),
-		mozjpeg_path = processing_join(t, "dist/tools/mozjpeg", "mozjpeg.exe"),
+		vips_path = processing_join(t, "dist/tools/vips-dev-8.18/bin", "vips.exe"),
+		vipsheader_path = processing_join(t, "dist/tools/vips-dev-8.18/bin", "vipsheader.exe"),
+		mozjpeg_path = processing_join(t, "dist/tools/mozjpeg/static/Release", "cjpeg-static.exe"),
 		pngquant_path = processing_join(t, "dist/tools/pngquant", "pngquant.exe"),
-		oxipng_path = processing_join(t, "dist/tools/oxipng", "oxipng.exe"),
+		oxipng_path = processing_join(
+			t,
+			"dist/tools/oxipng-10.1.1-x86_64-pc-windows-msvc",
+			"oxipng.exe",
+		),
 		srgb_profile = processing_join(t, "dist/profiles", "sRGB2014.icc"),
 	}
 }

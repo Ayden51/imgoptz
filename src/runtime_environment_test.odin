@@ -37,7 +37,7 @@ test_validate_required_runtime_files_reports_missing_file :: proc(t: ^testing.T)
 
 	missing_path := resolve_app_relative_path(
 		temp_dir,
-		"tools/pngquant/COPYRIGHT",
+		RUNTIME_PNGQUANT_PATH,
 		context.temp_allocator,
 	)
 	remove_err := os.remove(missing_path)
@@ -50,7 +50,7 @@ test_validate_required_runtime_files_reports_missing_file :: proc(t: ^testing.T)
 	validate_required_runtime_files(&env, temp_dir)
 
 	testing.expect_value(t, len(env.errors), 1)
-	testing.expect(t, strings.contains(env.errors[0], "tools/pngquant/COPYRIGHT"))
+	testing.expect(t, strings.contains(env.errors[0], RUNTIME_PNGQUANT_PATH))
 }
 
 @(test, require)
@@ -67,7 +67,7 @@ test_validate_required_runtime_files_reports_missing_executable :: proc(t: ^test
 
 	missing_path := resolve_app_relative_path(
 		temp_dir,
-		"tools/mozjpeg/mozjpeg.exe",
+		RUNTIME_MOZJPEG_PATH,
 		context.temp_allocator,
 	)
 	remove_err := os.remove(missing_path)
@@ -81,7 +81,7 @@ test_validate_required_runtime_files_reports_missing_executable :: proc(t: ^test
 
 	testing.expect_value(t, len(env.errors), 1)
 	testing.expect(t, strings.contains(env.errors[0], "MozJPEG executable"))
-	testing.expect(t, strings.contains(env.errors[0], "tools/mozjpeg/mozjpeg.exe"))
+	testing.expect(t, strings.contains(env.errors[0], RUNTIME_MOZJPEG_PATH))
 }
 
 @(test, require)
