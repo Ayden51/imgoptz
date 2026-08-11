@@ -124,7 +124,7 @@
                 "preserve_profiles": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Preserve supported source color profiles or convert to the bundled sRGB profile."
+                    "description": "Preserve any embedded source ICC profile or use bundled sRGB when missing."
                 }
             }
         },
@@ -189,7 +189,7 @@
                 "preserve_profiles": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Preserve supported source color profiles or convert to the bundled sRGB profile."
+                    "description": "Preserve any embedded source ICC profile or use bundled sRGB when missing."
                 }
             },
             "allOf": [
