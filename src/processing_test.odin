@@ -159,10 +159,10 @@ test_resize_dimension_down_matches_libvips_thumbnail_rounding :: proc(t: ^testin
 }
 
 @(test, require)
-test_shared_icc_profile_family_detection_covers_srgb_and_p3 :: proc(t: ^testing.T) {
-	testing.expect(t, icc_profile_family_is_retained("IEC 61966-2-1 default RGB profile"))
-	testing.expect(t, icc_profile_family_is_retained("Display P3 color profile"))
-	testing.expect(t, !icc_profile_family_is_retained("Generic CMYK profile"))
+test_srgb_profile_detection_covers_bundled_profile_names :: proc(t: ^testing.T) {
+	testing.expect(t, icc_profile_is_srgb_family("sRGB profile"))
+	testing.expect(t, icc_profile_is_srgb_family("IEC 61966-2-1 default RGB profile"))
+	testing.expect(t, !icc_profile_is_srgb_family("Display P3 color profile"))
 }
 
 @(test, require)
@@ -354,8 +354,8 @@ test_process_png_converts_missing_icc_profile_to_srgb :: proc(t: ^testing.T) {
 	verify_detail, verify_ok := verify_png_icc_profile(
 		runtime_env.vipsheader_path,
 		result.output_path,
-		"",
-		false,
+		runtime_env.srgb_profile,
+		true,
 		runtime_env,
 	)
 	defer delete(verify_detail)
