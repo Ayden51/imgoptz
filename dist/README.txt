@@ -28,14 +28,15 @@ First run
 
 4. Run setup.ps1 with PowerShell.
 
-   The script downloads official prebuilt dependency packages, verifies their
-   checksums, extracts them as-is, and downloads the sRGB ICC profile. It does
-   not build tools and does not license those dependencies for you.
+   The script downloads official prebuilt tool packages, verifies their
+   checksums, and extracts them as-is. It does not download the sRGB ICC
+   profile because that profile is included in this zip. It does not build
+   tools and does not license those tools for you.
 
 5. Keep the extracted files together.
 
-   imgoptz.exe needs imgoptz.json, schema, README.txt, LICENSE.txt, and the
-   dependency files installed beside it.
+   imgoptz.exe needs imgoptz.json, schema, README.txt, LICENSE.txt, profiles,
+   and the dependency tool files installed beside it.
 
 6. Double-click imgoptz.exe.
 
@@ -59,13 +60,14 @@ First run
 Runtime dependencies
 --------------------
 
-The helper downloads these exact dependency versions:
+The helper downloads these exact tool versions:
 
   libvips   8.18.5
   MozJPEG   4.0.3
   pngquant  2.17.0
   Oxipng    10.1.1
-  sRGB ICC  2014
+
+The release zip already includes profiles\sRGB2014.icc and its license.
 
 imgoptz requires these files after dependency setup:
 
@@ -75,9 +77,11 @@ imgoptz requires these files after dependency setup:
   tools\pngquant\pngquant.exe
   tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe
   profiles\sRGB2014.icc
+  profiles\sRGB2014.LICENSE.txt
 
-These dependency files are not licensed by imgoptz. You are responsible for
-acquiring them and confirming you have the right to use them.
+The tool files are not licensed by imgoptz. You are responsible for acquiring
+them and confirming you have the right to use them. The bundled sRGB ICC
+profile license is in profiles\sRGB2014.LICENSE.txt.
 
 
 Closing the app
@@ -240,6 +244,9 @@ these app files from the app folder:
   ├─ README.txt
   ├─ LICENSE.txt
   ├─ imgoptz.json
+  ├─ profiles\
+  │  ├─ sRGB2014.icc
+  │  └─ sRGB2014.LICENSE.txt
   ├─ schema\
   │  └─ imgoptz.schema.json
 
@@ -248,5 +255,6 @@ License
 -------
 
 See LICENSE.txt for the imgoptz license. The imgoptz license covers only the
-imgoptz app files in the release zip. Dependency tools and profiles are acquired
-separately by you and are governed by their own licenses.
+imgoptz app files in the release zip. The bundled sRGB ICC profile is governed
+by profiles\sRGB2014.LICENSE.txt. Dependency tools are acquired separately by
+you and are governed by their own licenses.

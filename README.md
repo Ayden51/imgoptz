@@ -45,13 +45,13 @@ The v0.1.0 goal is a real-life MVP centered on the current console TUI flow. Pla
 
 1. Download `imgoptz-v0.1.0-windows-x64.zip` from GitHub Releases. This is the app bundle listed as `Windows 64-bit (x64)`.
 2. Extract the whole zip file to a writable folder such as `Downloads`, `Desktop`, or another local folder.
-3. Install the required dependencies yourself by following the official docs for libvips, MozJPEG, pngquant, Oxipng, and the ICC sRGB profile.
-4. Place the dependency files in the runtime paths listed below.
+3. Install the required image tool dependencies yourself by following the official docs for libvips, MozJPEG, pngquant, and Oxipng.
+4. Place the tool files in the runtime paths listed below.
 5. Double-click `imgoptz.exe`.
 
 Do not run `imgoptz.exe` from inside the zip preview window, and do not move the executable by itself.
 
-The app zip does not include dependency tools, dependency notices, dependency source packages, or the sRGB ICC profile. You are responsible for acquiring those dependencies and the right to use them.
+The app zip includes `profiles/sRGB2014.icc` and its license. It does not include dependency tools, dependency notices, or dependency source packages. You are responsible for acquiring those tools and the right to use them.
 
 ### Runtime Dependencies
 
@@ -61,7 +61,6 @@ Install or build these tools from their official sources. Follow each project's 
 - MozJPEG: [source and build docs](https://github.com/mozilla/mozjpeg), [official releases](https://github.com/mozilla/mozjpeg/releases)
 - pngquant: [download page](https://pngquant.org/), [install/build docs](https://pngquant.org/install.html), [source](https://github.com/kornelski/pngquant)
 - Oxipng: [source and releases](https://github.com/oxipng/oxipng), [crate page](https://crates.io/crates/oxipng)
-- sRGB ICC profile: [ICC profile registry](https://registry.color.org/rgb-registry/srgbprofiles)
 
 If you use current/up-to-date versions instead of the helper script's pinned prebuilt packages, you may need toolchains such as CMake, Visual Studio C++ Build Tools, Rust, Cargo, NASM, or other dependencies required by the upstream projects. Build or install those tools yourself, then place the resulting files at the paths expected by imgoptz. The folder names below are the app runtime contract even if you build a different version yourself.
 
@@ -70,7 +69,8 @@ Required runtime layout:
 ```text
 imgoptz/
 ├─ profiles/
-│  └─ sRGB2014.icc
+│  ├─ sRGB2014.icc
+│  └─ sRGB2014.LICENSE.txt
 └─ tools/
    ├─ vips-dev-8.18/
    │  └─ bin/
@@ -96,14 +96,13 @@ To use it:
 2. Place `setup.ps1` directly inside the extracted `imgoptz` app folder, beside `imgoptz.exe`.
 3. Run it with PowerShell from that folder.
 
-The helper downloads and verifies these exact files:
+The helper downloads and verifies these exact tool files. It does not download the ICC profile because the release zip already includes it:
 
 ```text
 libvips   8.18.5  https://github.com/libvips/build-win64-mxe/releases/download/v8.18.5/vips-dev-x64-web-8.18.5-static.zip
 MozJPEG   4.0.3   https://github.com/mozilla/mozjpeg/releases/download/v4.0.3/mozjpeg-v4.0.3-win-x64.zip
 pngquant  2.17.0  https://pngquant.org/pngquant-windows.zip
 Oxipng    10.1.1  https://github.com/oxipng/oxipng/releases/download/v10.1.1/oxipng-10.1.1-x86_64-pc-windows-msvc.zip
-sRGB ICC  2014    https://registry.color.org/rgb-registry/profiles/sRGB2014.icc
 ```
 
 The helper uses older MozJPEG and pngquant versions because those are the official prebuilt Windows packages available for direct download. If you want newer versions, build or install them yourself from the official upstream projects and place the resulting files in the required runtime layout.
@@ -112,12 +111,13 @@ The helper uses older MozJPEG and pngquant versions because those are the offici
 
 This project targets Windows and is built with Odin. The app code is in `src/`; the source repository does not track the runtime tool binaries needed by the app.
 
-Before running a locally built executable, install or build the runtime dependencies yourself and place them under `dist/` using the runtime layout expected by the app:
+Before running a locally built executable, install or build the runtime tools yourself and place them under `dist/` using the runtime layout expected by the app. The ICC profile and license are tracked under `dist/profiles/`:
 
 ```text
 dist/
 ├─ profiles/
-│  └─ sRGB2014.icc
+│  ├─ sRGB2014.icc
+│  └─ sRGB2014.LICENSE.txt
 └─ tools/
    ├─ vips-dev-8.18/
    │  └─ bin/
@@ -161,7 +161,7 @@ Preview the production executable after building:
 ./scripts.exe preview
 ```
 
-Create the dependency-free app archive:
+Create the app archive:
 
 ```powershell
 ./scripts.exe package
@@ -355,7 +355,7 @@ imgoptz/
 │  ├─ LICENSE.txt        App license for release bundles
 │  ├─ imgoptz.json       Release config template
 │  ├─ schema/            JSON schema for config editors
-│  ├─ profiles/          Local runtime ICC profile, not packaged
+│  ├─ profiles/          Bundled runtime ICC profile and license
 │  └─ tools/             Local runtime image tools, not packaged
 ├─ LICENSE
 └─ README.md
@@ -417,4 +417,4 @@ Before proposing code changes, run the required verification commands in [Test A
 
 `imgoptz` is licensed under the MIT License. See `LICENSE` for the app license.
 
-The release package includes only the imgoptz app license. Dependency tools and profiles are acquired separately by users and are governed by their own licenses.
+The release package includes the imgoptz app license and the bundled sRGB ICC profile license. Dependency tools are acquired separately by users and are governed by their own licenses.
