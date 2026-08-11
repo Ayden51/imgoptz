@@ -20,7 +20,6 @@ Approval_Input_Kind :: enum {
 }
 
 Runtime_Recovery_Input_Kind :: enum {
-	Retry,
 	Exit,
 	Other_Input,
 }
@@ -72,9 +71,6 @@ parse_runtime_recovery_input :: proc(raw: string) -> Runtime_Recovery_Input_Kind
 	input := strings.trim_space(raw)
 	if is_exit_command(input) {
 		return .Exit
-	}
-	if len(input) == 0 {
-		return .Retry
 	}
 	return .Other_Input
 }

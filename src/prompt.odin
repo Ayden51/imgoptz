@@ -6,11 +6,11 @@ import "core:strings"
 import win "core:sys/windows"
 import "core:unicode/utf16"
 
-run_runtime_error_loop :: proc(app_root: string, config: App_Config) {
+run_runtime_error_loop :: proc() {
 	when ODIN_OS == .Windows {
 		if stdin_is_windows_console() {
 			for {
-				if !runtime_error_prompt_once_windows_console(app_root, config) {
+				if !runtime_error_prompt_once_windows_console() {
 					break
 				}
 			}
@@ -24,27 +24,23 @@ run_runtime_error_loop :: proc(app_root: string, config: App_Config) {
 	sc.split = bufio.scan_lines
 
 	for {
-		if !runtime_error_prompt_once(&sc, app_root, config) {
+		if !runtime_error_prompt_once(&sc) {
 			break
 		}
 	}
 }
 
-runtime_error_prompt_once :: proc(
-	sc: ^bufio.Scanner,
-	app_root: string,
-	config: App_Config,
-) -> bool {
+runtime_error_prompt_once :: proc(sc: ^bufio.Scanner) -> bool {
 	print_runtime_recovery_prompt()
 
 	if !bufio.scan(sc) {
 		return false
 	}
 
-	return handle_runtime_recovery_input(bufio.scanner_text(sc), app_root, config)
+	return handle_runtime_recovery_input(bufio.scanner_text(sc))
 }
 
-runtime_error_prompt_once_windows_console :: proc(app_root: string, config: App_Config) -> bool {
+runtime_error_prompt_once_windows_console :: proc() -> bool {
 	print_runtime_recovery_prompt()
 
 	raw, ok := read_windows_console_line_utf8()
@@ -53,10 +49,10 @@ runtime_error_prompt_once_windows_console :: proc(app_root: string, config: App_
 	}
 	defer delete(raw)
 
-	return handle_runtime_recovery_input(raw, app_root, config)
+	return handle_runtime_recovery_input(raw)
 }
 
-handle_runtime_recovery_input :: proc(raw, app_root: string, config: App_Config) -> bool {
+handle_runtime_recovery_input :: proc(raw: string) -> bool {
 	switch parse_runtime_recovery_input(raw) {
 	case .Exit:
 		return false
@@ -65,23 +61,8 @@ handle_runtime_recovery_input :: proc(raw, app_root: string, config: App_Config)
 			"imgoptz cannot process images because required tools are missing. Please type 'exit' to close this window, install the missing tools, then launch imgoptz.exe again.",
 		)
 		return true
-	case .Retry:
 	}
-
-	runtime_env := load_runtime_environment(app_root, config)
-	defer destroy_runtime_environment(&runtime_env)
-	debug_log_runtime_environment(runtime_env)
-	print_runtime_warnings(runtime_env)
-	if !runtime_env.ok {
-		print_runtime_errors(runtime_env)
-		print_runtime_setup_guidance()
-		return true
-	}
-
-	print_ui_blank()
-	print_ui_linef("%s Runtime dependencies found. You can process images now.", UI_OK)
-	run_prompt_loop(runtime_env, config)
-	return false
+	return true
 }
 
 run_prompt_loop :: proc(runtime_env: Runtime_Environment, config: App_Config) {
