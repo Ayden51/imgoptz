@@ -131,9 +131,8 @@ print_input_header :: proc() {
 
 print_runtime_recovery_prompt :: proc() {
 	print_ui_section("INPUT")
-	print_ui_line(
-		"Install the missing dependencies, then press Enter to check again, or type 'exit':",
-	)
+	print_ui_line("Please type 'exit' to close this window.")
+	print_ui_line("After installing the missing tools, please launch imgoptz.exe again.")
 }
 
 print_input_accepted :: proc() {

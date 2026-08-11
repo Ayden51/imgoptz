@@ -62,7 +62,7 @@ handle_runtime_recovery_input :: proc(raw, app_root: string, config: App_Config)
 		return false
 	case .Other_Input:
 		print_ui_warning(
-			"Image folders cannot be processed until required dependencies are installed. Press Enter to check again, or type exit to close.",
+			"imgoptz cannot process images because required tools are missing. Please type 'exit' to close this window, install the missing tools, then launch imgoptz.exe again.",
 		)
 		return true
 	case .Retry:
