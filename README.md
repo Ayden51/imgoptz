@@ -88,12 +88,12 @@ imgoptz/
 
 ### Optional Helper Script
 
-After the manual install guidance above, imgoptz also provides a convenience helper at [`scripts/setup-imgoptz-deps.ps1`](scripts/setup-imgoptz-deps.ps1). This script is source-hosted only. It is not included in the app zip and is not distributed as a GitHub Release asset.
+After the manual install guidance above, imgoptz also provides a convenience helper at [`scripts/setup.ps1`](scripts/setup.ps1). This script is source-hosted only. It is not included in the app zip and is not distributed as a GitHub Release asset.
 
 To use it:
 
-1. Download [`scripts/setup-imgoptz-deps.ps1`](scripts/setup-imgoptz-deps.ps1) from this repository.
-2. Place `setup-imgoptz-deps.ps1` directly inside the extracted `imgoptz` app folder, beside `imgoptz.exe`.
+1. Download [`scripts/setup.ps1`](scripts/setup.ps1) from this repository.
+2. Place `setup.ps1` directly inside the extracted `imgoptz` app folder, beside `imgoptz.exe`.
 3. Run it with PowerShell from that folder.
 
 The helper downloads and verifies these exact files:
@@ -385,7 +385,7 @@ For image-processing tests, prepare your own JPEG and PNG files or use throwaway
 
 The release asset for users is `imgoptz-v0.1.0-windows-x64.zip`, shown on release pages as `Windows 64-bit (x64)`. The zip should contain one app root folder. The app root is the folder that contains `imgoptz.exe`; all runtime paths resolve relative to that folder.
 
-The dependency helper remains source-hosted at `scripts/setup-imgoptz-deps.ps1`. It is not included in the app zip and is not distributed as a GitHub Release asset.
+The dependency helper remains source-hosted at `scripts/setup.ps1`. It is not included in the app zip and is not distributed as a GitHub Release asset.
 
 Required release layout:
 
@@ -401,7 +401,7 @@ imgoptz/
 
 ## Troubleshooting
 
-- If a tool or profile is missing, install the dependency files into the expected runtime paths yourself or place `scripts/setup-imgoptz-deps.ps1` in the app folder and run it from there.
+- If a tool or profile is missing, install the dependency files into the expected runtime paths yourself or place `scripts/setup.ps1` in the app folder and run it from there.
 - If no files are found, check that the folder contains `.jpg`, `.jpeg`, or `.png` files. If they are in subfolders, set `recursive` to `true`.
 - If no optimized files are saved, the optimized versions may not have been smaller, or the approval prompt may have been declined.
 - If config validation fails, check for missing commas, quoted booleans such as `"true"`, misspelled output modes such as `"inplace"`, and empty path values.

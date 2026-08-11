@@ -18,15 +18,15 @@ First run
 
    Open this file in your browser, then use Download raw:
 
-     https://github.com/Ayden51/imgoptz/blob/main/scripts/setup-imgoptz-deps.ps1
+     https://github.com/Ayden51/imgoptz/blob/main/scripts/setup.ps1
 
    The helper script is not included in this zip and is not distributed as a
    release asset.
 
-3. Place setup-imgoptz-deps.ps1 directly inside the extracted imgoptz folder,
+3. Place setup.ps1 directly inside the extracted imgoptz folder,
    beside imgoptz.exe.
 
-4. Run setup-imgoptz-deps.ps1 with PowerShell.
+4. Run setup.ps1 with PowerShell.
 
    The script downloads official prebuilt dependency packages, verifies their
    checksums, extracts them as-is, and downloads the sRGB ICC profile. It does
