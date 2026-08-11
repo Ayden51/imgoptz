@@ -6,17 +6,15 @@ import "core:os"
 import "core:path/filepath"
 
 Package_Options :: struct {
-	package_path:                 string `usage:"Release app zip path."`,
-	dependency_setup_script_path: string `usage:"Release dependency setup script path."`,
+	package_path: string `usage:"Release app zip path."`,
 }
 
 Package_State :: struct {
-	root_dir:                     string,
-	dist_dir:                     string,
-	package_output_path:          string,
-	dependency_setup_output_path: string,
-	bundle_work_dir:              string,
-	package_root:                 string,
+	root_dir:            string,
+	dist_dir:            string,
+	package_output_path: string,
+	bundle_work_dir:     string,
+	package_root:        string,
 }
 
 PACKAGE_SCRIPT := Script {
@@ -33,8 +31,7 @@ register_package_script :: proc "contextless" () {
 
 run_package_script :: proc(args: []string, ctx: ^Script_Context) -> int {
 	options := Package_Options {
-		package_path                 = "dist/imgoptz-v0.1.0-windows-x64.zip",
-		dependency_setup_script_path = "dist/setup-imgoptz-deps.ps1",
+		package_path = "dist/imgoptz-v0.1.0-windows-x64.zip",
 	}
 	parse_err := flags.parse(&options, args, .Unix)
 	if parse_err != nil {
@@ -63,9 +60,6 @@ run_package_script :: proc(args: []string, ctx: ^Script_Context) -> int {
 	if !write_app_package(&state) {
 		return 1
 	}
-	if !write_dependency_setup_script_asset(&state) {
-		return 1
-	}
 
 	if remove_err := os.remove_all(state.bundle_work_dir); remove_err != nil {
 		fmt.eprintf(
@@ -77,7 +71,6 @@ run_package_script :: proc(args: []string, ctx: ^Script_Context) -> int {
 	}
 
 	fmt.printf("Bundle written to %s\n", state.package_output_path)
-	fmt.printf("Dependency setup script written to %s\n", state.dependency_setup_output_path)
 	return 0
 }
 
@@ -85,9 +78,6 @@ initialize_package_paths :: proc(state: ^Package_State, options: ^Package_Option
 	state.dist_dir = join_path_or_report({state.root_dir, "dist"}) or_return
 	state.package_output_path = join_path_or_report(
 		{state.root_dir, native_manifest_path(options.package_path)},
-	) or_return
-	state.dependency_setup_output_path = join_path_or_report(
-		{state.root_dir, native_manifest_path(options.dependency_setup_script_path)},
 	) or_return
 	state.bundle_work_dir = join_path_or_report({state.dist_dir, ".bundle"}) or_return
 	state.package_root = join_path_or_report({state.bundle_work_dir, "imgoptz"}) or_return
@@ -107,7 +97,7 @@ assert_package_required_files :: proc(state: ^Package_State) -> bool {
 			return false
 		}
 	}
-	return assert_required_file(join_root_path_temp(state, "setup-imgoptz-deps.ps1"))
+	return true
 }
 
 write_app_package :: proc(state: ^Package_State) -> bool {
@@ -171,11 +161,6 @@ copy_bundle_item :: proc(state: ^Package_State, item: string) -> bool {
 	return copy_required_file(source_path, destination_path)
 }
 
-write_dependency_setup_script_asset :: proc(state: ^Package_State) -> bool {
-	source_path := join_root_path_temp(state, "setup-imgoptz-deps.ps1")
-	return copy_required_file(source_path, state.dependency_setup_output_path)
-}
-
 copy_required_file :: proc(source_path, destination_path: string) -> bool {
 	parent, _ := filepath.split(destination_path)
 	if parent != "" && !ensure_directory(parent) {
@@ -209,14 +194,6 @@ ensure_directory :: proc(path: string) -> bool {
 
 join_dist_path_temp :: proc(state: ^Package_State, relative_path: string) -> string {
 	path, ok := join_path_or_report({state.dist_dir, native_manifest_path(relative_path)})
-	if !ok {
-		return ""
-	}
-	return path
-}
-
-join_root_path_temp :: proc(state: ^Package_State, relative_path: string) -> string {
-	path, ok := join_path_or_report({state.root_dir, native_manifest_path(relative_path)})
 	if !ok {
 		return ""
 	}
