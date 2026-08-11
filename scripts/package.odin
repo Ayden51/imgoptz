@@ -19,7 +19,7 @@ Package_State :: struct {
 
 PACKAGE_SCRIPT := Script {
 	name    = "package",
-	summary = "Build and package the dependency-free app archive.",
+	summary = "Build and package the app archive.",
 	enabled = true,
 	run     = run_package_script,
 }
@@ -90,6 +90,8 @@ assert_package_required_files :: proc(state: ^Package_State) -> bool {
 		"imgoptz.json",
 		"LICENSE.txt",
 		"README.txt",
+		"profiles/sRGB2014.icc",
+		"profiles/sRGB2014.LICENSE.txt",
 		"schema/imgoptz.schema.json",
 	}
 	for relative_path in required_files {
@@ -116,6 +118,8 @@ write_app_package :: proc(state: ^Package_State) -> bool {
 		"imgoptz.json",
 		"LICENSE.txt",
 		"README.txt",
+		"profiles/sRGB2014.icc",
+		"profiles/sRGB2014.LICENSE.txt",
 		"schema/imgoptz.schema.json",
 	}
 	for item in bundle_items {
