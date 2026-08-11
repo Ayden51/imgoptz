@@ -21,6 +21,12 @@ Runtime_Required_File :: struct {
 	label:         string,
 }
 
+Runtime_Required_Tool :: struct {
+	executable_name: string,
+	relative_path:   string,
+	label:           string,
+}
+
 Runtime_Environment :: struct {
 	ok:               bool,
 	recursive:        bool,
@@ -61,12 +67,23 @@ RUNTIME_VIPS_PATH :: "tools/vips-dev-8.18/bin/vips.exe"
 RUNTIME_VIPSHEADER_PATH :: "tools/vips-dev-8.18/bin/vipsheader.exe"
 RUNTIME_SRGB_PROFILE_PATH :: "profiles/sRGB2014.icc"
 
+RUNTIME_REQUIRED_TOOLS :: [?]Runtime_Required_Tool {
+	{
+		executable_name = "cjpeg-static.exe",
+		relative_path = RUNTIME_MOZJPEG_PATH,
+		label = "MozJPEG",
+	},
+	{executable_name = "oxipng.exe", relative_path = RUNTIME_OXIPNG_PATH, label = "Oxipng"},
+	{executable_name = "pngquant.exe", relative_path = RUNTIME_PNGQUANT_PATH, label = "pngquant"},
+	{executable_name = "vips.exe", relative_path = RUNTIME_VIPS_PATH, label = "libvips"},
+	{
+		executable_name = "vipsheader.exe",
+		relative_path = RUNTIME_VIPSHEADER_PATH,
+		label = "libvips header",
+	},
+}
+
 RUNTIME_REQUIRED_FILES :: [?]Runtime_Required_File {
-	{relative_path = RUNTIME_MOZJPEG_PATH, label = "MozJPEG executable"},
-	{relative_path = RUNTIME_OXIPNG_PATH, label = "Oxipng executable"},
-	{relative_path = RUNTIME_PNGQUANT_PATH, label = "pngquant executable"},
-	{relative_path = RUNTIME_VIPS_PATH, label = "libvips executable"},
-	{relative_path = RUNTIME_VIPSHEADER_PATH, label = "libvips header executable"},
 	{relative_path = RUNTIME_SRGB_PROFILE_PATH, label = "sRGB ICC profile"},
 }
 
@@ -81,8 +98,8 @@ load_runtime_environment :: proc(app_root: string, config: App_Config) -> Runtim
 		gpu_status   = .Disabled_By_Config,
 	}
 
-	validate_required_runtime_files(&env, app_root)
 	resolve_runtime_tool_paths(&env, app_root)
+	validate_required_runtime_files(&env, app_root)
 
 	output_root := resolve_output_root(app_root, config)
 	defer destroy_output_root_result(&output_root)
@@ -185,11 +202,37 @@ destroy_runtime_environment :: proc(env: ^Runtime_Environment) {
 }
 
 resolve_runtime_tool_paths :: proc(env: ^Runtime_Environment, app_root: string) {
-	env.mozjpeg_path = resolve_app_relative_path(app_root, RUNTIME_MOZJPEG_PATH)
-	env.oxipng_path = resolve_app_relative_path(app_root, RUNTIME_OXIPNG_PATH)
-	env.pngquant_path = resolve_app_relative_path(app_root, RUNTIME_PNGQUANT_PATH)
-	env.vips_path = resolve_app_relative_path(app_root, RUNTIME_VIPS_PATH)
-	env.vipsheader_path = resolve_app_relative_path(app_root, RUNTIME_VIPSHEADER_PATH)
+	path_env, path_found := os.lookup_env("PATH", context.temp_allocator)
+	if !path_found {
+		path_env = ""
+	}
+	resolve_runtime_tool_paths_from_path_env(env, app_root, path_env)
+}
+
+resolve_runtime_tool_paths_from_path_env :: proc(
+	env: ^Runtime_Environment,
+	app_root, path_env: string,
+) {
+	env.mozjpeg_path = resolve_runtime_tool_path(
+		env,
+		app_root,
+		path_env,
+		RUNTIME_REQUIRED_TOOLS[0],
+	)
+	env.oxipng_path = resolve_runtime_tool_path(env, app_root, path_env, RUNTIME_REQUIRED_TOOLS[1])
+	env.pngquant_path = resolve_runtime_tool_path(
+		env,
+		app_root,
+		path_env,
+		RUNTIME_REQUIRED_TOOLS[2],
+	)
+	env.vips_path = resolve_runtime_tool_path(env, app_root, path_env, RUNTIME_REQUIRED_TOOLS[3])
+	env.vipsheader_path = resolve_runtime_tool_path(
+		env,
+		app_root,
+		path_env,
+		RUNTIME_REQUIRED_TOOLS[4],
+	)
 	env.srgb_profile = resolve_app_relative_path(app_root, RUNTIME_SRGB_PROFILE_PATH)
 	debug_log_debugf("resolved MozJPEG path: \"%s\"", env.mozjpeg_path)
 	debug_log_debugf("resolved Oxipng path: \"%s\"", env.oxipng_path)
@@ -197,6 +240,71 @@ resolve_runtime_tool_paths :: proc(env: ^Runtime_Environment, app_root: string) 
 	debug_log_debugf("resolved libvips path: \"%s\"", env.vips_path)
 	debug_log_debugf("resolved vipsheader path: \"%s\"", env.vipsheader_path)
 	debug_log_debugf("resolved sRGB profile path: \"%s\"", env.srgb_profile)
+}
+
+resolve_runtime_tool_path :: proc(
+	env: ^Runtime_Environment,
+	app_root, path_env: string,
+	tool: Runtime_Required_Tool,
+) -> string {
+	path_tool := find_executable_on_path(tool.executable_name, path_env)
+	if len(path_tool) > 0 {
+		debug_log_infof("runtime tool found on PATH: label=%s path=\"%s\"", tool.label, path_tool)
+		return path_tool
+	}
+
+	fallback_path := resolve_app_relative_path(app_root, tool.relative_path)
+	if os.is_file(fallback_path) {
+		debug_log_infof(
+			"runtime tool found in app tools folder: label=%s path=\"%s\"",
+			tool.label,
+			fallback_path,
+		)
+		return fallback_path
+	}
+	defer delete(fallback_path)
+
+	debug_log_errorf(
+		"missing runtime tool: label=%s executable=%s fallback=\"%s\"",
+		tool.label,
+		tool.executable_name,
+		fallback_path,
+	)
+	add_runtime_error(
+		env,
+		fmt.tprintf(
+			"Required tool is missing: %s. Install %s on PATH or place it at %s.",
+			tool.label,
+			tool.executable_name,
+			tool.relative_path,
+		),
+	)
+	return ""
+}
+
+find_executable_on_path :: proc(
+	executable_name, path_env: string,
+	allocator := context.allocator,
+) -> string {
+	path_dirs, split_err := os.split_path_list(path_env, context.temp_allocator)
+	if split_err != nil {
+		return ""
+	}
+
+	for path_dir in path_dirs {
+		parts := [?]string{path_dir, executable_name}
+		candidate, join_err := os.join_path(parts[:], context.temp_allocator)
+		if join_err != nil || !os.is_file(candidate) {
+			continue
+		}
+
+		absolute_candidate, absolute_err := os.get_absolute_path(candidate, allocator)
+		if absolute_err == os.ERROR_NONE {
+			return absolute_candidate
+		}
+		return strings.clone(candidate, allocator)
+	}
+	return ""
 }
 
 validate_required_runtime_files :: proc(env: ^Runtime_Environment, app_root: string) {
