@@ -6,6 +6,65 @@ import "core:strings"
 import win "core:sys/windows"
 import "core:unicode/utf16"
 
+run_runtime_error_loop :: proc() {
+	when ODIN_OS == .Windows {
+		if stdin_is_windows_console() {
+			for {
+				if !runtime_error_prompt_once_windows_console() {
+					break
+				}
+			}
+			return
+		}
+	}
+
+	sc: bufio.Scanner
+	bufio.scanner_init(&sc, os.to_stream(os.stdin))
+	defer bufio.scanner_destroy(&sc)
+	sc.split = bufio.scan_lines
+
+	for {
+		if !runtime_error_prompt_once(&sc) {
+			break
+		}
+	}
+}
+
+runtime_error_prompt_once :: proc(sc: ^bufio.Scanner) -> bool {
+	print_runtime_recovery_prompt()
+
+	if !bufio.scan(sc) {
+		return false
+	}
+
+	return handle_runtime_recovery_input(bufio.scanner_text(sc))
+}
+
+runtime_error_prompt_once_windows_console :: proc() -> bool {
+	print_runtime_recovery_prompt()
+
+	raw, ok := read_windows_console_line_utf8()
+	if !ok {
+		return false
+	}
+	defer delete(raw)
+
+	return handle_runtime_recovery_input(raw)
+}
+
+handle_runtime_recovery_input :: proc(raw: string) -> bool {
+	switch parse_runtime_recovery_input(raw) {
+	case .Exit:
+		return false
+	case .Other_Input:
+		print_ui_warning(
+			"imgoptz cannot process images because required tools are missing. Please type 'exit' to close this window, install the missing tools, then launch imgoptz.exe again.",
+		)
+		return true
+	}
+	return true
+}
+
 run_prompt_loop :: proc(runtime_env: Runtime_Environment, config: App_Config) {
 	when ODIN_OS == .Windows {
 		if stdin_is_windows_console() {

@@ -272,14 +272,16 @@ resolve_runtime_tool_path :: proc(
 	)
 	add_runtime_error(
 		env,
-		fmt.tprintf(
-			"Required tool is missing: %s. Install %s on PATH or place it at %s.",
-			tool.label,
-			tool.executable_name,
-			tool.relative_path,
-		),
+		fmt.tprintf("Required tool is missing: %s.", runtime_tool_error_label(tool)),
 	)
 	return ""
+}
+
+runtime_tool_error_label :: proc(tool: Runtime_Required_Tool) -> string {
+	if tool.label == "libvips header" {
+		return "libvips"
+	}
+	return tool.label
 }
 
 find_executable_on_path :: proc(
@@ -502,7 +504,22 @@ add_runtime_warning :: proc(env: ^Runtime_Environment, warning: string) {
 }
 
 add_runtime_error :: proc(env: ^Runtime_Environment, err: string) {
+	for existing in env.errors {
+		if existing == err {
+			return
+		}
+	}
 	append(&env.errors, strings.clone(err))
+}
+
+print_runtime_setup_guidance :: proc() {
+	print_ui_blank()
+	print_ui_linef("%s imgoptz cannot process images because required tools are missing.", UI_WARN)
+	print_ui_line("Please install the missing image tools before using imgoptz.")
+	print_ui_blank()
+	print_ui_line("For quick setup, please follow the guide in README.txt.")
+	print_ui_line("For a detailed step-by-step guide, please read the online guide:")
+	print_ui_line("https://github.com/Ayden51/imgoptz#installation")
 }
 
 print_runtime_warnings :: proc(env: Runtime_Environment) {

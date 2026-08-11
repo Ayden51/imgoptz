@@ -110,9 +110,40 @@ test_resolve_runtime_tool_paths_reports_missing_tool :: proc(t: ^testing.T) {
 
 	testing.expect_value(t, len(env.errors), 1)
 	testing.expect_value(t, env.mozjpeg_path, "")
-	testing.expect(t, strings.contains(env.errors[0], "MozJPEG"))
-	testing.expect(t, strings.contains(env.errors[0], "Install cjpeg-static.exe on PATH"))
-	testing.expect(t, strings.contains(env.errors[0], RUNTIME_MOZJPEG_PATH))
+	testing.expect_value(t, env.errors[0], "Required tool is missing: MozJPEG.")
+}
+
+@(test, require)
+test_resolve_runtime_tool_paths_groups_missing_libvips_files :: proc(t: ^testing.T) {
+	temp_dir := make_temp_runtime_root(t)
+	if len(temp_dir) == 0 {
+		return
+	}
+	defer cleanup_test_directory(temp_dir)
+
+	if !write_required_runtime_tree(t, temp_dir) {
+		return
+	}
+
+	vips_path := resolve_app_relative_path(temp_dir, RUNTIME_VIPS_PATH, context.temp_allocator)
+	vipsheader_path := resolve_app_relative_path(
+		temp_dir,
+		RUNTIME_VIPSHEADER_PATH,
+		context.temp_allocator,
+	)
+	if !testing.expect_value(t, os.remove(vips_path), nil) {
+		return
+	}
+	if !testing.expect_value(t, os.remove(vipsheader_path), nil) {
+		return
+	}
+
+	env: Runtime_Environment
+	defer destroy_runtime_environment(&env)
+	resolve_runtime_tool_paths_from_path_env(&env, temp_dir, "")
+
+	testing.expect_value(t, len(env.errors), 1)
+	testing.expect_value(t, env.errors[0], "Required tool is missing: libvips.")
 }
 
 @(test, require)
