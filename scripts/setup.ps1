@@ -107,6 +107,25 @@ function Test-DependencyOnPath {
     }
 }
 
+function Get-DependencyVersion {
+    param(
+        [object]$Dependency,
+        [string]$ExecutablePath
+    )
+
+    try {
+        $output = & $ExecutablePath $Dependency.VersionArgs 2>&1
+        $text = ($output | Out-String).Trim()
+        $match = [regex]::Match($text, $Dependency.VersionPattern)
+        if ($match.Success) {
+            return $match.Groups[1].Value
+        }
+    } catch {
+    }
+
+    return "unknown version"
+}
+
 function Show-ToolStatus {
     param(
         [object[]]$Dependencies,
@@ -119,36 +138,22 @@ function Show-ToolStatus {
 
     $statuses = @()
     foreach ($dependency in $Dependencies) {
-        $local = Test-DependencyInToolsFolder -Dependency $dependency -Root $Root
         $path = Test-DependencyOnPath -Dependency $dependency
-
-        Write-Host ""
-        Write-Host $dependency.DisplayName
-        if ($local.FoundAll) {
-            Write-Host "[OK] Found in app tools folder."
-        } else {
-            Write-Host "[INFO] Not complete in app tools folder."
-            foreach ($file in $local.Missing) {
-                Write-Host "          Missing: $file"
-            }
-        }
+        $local = Test-DependencyInToolsFolder -Dependency $dependency -Root $Root
 
         if ($path.FoundAll) {
-            Write-Host "[OK] Found on PATH."
-            foreach ($entry in $path.Found) {
-                Write-Host "     $entry"
-            }
+            $versionExecutable = (Get-Command $dependency.PathCommands[$dependency.VersionCommandIndex]).Source
+            $version = Get-DependencyVersion -Dependency $dependency -ExecutablePath $versionExecutable
+            Write-Host "[OK] $($dependency.Name) $version => Found on PATH."
+            $location = "PATH"
+        } elseif ($local.FoundAll) {
+            $versionExecutable = Join-RootPath -Root $Root -RelativePath $dependency.LocalFiles[$dependency.VersionCommandIndex]
+            $version = Get-DependencyVersion -Dependency $dependency -ExecutablePath $versionExecutable
+            Write-Host "[OK] $($dependency.Name) $version => Found in app tools folder."
+            $location = "app tools folder"
         } else {
-            Write-Host "[INFO] Not complete on PATH."
-            foreach ($commandName in $path.Missing) {
-                Write-Host "       Missing command: $commandName"
-            }
-        }
-
-        if ($local.FoundAll -or $path.FoundAll) {
-            Write-Host "[OK] Available to imgoptz."
-        } else {
-            Write-Host "[MISSING] Not found in either location. Setup will download it into the app tools folder after acknowledgement."
+            Write-Host "[WARN] $($dependency.Name) => Not found."
+            $location = "missing"
         }
 
         $statuses += [pscustomobject]@{
@@ -156,6 +161,7 @@ function Show-ToolStatus {
             LocalFound = $local.FoundAll
             PathFound = $path.FoundAll
             Available = ($local.FoundAll -or $path.FoundAll)
+            Location = $location
         }
     }
 
@@ -163,26 +169,29 @@ function Show-ToolStatus {
 }
 
 function Show-LicenseNotice {
-    param([object[]]$Dependencies)
+    param([object[]]$DependenciesToInstall)
 
     Write-Host ""
     Write-Host "Important dependency and license notice"
     Write-Host "---------------------------------------"
     Write-Host "imgoptz is an orchestrator. It calls these external tools to optimize images: libvips, MozJPEG, pngquant, and Oxipng."
     Write-Host "imgoptz does not grant or cover the licenses for those tools for your purpose or use case."
-    Write-Host "This setup helper downloads the specific official tool archives listed below and extracts them into the app tools folder."
+    Write-Host "This setup helper can download missing tools into the app tools folder."
     Write-Host "You are responsible for reviewing each tool's license and complying with it for your use case."
+    Write-Host ""
+    Write-Host "It will only download these specific missing tools from official sources:"
     Write-Host ""
     Write-Host "Tool     Version  Official source"
     Write-Host "----     -------  ---------------"
-    foreach ($dependency in $Dependencies) {
+    foreach ($dependency in $DependenciesToInstall) {
         Write-Host ("{0,-8} {1,-8} {2}" -f $dependency.Name, $dependency.Version, $dependency.Url)
     }
+    Write-Host ""
 }
 
 function Read-LicenseAcknowledgement {
     while ($true) {
-        $answer = Read-Host "Type yes or no to acknowledge that you are responsible for these tool licenses"
+        $answer = Read-Host "Type yes to agree to this license notice and start downloading the missing tools, or type no to cancel"
         $normalized = $answer.Trim().ToLowerInvariant()
         if ($normalized -eq "yes") {
             return $true
@@ -296,6 +305,9 @@ $Dependencies = @(
         CleanPaths = @("tools\vips-dev-8.18")
         LocalFiles = @("tools\vips-dev-8.18\bin\vips.exe", "tools\vips-dev-8.18\bin\vipsheader.exe")
         PathCommands = @("vips.exe", "vipsheader.exe")
+        VersionCommandIndex = 0
+        VersionArgs = @("--version")
+        VersionPattern = "(\d+(?:\.\d+)+)"
     }
     [pscustomobject]@{
         Name = "MozJPEG"
@@ -308,6 +320,9 @@ $Dependencies = @(
         CleanPaths = @("tools\mozjpeg")
         LocalFiles = @("tools\mozjpeg\static\Release\cjpeg-static.exe")
         PathCommands = @("cjpeg-static.exe")
+        VersionCommandIndex = 0
+        VersionArgs = @("-version")
+        VersionPattern = "version\s+(\d+(?:\.\d+)+)"
     }
     [pscustomobject]@{
         Name = "pngquant"
@@ -320,6 +335,9 @@ $Dependencies = @(
         CleanPaths = @("tools\pngquant")
         LocalFiles = @("tools\pngquant\pngquant.exe")
         PathCommands = @("pngquant.exe")
+        VersionCommandIndex = 0
+        VersionArgs = @("--version")
+        VersionPattern = "(\d+(?:\.\d+)+)"
     }
     [pscustomobject]@{
         Name = "Oxipng"
@@ -332,6 +350,9 @@ $Dependencies = @(
         CleanPaths = @("tools\oxipng-10.1.1-x86_64-pc-windows-msvc")
         LocalFiles = @("tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe")
         PathCommands = @("oxipng.exe")
+        VersionCommandIndex = 0
+        VersionArgs = @("--version")
+        VersionPattern = "(\d+(?:\.\d+)+)"
     }
 )
 
@@ -359,16 +380,6 @@ try {
     Write-Host "App root: $Root"
 
     $statuses = Show-ToolStatus -Dependencies $Dependencies -Root $Root
-    Show-LicenseNotice -Dependencies $Dependencies
-
-    $acknowledged = Read-LicenseAcknowledgement
-    if (-not $acknowledged) {
-        Write-Host ""
-        Write-Host "No tools were downloaded. Run this setup again if you decide to install the dependencies."
-        Wait-To-Close
-        exit 1
-    }
-
     $dependenciesToInstall = @()
     foreach ($status in $statuses) {
         if ($Force -or (-not $status.Available)) {
@@ -378,8 +389,20 @@ try {
 
     if ($dependenciesToInstall.Count -eq 0) {
         Write-Host ""
-        Write-Host "All tools are already available from PATH or the app tools folder. Nothing to download."
+        Write-Host "[OK] All required tools are available from PATH or the app tools folder. Nothing to download."
+        Wait-To-Close
+        exit 0
     } else {
+        Show-LicenseNotice -DependenciesToInstall $dependenciesToInstall
+
+        $acknowledged = Read-LicenseAcknowledgement
+        if (-not $acknowledged) {
+            Write-Host ""
+            Write-Host "No tools were downloaded. Run this setup again if you decide to install the dependencies."
+            Wait-To-Close
+            exit 1
+        }
+
         Ensure-Directory $ToolsDir
         Ensure-Directory $script:DownloadDir
 
