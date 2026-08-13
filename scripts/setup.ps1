@@ -73,10 +73,10 @@ function Test-DependencyInToolsFolder {
     )
 
     $missing = @()
-    foreach ($file in $Dependency.LocalFiles) {
-        $path = Join-RootPath -Root $Root -RelativePath $file
-        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-            $missing += $file
+    for ($i = 0; $i -lt $Dependency.LocalFiles.Count; $i++) {
+        $path = Resolve-DependencyLocalFile -Root $Root -Dependency $Dependency -Index $i
+        if ([string]::IsNullOrEmpty($path)) {
+            $missing += $Dependency.LocalFiles[$i]
         }
     }
 
@@ -84,6 +84,70 @@ function Test-DependencyInToolsFolder {
         FoundAll = ($missing.Count -eq 0)
         Missing = $missing
     }
+}
+
+function Test-ToolFolderName {
+    param(
+        [string]$FolderName,
+        [string]$ToolName
+    )
+
+    if ($FolderName.Equals($ToolName, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $true
+    }
+    if (-not $FolderName.StartsWith($ToolName, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+    if ($FolderName.Length -le $ToolName.Length) {
+        return $false
+    }
+
+    $next = $FolderName[$ToolName.Length]
+    if ($next -ge '0' -and $next -le '9') {
+        return $true
+    }
+    if ($next -ne '-' -and $next -ne '_' -and $next -ne '.') {
+        return $false
+    }
+    if ($FolderName.Length -eq ($ToolName.Length + 1)) {
+        return $false
+    }
+
+    $versionStart = [char]::ToLowerInvariant($FolderName[$ToolName.Length + 1])
+    return ($versionStart -eq 'v' -or ($versionStart -ge '0' -and $versionStart -le '9'))
+}
+
+function Resolve-DependencyLocalFile {
+    param(
+        [string]$Root,
+        [object]$Dependency,
+        [int]$Index
+    )
+
+    $localPath = Join-RootPath -Root $Root -RelativePath $Dependency.LocalFiles[$Index]
+    if (Test-Path -LiteralPath $localPath -PathType Leaf) {
+        return $localPath
+    }
+
+    $toolsRoot = Join-RootPath -Root $Root -RelativePath "tools"
+    if (-not (Test-Path -LiteralPath $toolsRoot -PathType Container)) {
+        return $null
+    }
+
+    $toolFolder = $Dependency.LocalFolderNames[$Index]
+    $toolRelativePath = $Dependency.LocalExecutablePaths[$Index]
+    foreach ($entry in Get-ChildItem -LiteralPath $toolsRoot -Directory) {
+        if (-not (Test-ToolFolderName -FolderName $entry.Name -ToolName $toolFolder)) {
+            continue
+        }
+
+        $candidate = Join-Path $entry.FullName $toolRelativePath
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+    }
+
+    return $null
 }
 
 function Test-DependencyOnPath {
@@ -147,7 +211,7 @@ function Show-ToolStatus {
             Write-Host "[OK] $($dependency.Name) $version => Found on PATH."
             $location = "PATH"
         } elseif ($local.FoundAll) {
-            $versionExecutable = Join-RootPath -Root $Root -RelativePath $dependency.LocalFiles[$dependency.VersionCommandIndex]
+            $versionExecutable = Resolve-DependencyLocalFile -Root $Root -Dependency $dependency -Index $dependency.VersionCommandIndex
             $version = Get-DependencyVersion -Dependency $dependency -ExecutablePath $versionExecutable
             Write-Host "[OK] $($dependency.Name) $version => Found in app tools folder."
             $location = "app tools folder"
@@ -259,8 +323,8 @@ function Resolve-VerificationPath {
         return $pathCommand.Source
     }
 
-    $localPath = Join-RootPath -Root $Root -RelativePath $Dependency.LocalFiles[$Index]
-    if (Test-Path -LiteralPath $localPath -PathType Leaf) {
+    $localPath = Resolve-DependencyLocalFile -Root $Root -Dependency $Dependency -Index $Index
+    if (-not [string]::IsNullOrEmpty($localPath) -and (Test-Path -LiteralPath $localPath -PathType Leaf)) {
         return $localPath
     }
 
@@ -304,6 +368,8 @@ $Dependencies = @(
         Destination = "tools"
         CleanPaths = @("tools\vips-dev-8.18")
         LocalFiles = @("tools\vips-dev-8.18\bin\vips.exe", "tools\vips-dev-8.18\bin\vipsheader.exe")
+        LocalFolderNames = @("vips-dev", "vips-dev")
+        LocalExecutablePaths = @("bin\vips.exe", "bin\vipsheader.exe")
         PathCommands = @("vips.exe", "vipsheader.exe")
         VersionCommandIndex = 0
         VersionArgs = @("--version")
@@ -319,6 +385,8 @@ $Dependencies = @(
         Destination = "tools\mozjpeg"
         CleanPaths = @("tools\mozjpeg")
         LocalFiles = @("tools\mozjpeg\static\Release\cjpeg-static.exe")
+        LocalFolderNames = @("mozjpeg")
+        LocalExecutablePaths = @("static\Release\cjpeg-static.exe")
         PathCommands = @("cjpeg-static.exe")
         VersionCommandIndex = 0
         VersionArgs = @("-version")
@@ -334,6 +402,8 @@ $Dependencies = @(
         Destination = "tools"
         CleanPaths = @("tools\pngquant")
         LocalFiles = @("tools\pngquant\pngquant.exe")
+        LocalFolderNames = @("pngquant")
+        LocalExecutablePaths = @("pngquant.exe")
         PathCommands = @("pngquant.exe")
         VersionCommandIndex = 0
         VersionArgs = @("--version")
@@ -349,6 +419,8 @@ $Dependencies = @(
         Destination = "tools"
         CleanPaths = @("tools\oxipng-10.1.1-x86_64-pc-windows-msvc")
         LocalFiles = @("tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe")
+        LocalFolderNames = @("oxipng")
+        LocalExecutablePaths = @("oxipng.exe")
         PathCommands = @("oxipng.exe")
         VersionCommandIndex = 0
         VersionArgs = @("--version")

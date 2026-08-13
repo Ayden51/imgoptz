@@ -62,7 +62,7 @@ Install or build these tools from their official sources. Follow each project's 
 - pngquant: [download page](https://pngquant.org/), [install/build docs](https://pngquant.org/install.html), [source](https://github.com/kornelski/pngquant)
 - Oxipng: [source and releases](https://github.com/oxipng/oxipng), [crate page](https://crates.io/crates/oxipng)
 
-If you use current/up-to-date versions instead of the helper script's pinned prebuilt packages, you may need toolchains such as CMake, Visual Studio C++ Build Tools, Rust, Cargo, NASM, or other dependencies required by the upstream projects. Build or install those tools yourself, then place the resulting files at the paths expected by imgoptz. The folder names below are the app runtime contract even if you build a different version yourself.
+If you use current/up-to-date versions instead of the helper script's pinned prebuilt packages, you may need toolchains such as CMake, Visual Studio C++ Build Tools, Rust, Cargo, NASM, or other dependencies required by the upstream projects. Build or install those tools yourself, then place the resulting files in app-local tool folders named after each tool. Folder names may include version suffixes, such as `oxipng-10.1.1-x86_64-pc-windows-msvc` or `vips-dev-8.18`.
 
 Required runtime layout:
 
@@ -72,7 +72,7 @@ imgoptz/
 │  ├─ sRGB2014.icc
 │  └─ sRGB2014.LICENSE.txt
 └─ tools/
-   ├─ vips-dev-8.18/
+   ├─ vips-dev[-version...]/
    │  └─ bin/
    │     ├─ vips.exe
    │     └─ vipsheader.exe
@@ -80,7 +80,7 @@ imgoptz/
    │  └─ static/
    │     └─ Release/
    │        └─ cjpeg-static.exe
-   ├─ oxipng-10.1.1-x86_64-pc-windows-msvc/
+   ├─ oxipng[-version...]/
    │  └─ oxipng.exe
    └─ pngquant/
       └─ pngquant.exe
@@ -105,7 +105,7 @@ pngquant  2.17.0  https://pngquant.org/pngquant-windows.zip
 Oxipng    10.1.1  https://github.com/oxipng/oxipng/releases/download/v10.1.1/oxipng-10.1.1-x86_64-pc-windows-msvc.zip
 ```
 
-The helper uses older MozJPEG and pngquant versions because those are the official prebuilt Windows packages available for direct download. If you want newer versions, build or install them yourself from the official upstream projects and place the resulting files in the required runtime layout.
+The helper uses older MozJPEG and pngquant versions because those are the official prebuilt Windows packages available for direct download. If you want newer versions, build or install them yourself from the official upstream projects and place the resulting files in matching app-local tool folders.
 
 ### From Source
 
@@ -119,7 +119,7 @@ dist/
 │  ├─ sRGB2014.icc
 │  └─ sRGB2014.LICENSE.txt
 └─ tools/
-   ├─ vips-dev-8.18/
+   ├─ vips-dev[-version...]/
    │  └─ bin/
    │     ├─ vips.exe
    │     └─ vipsheader.exe
@@ -127,7 +127,7 @@ dist/
    │  └─ static/
    │     └─ Release/
    │        └─ cjpeg-static.exe
-   ├─ oxipng-10.1.1-x86_64-pc-windows-msvc/
+   ├─ oxipng[-version...]/
    │  └─ oxipng.exe
    └─ pngquant/
       └─ pngquant.exe

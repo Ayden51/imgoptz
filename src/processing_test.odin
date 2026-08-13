@@ -195,16 +195,7 @@ test_corrupt_png_failure_cleans_intermediate_temps :: proc(t: ^testing.T) {
 
 	config := default_config()
 	defer destroy_config(&config)
-	runtime_env := Runtime_Environment {
-		vips_path       = processing_join(t, "dist/tools/vips-dev-8.18/bin", "vips.exe"),
-		vipsheader_path = processing_join(t, "dist/tools/vips-dev-8.18/bin", "vipsheader.exe"),
-		pngquant_path   = processing_join(t, "dist/tools/pngquant", "pngquant.exe"),
-		oxipng_path     = processing_join(
-			t,
-			"dist/tools/oxipng-10.1.1-x86_64-pc-windows-msvc",
-			"oxipng.exe",
-		),
-	}
+	runtime_env := processing_test_runtime_environment(t)
 	if len(runtime_env.vips_path) == 0 ||
 	   len(runtime_env.vipsheader_path) == 0 ||
 	   len(runtime_env.pngquant_path) == 0 ||
@@ -1010,18 +1001,23 @@ processing_join :: proc(t: ^testing.T, first, second: string) -> string {
 }
 
 processing_test_runtime_environment :: proc(t: ^testing.T) -> Runtime_Environment {
+	_ = t
 	return Runtime_Environment {
-		vips_path = processing_join(t, "dist/tools/vips-dev-8.18/bin", "vips.exe"),
-		vipsheader_path = processing_join(t, "dist/tools/vips-dev-8.18/bin", "vipsheader.exe"),
-		mozjpeg_path = processing_join(t, "dist/tools/mozjpeg/static/Release", "cjpeg-static.exe"),
-		pngquant_path = processing_join(t, "dist/tools/pngquant", "pngquant.exe"),
-		oxipng_path = processing_join(
-			t,
-			"dist/tools/oxipng-10.1.1-x86_64-pc-windows-msvc",
-			"oxipng.exe",
+		vips_path = processing_test_runtime_tool_path(RUNTIME_REQUIRED_TOOLS[3]),
+		vipsheader_path = processing_test_runtime_tool_path(RUNTIME_REQUIRED_TOOLS[4]),
+		mozjpeg_path = processing_test_runtime_tool_path(RUNTIME_REQUIRED_TOOLS[0]),
+		pngquant_path = processing_test_runtime_tool_path(RUNTIME_REQUIRED_TOOLS[2]),
+		oxipng_path = processing_test_runtime_tool_path(RUNTIME_REQUIRED_TOOLS[1]),
+		srgb_profile = resolve_app_relative_path(
+			"dist",
+			RUNTIME_SRGB_PROFILE_PATH,
+			context.temp_allocator,
 		),
-		srgb_profile = processing_join(t, "dist/profiles", "sRGB2014.icc"),
 	}
+}
+
+processing_test_runtime_tool_path :: proc(tool: Runtime_Required_Tool) -> string {
+	return find_executable_in_app_tools_folder("dist", tool, context.temp_allocator)
 }
 
 processing_runtime_tools_exist :: proc(runtime_env: Runtime_Environment) -> bool {
