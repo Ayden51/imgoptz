@@ -24,6 +24,8 @@ Runtime_Required_File :: struct {
 Runtime_Required_Tool :: struct {
 	executable_name: string,
 	relative_path:   string,
+	folder_name:     string,
+	executable_path: string,
 	label:           string,
 }
 
@@ -60,25 +62,48 @@ Output_Root_Result :: struct {
 
 RUNTIME_DEFAULT_OUTPUT_DIR :: "~/imgoptz-output"
 RUNTIME_TARGET_RELATIVE_OUTPUT_PREFIX :: "~/"
+RUNTIME_TOOLS_DIR :: "tools"
 RUNTIME_MOZJPEG_PATH :: "tools/mozjpeg/static/Release/cjpeg-static.exe"
-RUNTIME_OXIPNG_PATH :: "tools/oxipng-10.1.1-x86_64-pc-windows-msvc/oxipng.exe"
+RUNTIME_OXIPNG_PATH :: "tools/oxipng/oxipng.exe"
 RUNTIME_PNGQUANT_PATH :: "tools/pngquant/pngquant.exe"
-RUNTIME_VIPS_PATH :: "tools/vips-dev-8.18/bin/vips.exe"
-RUNTIME_VIPSHEADER_PATH :: "tools/vips-dev-8.18/bin/vipsheader.exe"
+RUNTIME_VIPS_PATH :: "tools/vips-dev/bin/vips.exe"
+RUNTIME_VIPSHEADER_PATH :: "tools/vips-dev/bin/vipsheader.exe"
 RUNTIME_SRGB_PROFILE_PATH :: "profiles/sRGB2014.icc"
 
 RUNTIME_REQUIRED_TOOLS :: [?]Runtime_Required_Tool {
 	{
 		executable_name = "cjpeg-static.exe",
 		relative_path = RUNTIME_MOZJPEG_PATH,
+		folder_name = "mozjpeg",
+		executable_path = "static/Release/cjpeg-static.exe",
 		label = "MozJPEG",
 	},
-	{executable_name = "oxipng.exe", relative_path = RUNTIME_OXIPNG_PATH, label = "Oxipng"},
-	{executable_name = "pngquant.exe", relative_path = RUNTIME_PNGQUANT_PATH, label = "pngquant"},
-	{executable_name = "vips.exe", relative_path = RUNTIME_VIPS_PATH, label = "libvips"},
+	{
+		executable_name = "oxipng.exe",
+		relative_path = RUNTIME_OXIPNG_PATH,
+		folder_name = "oxipng",
+		executable_path = "oxipng.exe",
+		label = "Oxipng",
+	},
+	{
+		executable_name = "pngquant.exe",
+		relative_path = RUNTIME_PNGQUANT_PATH,
+		folder_name = "pngquant",
+		executable_path = "pngquant.exe",
+		label = "pngquant",
+	},
+	{
+		executable_name = "vips.exe",
+		relative_path = RUNTIME_VIPS_PATH,
+		folder_name = "vips-dev",
+		executable_path = "bin/vips.exe",
+		label = "libvips",
+	},
 	{
 		executable_name = "vipsheader.exe",
 		relative_path = RUNTIME_VIPSHEADER_PATH,
+		folder_name = "vips-dev",
+		executable_path = "bin/vipsheader.exe",
 		label = "libvips header",
 	},
 }
@@ -253,8 +278,8 @@ resolve_runtime_tool_path :: proc(
 		return path_tool
 	}
 
-	fallback_path := resolve_app_relative_path(app_root, tool.relative_path)
-	if os.is_file(fallback_path) {
+	fallback_path := find_executable_in_app_tools_folder(app_root, tool)
+	if len(fallback_path) > 0 {
 		debug_log_infof(
 			"runtime tool found in app tools folder: label=%s path=\"%s\"",
 			tool.label,
@@ -262,19 +287,90 @@ resolve_runtime_tool_path :: proc(
 		)
 		return fallback_path
 	}
-	defer delete(fallback_path)
 
 	debug_log_errorf(
-		"missing runtime tool: label=%s executable=%s fallback=\"%s\"",
+		"missing runtime tool: label=%s executable=%s tools_folder=%s",
 		tool.label,
 		tool.executable_name,
-		fallback_path,
+		tool.folder_name,
 	)
 	add_runtime_error(
 		env,
 		fmt.tprintf("Required tool is missing: %s.", runtime_tool_error_label(tool)),
 	)
 	return ""
+}
+
+find_executable_in_app_tools_folder :: proc(
+	app_root: string,
+	tool: Runtime_Required_Tool,
+	allocator := context.allocator,
+) -> string {
+	tools_root := resolve_app_relative_path(app_root, RUNTIME_TOOLS_DIR, context.temp_allocator)
+	if !os.is_directory(tools_root) {
+		return ""
+	}
+
+	canonical_path := resolve_app_relative_path(
+		app_root,
+		tool.relative_path,
+		context.temp_allocator,
+	)
+	if os.is_file(canonical_path) {
+		return strings.clone(canonical_path, allocator)
+	}
+
+	entries, entries_err := os.read_directory_by_path(tools_root, 0, context.allocator)
+	if entries_err != nil {
+		debug_log_debugf(
+			"read app tools folder failed: path=\"%s\" err=%v",
+			tools_root,
+			entries_err,
+		)
+		return ""
+	}
+	defer os.file_info_slice_delete(entries, context.allocator)
+
+	for entry in entries {
+		#partial switch entry.type {
+		case .Directory:
+			if !runtime_tool_folder_matches(entry.name, tool.folder_name) {
+				continue
+			}
+
+			parts := [?]string{tools_root, entry.name, tool.executable_path}
+			candidate, join_err := os.join_path(parts[:], context.temp_allocator)
+			if join_err != nil || !os.is_file(candidate) {
+				continue
+			}
+			return strings.clone(candidate, allocator)
+		}
+	}
+
+	return ""
+}
+
+runtime_tool_folder_matches :: proc(folder_name, tool_name: string) -> bool {
+	if ascii_equal_fold(folder_name, tool_name) {
+		return true
+	}
+	if len(folder_name) <= len(tool_name) ||
+	   !ascii_equal_fold(folder_name[:len(tool_name)], tool_name) {
+		return false
+	}
+
+	next := folder_name[len(tool_name)]
+	if next >= '0' && next <= '9' {
+		return true
+	}
+	if next != '-' && next != '_' && next != '.' {
+		return false
+	}
+	if len(folder_name) == len(tool_name) + 1 {
+		return false
+	}
+	version_start := ascii_lower(folder_name[len(tool_name) + 1])
+	return version_start == 'v' || (version_start >= '0' && version_start <= '9')
 }
 
 runtime_tool_error_label :: proc(tool: Runtime_Required_Tool) -> string {
