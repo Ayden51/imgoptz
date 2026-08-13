@@ -29,14 +29,14 @@ Do not include dependency tools, dependency notices, source packages, or depende
 
 The app changes cwd to the executable directory at startup, so all relative paths resolve against `<app-root>/`.
 
-After users acquire/install dependency tools, the runtime app root should have this layout. Tool paths intentionally follow official archive extraction layouts instead of a curated redistributed layout. The ICC profile is part of the release package:
+After users acquire/install dependency tools, the runtime app root should have this layout. App-local tool folder names must match the tool name and may include a version suffix, such as `oxipng-10.1.1-x86_64-pc-windows-msvc` or `vips-dev-8.18`. The ICC profile is part of the release package:
 
 ```text
 tools\mozjpeg\static\Release\cjpeg-static.exe
-tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe
+tools\oxipng[-version...]\oxipng.exe
 tools\pngquant\pngquant.exe
-tools\vips-dev-8.18\bin\vips.exe
-tools\vips-dev-8.18\bin\vipsheader.exe
+tools\vips-dev[-version...]\bin\vips.exe
+tools\vips-dev[-version...]\bin\vipsheader.exe
 profiles\sRGB2014.icc
 ```
 
@@ -61,9 +61,9 @@ The end-user helper is `scripts/setup.ps1` in the source repository. It is not p
 The helper should verify these version commands after install:
 
 ```text
-tools\vips-dev-8.18\bin\vips.exe --version
+tools\vips-dev[-version...]\bin\vips.exe --version
 tools\mozjpeg\static\Release\cjpeg-static.exe -version
-tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe --version
+tools\oxipng[-version...]\oxipng.exe --version
 tools\pngquant\pngquant.exe --version
 ```
 
@@ -425,9 +425,9 @@ Profile decision rules:
 Retained-profile command shape:
 
 ```text
-tools\vips-dev-8.18\bin\vipsheader.exe -f icc-profile-data input.jpg
+tools\vips-dev[-version...]\bin\vipsheader.exe -f icc-profile-data input.jpg
 decode base64 ICC stdout to temp.source.icc
-tools\vips-dev-8.18\bin\vips.exe thumbnail input.jpg .raw 1920 --height 1920 --size down
+tools\vips-dev[-version...]\bin\vips.exe thumbnail input.jpg .raw 1920 --height 1920 --size down
 prepend PPM header: P6\n<resized-width> <resized-height>\n255\n
 tools\mozjpeg\static\Release\cjpeg-static.exe -quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim -icc temp.source.icc -outfile temp.jpg
 ```
@@ -435,7 +435,7 @@ tools\mozjpeg\static\Release\cjpeg-static.exe -quality 78 -progressive -optimize
 No-profile command shape:
 
 ```text
-tools\vips-dev-8.18\bin\vips.exe thumbnail input.jpg .raw 1920 --height 1920 --size down --output-profile profiles\sRGB2014.icc
+tools\vips-dev[-version...]\bin\vips.exe thumbnail input.jpg .raw 1920 --height 1920 --size down --output-profile profiles\sRGB2014.icc
 prepend PPM header: P6\n<resized-width> <resized-height>\n255\n
 tools\mozjpeg\static\Release\cjpeg-static.exe -quality 78 -progressive -optimize -sample 2x2 -quant-table 2 -tune-ms-ssim -icc profiles\sRGB2014.icc -outfile temp.jpg
 ```
@@ -481,21 +481,21 @@ Use Oxipng `--strip safe` by default. Oxipng safe stripping keeps PNG display/co
 Command shape:
 
 ```text
-tools\vips-dev-8.18\bin\vipsheader.exe -f icc-profile-data input.png
+tools\vips-dev[-version...]\bin\vipsheader.exe -f icc-profile-data input.png
 decode base64 ICC stdout to temp.source.icc when retaining a source profile
-tools\vips-dev-8.18\bin\vips.exe thumbnail input.png temp.resized.png 1920 --height 1920 --size down
+tools\vips-dev[-version...]\bin\vips.exe thumbnail input.png temp.resized.png 1920 --height 1920 --size down
 tools\pngquant\pngquant.exe --force --output temp.quant.png --quality 40-95 --speed 1 --nofs -- temp.resized.png
-tools\vips-dev-8.18\bin\vips.exe pngsave temp.quant.png temp.profiled.png --profile temp.source.icc
-tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.profiled.png
+tools\vips-dev[-version...]\bin\vips.exe pngsave temp.quant.png temp.profiled.png --profile temp.source.icc
+tools\oxipng[-version...]\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.profiled.png
 ```
 
 No-profile command shape:
 
 ```text
-tools\vips-dev-8.18\bin\vips.exe thumbnail input.png temp.resized.png 1920 --height 1920 --size down --output-profile profiles\sRGB2014.icc
+tools\vips-dev[-version...]\bin\vips.exe thumbnail input.png temp.resized.png 1920 --height 1920 --size down --output-profile profiles\sRGB2014.icc
 tools\pngquant\pngquant.exe --force --output temp.quant.png --quality 40-95 --speed 1 --nofs -- temp.resized.png
-tools\vips-dev-8.18\bin\vips.exe pngsave temp.quant.png temp.profiled.png --profile profiles\sRGB2014.icc
-tools\oxipng-10.1.1-x86_64-pc-windows-msvc\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.profiled.png
+tools\vips-dev[-version...]\bin\vips.exe pngsave temp.quant.png temp.profiled.png --profile profiles\sRGB2014.icc
+tools\oxipng[-version...]\oxipng.exe --force -o 4 --strip safe --alpha --interlace off --out temp.optimized.png temp.profiled.png
 ```
 
 PNG config maps to tool flags:
